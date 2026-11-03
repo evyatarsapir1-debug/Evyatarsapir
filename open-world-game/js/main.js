@@ -622,6 +622,7 @@ class Game {
   }
 
   _menuFrame(dt) {
+    this._leaveCreatorView();
     this.menuAngle += dt * 0.05;
     const cx = 520, cz = 520, r = 230;
     const x = cx + Math.cos(this.menuAngle) * r, z = cz + Math.sin(this.menuAngle) * r;
@@ -648,14 +649,32 @@ class Game {
     const f = this.creatorView.yaw;
     const camDist = 3.4;
     const pos = new THREE.Vector3(p.x + Math.sin(f) * camDist, p.y + 1.35, p.z + Math.cos(f) * camDist);
-    const wide = innerWidth > 700;
-    const right = new THREE.Vector3(Math.cos(f), 0, -Math.sin(f)).multiplyScalar(wide ? 0.85 : 0);
     this.camera.position.copy(pos);
-    this.camera.lookAt(p.x + right.x * -1, p.y + (wide ? 1.0 : 0.75), p.z + right.z * -1);
+    this.camera.lookAt(p.x, p.y + 0.95, p.z);
+    // show the character in the free part of the screen next to the panel (shift the projection, not the camera)
+    const r = document.querySelector('#creator .creator-panel')?.getBoundingClientRect();
+    const W = innerWidth, H = innerHeight;
+    let cx = W / 2;
+    if (r && r.width) {
+      const leftFree = r.left, rightFree = W - r.right;
+      if (Math.max(leftFree, rightFree) > 140) cx = rightFree >= leftFree ? (r.right + W) / 2 : r.left / 2;
+    }
+    if (Math.abs(cx - W / 2) > 2) this.camera.setViewOffset(W, H, -(cx - W / 2), 0, W, H);
+    else if (this.camera.view?.enabled) this.camera.clearViewOffset();
+    // studio light so the character is clearly visible even at night
+    if (!this.creatorLight) { this.creatorLight = new THREE.PointLight(0xfff4e6, 0, 12, 1.6); this.scene.add(this.creatorLight); }
+    this.creatorLight.intensity = 45;
+    this.creatorLight.position.set(p.x + Math.sin(f + 0.5) * 2.2, p.y + 2.4, p.z + Math.cos(f + 0.5) * 2.2);
     this.env.update(p.object.position);
   }
 
+  _leaveCreatorView() {
+    if (this.camera.view?.enabled) this.camera.clearViewOffset();
+    if (this.creatorLight) this.creatorLight.intensity = 0;
+  }
+
   _playFrame(dt) {
+    this._leaveCreatorView();
     const input = this.input, p = this.player;
     input.poll();
     this.playTime = (this.playTime || 0) + dt;
