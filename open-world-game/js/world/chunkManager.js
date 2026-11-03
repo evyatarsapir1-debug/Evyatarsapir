@@ -215,6 +215,24 @@ function buildBuilding(b, out, B) {
     } else {
       faces(f(b.style), rect, y, top, uS, vS, b.color, door);
     }
+    // balconies on residential facades (aligned with the window bays of the facade texture)
+    if (!b.storefront && !b.tower && ['plaster', 'brick', 'concrete'].includes(b.style) && b.h >= 9) {
+      const [fx, fz] = faceVector(b.face);
+      const half = fx !== 0 ? b.w / 2 : b.d / 2, len = fx !== 0 ? b.d : b.w;
+      const rx = -fz, rz = fx;
+      for (let fy = CURB_H + 3.2; fy < top - 2.5; fy += 3.2) {
+        for (let u = 1.5; u < len - 1.5; u += 6) {
+          const a = u - len / 2;
+          if (b.interior && fy < CURB_H + 3.3 && Math.abs(a) < 2.5) continue;
+          const cx = b.x + fx * (half + 0.6) + rx * a, cz = b.z + fz * (half + 0.6) + rz * a;
+          const ry = fx !== 0 ? Math.PI / 2 : 0;
+          B.props.addGeometry(G.box, mat(cx, fy + 0.3, cz, ry, 2.4, 0.12, 1.2), 0xd8d2c6);
+          B.props.addGeometry(G.box, mat(cx + fx * 0.58, fy + 0.85, cz + fz * 0.58, ry, 2.4, 0.06, 0.05), 0x5b6168);
+          for (const s of [-1, 1]) B.props.addGeometry(G.box, mat(cx + rx * s * 1.18, fy + 0.6, cz + rz * s * 1.18, ry, 0.05, 0.6, 1.2), 0x5b6168);
+          B.props.addGeometry(G.box, mat(cx + fx * 0.58, fy + 0.6, cz + fz * 0.58, ry, 2.36, 0.5, 0.02), 0x8fa3b0);
+        }
+      }
+    }
     if (!(b.tower && b.setback)) {
       roof.floor(rect[0], rect[1], rect[2], rect[3], top, 0xaaaaaa, 6);
       faces(f('concrete'), [rect[0] - 0.15, rect[1] - 0.15, rect[2] + 0.15, rect[3] + 0.15], top, top + 0.8, 60, 60, 0xcfcac2, null);
@@ -235,28 +253,36 @@ function buildBuilding(b, out, B) {
       signQuad(B.signs, b.x + fx * (half + 0.15), sy, b.z + fz * (half + 0.15), fx, fz, sw, b.sign);
     }
   }
-  if (spec) buildInterior(spec, b, B);
+  if (spec) buildDoorFrame(spec, b, B);
 }
 
-function buildInterior(spec, b, B) {
+function buildDoorFrame(spec, b, B) {
+  const [fx, fz] = faceVector(b.face);
+  const half = fx !== 0 ? b.w / 2 : b.d / 2;
+  const cx = b.x + fx * (half - 0.15), cz = b.z + fz * (half - 0.15), rx = -fz, rz = fx, hw = spec.door.w / 2;
+  const ry = fx !== 0 ? Math.PI / 2 : 0;
+  for (const s of [-1, 1]) B.props.addGeometry(G.box, mat(cx + rx * s * (hw + 0.06), CURB_H + spec.door.h / 2, cz + rz * s * (hw + 0.06), ry, 0.12, spec.door.h, 0.42), 0x3b3f44);
+  B.props.addGeometry(G.box, mat(cx, CURB_H + spec.door.h + 0.06, cz, ry, spec.door.w + 0.24, 0.12, 0.42), 0x3b3f44);
+  if (b.interior === 'apartment' || b.interior === 'tower' || b.interior === 'hall' || b.interior === 'mall') {
+    // entrance canopy
+    B.props.addGeometry(G.box, mat(b.x + fx * (half + 1.2), CURB_H + spec.door.h + 0.45, b.z + fz * (half + 1.2), ry, spec.door.w + 2.2, 0.18, 2.4), 0x50565c);
+  }
+}
+
+// Interior geometry (built on demand by the InteriorManager when the player is close)
+export function buildInterior(spec, b, B) {
   const I = B.interior;
   for (const r of spec.rooms) {
     faces(I, r.rect, r.y0, r.y1, 3, 3, r.wall, r.door, true);
     if (r.floor !== null) I.floor(r.rect[0], r.rect[1], r.rect[2], r.rect[3], r.y0 + 0.02, r.floor, 2);
-    // ceiling facing down
     const [x0, z0, x1, z1] = r.rect, y = r.y1 - 0.01;
     I.quad([x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1], [0, 0, 1, 0, 1, 1, 0, 1], r.ceil);
   }
-  // door frame
   if (spec.door) {
     const [fx, fz] = faceVector(b.face);
     const half = fx !== 0 ? b.w / 2 : b.d / 2;
-    const cx = b.x + fx * (half - 0.15), cz = b.z + fz * (half - 0.15), rx = -fz, rz = fx, hw = spec.door.w / 2;
-    const ry = fx !== 0 ? Math.PI / 2 : 0;
-    for (const s of [-1, 1]) B.props.addGeometry(G.box, mat(cx + rx * s * (hw + 0.06), CURB_H + spec.door.h / 2, cz + rz * s * (hw + 0.06), ry, 0.12, spec.door.h, 0.42), 0x3b3f44);
-    B.props.addGeometry(G.box, mat(cx, CURB_H + spec.door.h + 0.06, cz, ry, spec.door.w + 0.24, 0.12, 0.42), 0x3b3f44);
-    // threshold mat inside
-    B.props.addGeometry(G.box, mat(cx - fx * 1.0, CURB_H + 0.025, cz - fz * 1.0, ry, spec.door.w, 0.02, 1.2), 0x6b2e2e);
+    const cx = b.x + fx * (half - 0.15), cz = b.z + fz * (half - 0.15);
+    B.props.addGeometry(G.box, mat(cx - fx * 1.0, CURB_H + 0.03, cz - fz * 1.0, fx !== 0 ? Math.PI / 2 : 0, spec.door.w, 0.02, 1.2), 0x6b2e2e);
   }
   for (const s of spec.slabs) {
     const [x0, z0, x1, z1] = s.rect;
@@ -266,7 +292,7 @@ function buildInterior(spec, b, B) {
   }
   for (const st of spec.stairs) buildStairs(B.props, st);
   for (const bx of spec.boxes) {
-    const target = bx.mat === 'glass' ? B.glass : B.props;
+    const target = bx.mat === 'glass' ? B.glass : bx.mat === 'lamp' ? B.lamp : bx.mat === 'wall' ? B.interior : B.props;
     target.addGeometry(G.boxB, mat(bx.x, bx.y, bx.z, 0, bx.w, bx.h, bx.d), bx.color);
   }
   for (const l of spec.lamps) B.lamp.addGeometry(G.box, mat(l.x, l.y - 0.03, l.z, 0, 0.9, 0.05, 0.9), 0xffffff);
@@ -686,4 +712,4 @@ export class ChunkManager {
   }
 }
 
-export { nodeNbrs };
+export { nodeNbrs, G, faces };

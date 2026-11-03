@@ -216,6 +216,113 @@ const states = [...new Set(peds1.map((p) => p[2]))].join(', ');
 check('pedestrians walk around', peds1.length > 5 && moved > 3, `${peds1.length} people, ${moved} moved; states: ${states}`);
 await shot('09-street');
 
+// ---------------------------------------------------------------- homes, elevator, residents
+const elev = await g(() => {
+  let b = null;
+  for (let ix = 0; ix < 10 && !b; ix++) for (let iz = 0; iz < 10 && !b; iz++) b = __wg.cellData(ix, iz).buildings.find((q) => q.interior === 'apartment');
+  const e = b._spec.elevator, game = __game;
+  game.teleport(e.doorPt[0], e.doorPt[1], 0, 0.2);
+  const step = (n, f) => { for (let i = 0; i < n; i++) { f && f(); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  step(5);
+  const prompt = game.player.prompt?.text;
+  game.input.pressed.add('interact'); step(70);
+  game.input.keys.add('KeyW');
+  step(30, () => { game.rig.yaw = Math.atan2(e.insidePt[0] - game.player.x, e.insidePt[1] - game.player.z); game.rig.idle = 0; });
+  game.input.keys.delete('KeyW');
+  const L = [...game.interiors.loaded.values()].find((l) => l.b === b);
+  const inside = L.elevator.contains(game.player.x, game.player.y, game.player.z);
+  const panel = document.querySelectorAll('#elevPanel.show .fbtn').length;
+  document.querySelector('#elevPanel .fbtn[data-k="2"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  const ys = [];
+  for (let k = 0; k < 12; k++) { step(10); ys.push(game.player.y); }
+  step(60);
+  const target = e.floors[2];
+  const furniture = L.spec.boxes.length, homes = L.spec.homes.length;
+  const residents = game.peds.peds.filter((q) => q.state === 'resident').length;
+  return { prompt, inside, panel, ys, final: game.player.y, target, furniture, homes, residents, floors: e.floors.length };
+});
+check('elevator: call button on the landing', elev.prompt === 'הזמן מעלית', elev.prompt);
+check('elevator: walk into the cabin, floor buttons appear', elev.inside && elev.panel >= 2, `${elev.panel} floors`);
+const mid = elev.ys.filter((y) => y > 0.3 && y < elev.target - 0.3).length;
+check('elevator: rides smoothly between floors (not a teleport)', Math.abs(elev.final - elev.target) < 0.05 && mid >= 3, `y ${elev.ys.map((y) => y.toFixed(1)).join('→')}`);
+check('apartments furnished, residents at home', elev.furniture > 200 && elev.residents > 0, `${elev.furniture} furniture boxes, ${elev.homes} apartments, ${elev.residents} residents`);
+await shot('10-apartment-corridor');
+
+// ---------------------------------------------------------------- shops, money, clothes, gear
+const shopRes = await g(() => {
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const out = {};
+  for (const [cell, sign] of [[[7, 5], 'אופנת אזורה'], [[2, 5], 'ארסנל הצללים'], [[7, 6], 'פלאפל הכיכר']]) {
+    const b = __wg.cellData(cell[0], cell[1]).buildings.find((q) => q.sign === sign);
+    const c = b._spec.counter;
+    game.teleport(c.pt[0], c.pt[1], c.yaw + Math.PI);
+    step(10);
+    out[sign] = { prompt: game.player.prompt?.text };
+    game.input.pressed.add('interact'); step(1);
+    out[sign].open = game.state === 'shop';
+    const before = game.econ.money, top = game.player.model.app.top, color = game.player.model.app.topColor;
+    const btn = [...document.querySelectorAll('#shopPanel .sbuy')].find((x) => !x.disabled);
+    btn.click();
+    out[sign].paid = before - game.econ.money;
+    out[sign].changedClothes = game.player.model.app.top !== top || game.player.model.app.topColor !== color;
+    document.querySelector('#shopPanel .sclose').click();
+    out[sign].closed = game.state === 'playing';
+  }
+  out.weapon = game.econ.equipped;
+  return out;
+});
+check('clothing store: buy and wear', shopRes['אופנת אזורה'].open && shopRes['אופנת אזורה'].paid > 0 && shopRes['אופנת אזורה'].changedClothes, JSON.stringify(shopRes['אופנת אזורה']));
+check('fictional gear store: buy an item', shopRes['ארסנל הצללים'].paid > 0 && !!shopRes.weapon, `${shopRes['ארסנל הצללים'].paid}₪, equipped ${shopRes.weapon}`);
+check('food shop: buy food', shopRes['פלאפל הכיכר'].paid > 0 && shopRes['פלאפל הכיכר'].closed);
+const fire = await g(() => {
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  game.econ.weapons.hp = { ammo: 6 }; game.equip('hp');
+  game.teleport(520, 592, Math.PI); step(20);
+  const v = game.vehicles.all().filter((q) => !q.driver && !q.isHeli && q.T.kind === 'car').sort((a, b) => Math.hypot(a.x - 520, a.z - 592) - Math.hypot(b.x - 520, b.z - 592))[0];
+  if (!v) return { err: 'no target car' };
+  v.x = 520; v.z = 576; v.y = 0.15; v.heading = Math.PI / 2; v.vx = v.vz = 0; v.sync();
+  game.rig.yaw = Math.PI; game.rig.pitch = 0.05; game.rig.idle = 0; step(3);
+  const d0 = v.damage; game.input.pressed.add('fire'); step(10);
+  return { d0, d1: v.damage, ammo: game.econ.weapons.hp.ammo };
+});
+check('gear: energy blast damages a car', fire.d1 > fire.d0, JSON.stringify(fire));
+await shot('11-blast');
+
+// ---------------------------------------------------------------- day/night + weather
+const env = await g(() => {
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  game.env.hour = 22; step(5);
+  const night = { win: game.mats.f_plaster.emissiveIntensity, lamp: game.mats.lamp.emissiveIntensity, sun: game.env.sun.intensity, clock: game.env.clockText };
+  game.env.hour = 13; game.env.setWeather('rain'); step(400);
+  const rain = { visible: game.env.rain.visible, wet: game.env.wet, name: game.env.weatherName };
+  game.env.setWeather('clear');
+  return { night, rain };
+});
+check('night: windows and street lamps light up', env.night.win > 0.8 && env.night.lamp > 2 && env.night.sun < 0.5, JSON.stringify(env.night));
+check('weather: rain falls and the streets get wet', env.rain.visible && env.rain.wet > 0.1, JSON.stringify(env.rain));
+
+// ---------------------------------------------------------------- the clickable "enter car" button
+const btn = await g(() => {
+  const game = __game; game.equip(null);
+  const v = game.vehicles.all().filter((q) => !q.driver && !q.isHeli && q.T.kind === 'car').sort((a, b) => Math.hypot(a.x - 540, a.z - 580) - Math.hypot(b.x - 540, b.z - 580))[0];
+  v.x = 540; v.z = 580; v.y = 0.15; v.heading = 0; v.vx = v.vz = 0; v.damage = 0; v.wrecked = false; v.sync();
+  const dp = v.doorPoint();
+  game.teleport(dp.x, dp.z, -Math.PI / 2);
+  for (let i = 0; i < 10; i++) { game.time += 1 / 30; game._playFrame(1 / 30); }
+  const el = document.getElementById('prompt');
+  const shown = el.classList.contains('show') ? el.textContent : null;
+  el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  for (let i = 0; i < 90; i++) { game.time += 1 / 30; game._playFrame(1 / 30); }
+  const after = game.player.state;
+  for (let i = 0; i < 2; i++) { game.time += 1 / 30; game._playFrame(1 / 30); }
+  const exitText = el.classList.contains('show') ? el.textContent : null;
+  return { shown, after, exitText };
+});
+check('"היכנס לרכב" button works', !!btn.shown && btn.shown.includes('היכנס לרכב') && btn.after === 'driving', JSON.stringify(btn));
+check('"צא מהרכב" button shown while driving', !!btn.exitText && btn.exitText.includes('צא מהרכב'), btn.exitText || '');
+const kinds = await g(() => [...new Set([...__game.vehicles.all(), ...__game.traffic.cars].map((v) => v.typeKey))]);
+check('variety of cars around', kinds.length >= 6, kinds.join(', '));
+
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);
 await g(() => __game.save());

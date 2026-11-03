@@ -51,13 +51,15 @@ const SHOP_NAMES = [
   'נעלי הצעד', 'בית הקפה הירוק', 'מסעדת הנמל', 'סושי גל', 'פלאפל הכיכר', 'תכשיטי אור',
   'משקפי עין', 'פארם העיר', 'צעצועי קשת', 'יין ושמש', 'בגדי רחוב', 'מכולת אבי',
 ];
-export const SPECIAL_SIGNS = ['תחנת רכבת מרכזית', 'מוסך אזורה', 'דלק+', 'נמל התעופה אזורה', 'מגדל אזורה', 'בית העירייה', 'מחסני הנמל', 'בית קפה החוף', 'קניון העיר', 'חניון', 'חוות השקד', 'מנהרת הרכס'];
+export const SPECIAL_SIGNS = ['תחנת רכבת מרכזית', 'מוסך אזורה', 'דלק+', 'נמל התעופה אזורה', 'מגדל אזורה', 'בית העירייה', 'מחסני הנמל', 'בית קפה החוף', 'קניון העיר', 'חניון', 'חוות השקד', 'מנהרת הרכס', 'ארסנל הצללים'];
 export const ALL_SIGNS = [...SHOP_NAMES, ...SPECIAL_SIGNS];
 
 const PASTELS = [0xf2e3c6, 0xe8d1b5, 0xd9c8a9, 0xf0d9c0, 0xc9d6df, 0xe4c9b6, 0xd8e2cf, 0xefe6d8, 0xd4b8a0, 0xbfcfd9];
 const TOWER_TINTS = [0x9fb8cc, 0x7f9bb5, 0xa9b9c4, 0x8aa3a8, 0xb7c4cf, 0x6f8aa3, 0xc4ccd2];
 const BRICK = [0xa65a45, 0x9b4f3c, 0xb26b4f, 0x8c5040];
 const ROOF_COLORS = [0xa04a35, 0x8a3f30, 0x5d5b5a, 0x7a4a33, 0x3f4b57];
+
+const FORCED_SHOPS = { '7,5': 'אופנת אזורה', '7,6': 'פלאפל הכיכר', '7,4': 'אלקטרו פלוס', '2,5': 'ארסנל הצללים', '2,6': 'מספרת סטייל' };
 
 export function blockType(bx, bz) {
   if (bx < 0 || bz < 0 || bx >= N || bz >= N) return null;
@@ -284,6 +286,12 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
     PR.push({ kind: 'bin', x: ox + 8.4, z: oz + 32 });
   }
 
+  // guaranteed shops near the city centre (+ a few fictional gear stores in other towns)
+  const forced = FORCED_SHOPS[bx + ',' + bz] || (type === 'C' && (bx < 0 || bx > 9 || bz < 0 || bz > 9) && rng.chance(0.08) ? 'ארסנל הצללים' : null);
+  if (forced) {
+    const b = B.filter((q) => q.storefront && q.w >= 9 && q.d >= 9).sort((p, q) => (p.face === 'w' ? -1 : 0) - (q.face === 'w' ? -1 : 0))[0];
+    if (b) { b.sign = forced; b.forceShop = true; }
+  }
   markInteriors(B, rng);
   for (const b of B) {
     const [fx, fz] = faceVector(b.face);
@@ -296,9 +304,12 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
 // Which buildings can be entered (real interiors are generated from this flag)
 export function markInteriors(B, rng) {
   for (const b of B) {
-    if (b.mall) b.interior = 'mall';
+    if (b.forceShop) b.interior = 'shop';
+    else if (b.mall) b.interior = 'mall';
     else if (b.station || b.airport || b.sign === 'בית העירייה' || b.garage) b.interior = 'hall';
     else if (b.house) { if (rng.chance(0.7)) b.interior = 'house'; }
+    else if (b.tower) { if (rng.chance(0.45)) b.interior = 'tower'; }
+    else if (!b.storefront && ['plaster', 'concrete', 'brick'].includes(b.style) && b.h >= 9 && b.w >= 14 && b.d >= 14) { if (rng.chance(0.6)) b.interior = 'apartment'; }
     else if (b.storefront && b.sign && !b.tower && b.w >= 8 && b.d >= 8 && rng.chance(0.6)) b.interior = 'shop';
   }
 }

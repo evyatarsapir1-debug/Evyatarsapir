@@ -82,7 +82,7 @@ export class Pedestrians {
   }
 
   setDensity(n) { this.target = Math.min(MAX - 8, n); }
-  obstacles() { return this.peds.filter((p) => p.state !== 'inside' && p.state !== 'shopkeeper').map((p) => ({ x: p.x, z: p.z, r: 0.45 })); }
+  obstacles() { return this.peds.filter((p) => p.state !== 'inside' && p.state !== 'shopkeeper' && p.state !== 'resident').map((p) => ({ x: p.x, z: p.z, y: p.y, r: 0.45 })); }
 
   _appearance() {
     const r = this.rng;
@@ -112,10 +112,10 @@ export class Pedestrians {
 
   _add(o) {
     const p = {
-      y: heightAt(o.x, o.z, 1), yaw: 0, speed: 0, phase: this.rng.float(0, 6), j: {}, timer: this.rng.float(4, 14),
+      yaw: 0, speed: 0, phase: this.rng.float(0, 6), j: {}, timer: this.rng.float(4, 14),
       app: this._appearance(), walkSpeed: this.rng.float(1.15, 1.55), phone: this.rng.chance(0.15), lane: this.rng.float(-0.6, 0.6), ...o,
     };
-    p.y = heightAt(p.x, p.z, p.y + 1);
+    p.y = heightAt(p.x, p.z, (o.y ?? 0) + 0.5);
     this.peds.push(p);
     this._colors();
     return p;
@@ -136,32 +136,32 @@ export class Pedestrians {
     for (const m of Object.values(this.M)) if (m.instanceColor) m.instanceColor.needsUpdate = true;
   }
 
-  // keep shopkeepers in nearby shops
-  _syncShopkeepers(px, pz, cells) {
+  // shopkeepers behind counters and residents at home, for interiors loaded around the player
+  _syncInteriorPeople(places, player) {
     const want = new Map();
-    for (const [ix, iz] of cells) {
-      if (Math.hypot(ix * P + 50 - px, iz * P + 50 - pz) > 90) continue;
-      const cd = cellData(ix, iz);
-      for (const b of cd.buildings) {
-        if (b.interior !== 'shop' && b.interior !== 'hall') continue;
-        const spec = interiorSpec(b);
-        const counter = spec.boxes[0];
-        if (!counter) continue;
-        // stand behind the counter, facing the door
-        const [fx, fz] = [Math.sign(b.door.x - b.x) * (b.face === 'e' || b.face === 'w' ? 1 : 0), Math.sign(b.door.z - b.z) * (b.face === 'n' || b.face === 's' ? 1 : 0)];
-        const x = counter.x - fx * 0.8, z = counter.z - fz * 0.8;
-        want.set(`${b.x},${b.z}`, { x, z, yaw: Math.atan2(fx, fz) });
+    for (const L of places || []) {
+      const key = `${L.b.x.toFixed(1)},${L.b.z.toFixed(1)}`;
+      const c = L.spec.counter;
+      if (c) want.set(key + ':k', { x: c.keeper[0], z: c.keeper[1], y: c.y, yaw: c.yaw, state: 'shopkeeper' });
+      if (L.spec.home) { const h = L.spec.home; want.set(key + ':h', { x: h.pt[0], z: h.pt[1], y: h.y, yaw: h.yaw, state: 'resident' }); }
+      if (L.spec.homes) {
+        L.spec.homes.forEach((h, i) => {
+          if (Math.abs(h.y - player.y) > 4 || i % 2) return;
+          want.set(`${key}:a${i}`, { x: h.pt[0], z: h.pt[1], y: h.y, yaw: h.yaw, state: 'resident' });
+        });
       }
     }
+    let changed = false;
     for (let i = this.peds.length - 1; i >= 0; i--) {
       const p = this.peds[i];
-      if (p.state === 'shopkeeper' && !want.has(p.shopKey)) { this.peds.splice(i, 1); this._colors(); }
+      if ((p.state === 'shopkeeper' || p.state === 'resident') && !want.has(p.shopKey)) { this.peds.splice(i, 1); changed = true; }
     }
+    if (changed) this._colors();
     for (const [k, w] of want) {
-      if (this.peds.some((p) => p.shopKey === k)) continue;
       if (this.peds.length >= MAX) break;
-      const p = this._add({ x: w.x, z: w.z, state: 'shopkeeper', shopKey: k });
-      p.yaw = w.yaw; p.phone = false;
+      if (this.peds.some((p) => p.shopKey === k)) continue;
+      const p = this._add({ x: w.x, z: w.z, y: w.y, state: w.state, shopKey: k });
+      p.yaw = w.yaw; p.phone = w.state === 'resident' && this.rng.chance(0.3);
     }
   }
 
@@ -171,12 +171,12 @@ export class Pedestrians {
     // population
     for (let i = this.peds.length - 1; i >= 0; i--) {
       const p = this.peds[i];
-      if (p.state !== 'shopkeeper' && Math.hypot(p.x - px, p.z - pz) > 140) { this._release(p); this.peds.splice(i, 1); this._colors(); }
+      if (p.state !== 'shopkeeper' && p.state !== 'resident' && Math.hypot(p.x - px, p.z - pz) > 140) { this._release(p); this.peds.splice(i, 1); this._colors(); }
     }
-    const walkers = this.peds.filter((p) => p.state !== 'shopkeeper').length;
+    const walkers = this.peds.filter((p) => p.state !== 'shopkeeper' && p.state !== 'resident').length;
     if (walkers < this.target && cells.length && this.peds.length < MAX) this._spawnWalker(px, pz, cells);
     this._skT = (this._skT || 0) - dt;
-    if (this._skT <= 0) { this._skT = 1; this._syncShopkeepers(px, pz, cells); }
+    if (this._skT <= 0) { this._skT = 1; this._syncInteriorPeople(ctx.places, ctx.player); }
 
     for (const p of this.peds) this._think(p, dt, time, ctx);
     this._render();
@@ -194,7 +194,7 @@ export class Pedestrians {
     p.timer -= dt;
     let goal = null, speed = p.walkSpeed, pose = 'walk';
     // ---- danger: fast vehicle heading at us
-    if (p.state !== 'shopkeeper' && p.state !== 'inside' && p.state !== 'fall') {
+    if (p.state !== 'shopkeeper' && p.state !== 'resident' && p.state !== 'inside' && p.state !== 'fall' && p.state !== 'flee') {
       for (const v of vehicles) {
         const sp = Math.hypot(v.vx, v.vz);
         if (sp < 4 || Math.abs(v.x - p.x) > 12 || Math.abs(v.z - p.z) > 12) continue;
@@ -219,6 +219,9 @@ export class Pedestrians {
     switch (p.state) {
       case 'shopkeeper':
         pose = Math.sin(time * 0.3 + p.x) > 0.7 ? 'talk' : 'idle'; speed = 0;
+        break;
+      case 'resident':
+        pose = 'sit'; speed = 0;
         break;
       case 'walk': {
         goal = this._goalOnLoop(p);
@@ -269,8 +272,15 @@ export class Pedestrians {
       case 'fall':
         speed = 0; pose = 'fall';
         p.x += (p.vx || 0) * dt; p.z += (p.vz || 0) * dt; p.vx *= Math.exp(-4 * dt); p.vz *= Math.exp(-4 * dt);
-        if (p.timer <= 0) { p.state = 'walk'; p.timer = 4; p.walkSpeed = 2.2; setTimeout(() => { p.walkSpeed = 1.3; }, 4000); }
+        if (p.timer <= 0) { if (p.afterFall === 'flee') { p.state = 'flee'; p.timer = 6; p.afterFall = null; } else { p.state = 'walk'; p.timer = 4; } }
         break;
+      case 'flee': {
+        const [sx, sz] = p.fleeFrom;
+        const dx = p.x - sx, dz = p.z - sz, L = Math.hypot(dx, dz) || 1;
+        goal = [p.x + dx / L * 10, p.z + dz / L * 10]; speed = 4.8; pose = 'run';
+        if (p.timer <= 0) { p.state = 'walk'; p.timer = 5; }
+        break;
+      }
     }
     // ---- movement with simple avoidance
     if (goal && speed > 0) {
@@ -297,9 +307,15 @@ export class Pedestrians {
       p.speed = damp(p.speed, sp, 8, dt);
       // never walk through walls/poles (interiors use doors)
       if (statics && p.state !== 'toShop' && p.state !== 'leaveShop') {
+        // never overlap vehicles either
+        for (const v of ctx.vehicles) {
+          if (Math.abs(v.x - p.x) > 6 || Math.abs(v.z - p.z) > 6) continue;
+          const r = circleVs(p.x, p.z, 0.3, v.collider);
+          if (r.hit && verticalOverlap(p.y + 0.3, p.y + 1.7, v.collider)) { p.x += r.nx * r.depth; p.z += r.nz * r.depth; }
+        }
         statics.query(p.x - 1, p.z - 1, p.x + 1, p.z + 1, _q);
         for (const c of _q) {
-          if (c.tag === 'slab' || !verticalOverlap(p.y + 0.3, p.y + 1.7, c)) continue;
+          if (c.off || c.tag === 'slab' || !verticalOverlap(p.y + 0.3, p.y + 1.7, c)) continue;
           const r = circleVs(p.x, p.z, 0.3, c);
           if (r.hit) { p.x += r.nx * r.depth; p.z += r.nz * r.depth; }
         }
@@ -307,6 +323,19 @@ export class Pedestrians {
     } else p.speed = damp(p.speed, 0, 8, dt);
     p.y = damp(p.y, heightAt(p.x, p.z, p.y + 0.4), 12, dt);
     p.pose = pose;
+  }
+
+  // something dangerous happened near this person (explosion, energy blast): duck / fall, then run away
+  scare(p, src, hit) {
+    if (p.state === 'shopkeeper' || p.state === 'resident') { p.pose = 'idle'; return; }
+    this._release(p);
+    if (hit && p.state !== 'fall') {
+      p.state = 'fall'; p.timer = 2.4; p.fallYaw = Math.atan2(p.x - src.x, p.z - src.z); p.vx = (p.x - src.x) * 0.6; p.vz = (p.z - src.z) * 0.6;
+      p.afterFall = 'flee'; p.fleeFrom = [src.x, src.z];
+      return;
+    }
+    if (p.state === 'fall' || p.state === 'flee') return;
+    p.state = 'flee'; p.timer = 6; p.fleeFrom = [src.x, src.z];
   }
 
   _nextCorner(p) { p.corner = (p.corner + p.dir + 4) % 4; }
@@ -362,7 +391,7 @@ export class Pedestrians {
     const cd = cellData(p.ix, p.iz);
     let best = null, bd = 6;
     for (const b of cd.buildings) {
-      if (!b.interior || b.interior === 'house') continue;
+      if (!b.interior) continue;
       const d = Math.hypot(b.door.x - p.x, b.door.z - p.z);
       if (d < bd) { bd = d; best = b; }
     }

@@ -5,6 +5,7 @@ import { VEHICLE_TYPES, TRAFFIC_POOL } from '../vehicles/vehicleTypes.js';
 import { dirOf, laneStart, laneEnd, lightState, hasLights } from './roadGraph.js';
 import { RNG } from '../core/rng.js';
 import { clamp, dampAngle, wrapAngle } from '../core/mathx.js';
+import { obbVs, updateBox } from '../physics/collision.js';
 
 const STOP_BACK = 11;
 
@@ -205,6 +206,13 @@ export class Traffic {
     v.steer = clamp(-steerAngle * 2, -0.6, 0.6);
     v.vx = Math.sin(v.heading) * v.speed; v.vz = Math.cos(v.heading) * v.speed;
     v.y = 0; v.pitch = 0;
+    // hard guarantee: never overlap another vehicle (e.g. the player's car stopped across the lane)
+    updateBox(v.collider, v.x, v.z, v.heading);
+    for (const o of vehicles) {
+      if (o === v || Math.abs(o.x - v.x) > 9 || Math.abs(o.z - v.z) > 9 || (o.isHeli && o.y > 3)) continue;
+      const r = obbVs(v.collider, o.collider);
+      if (r.hit) { v.x += r.nx * r.depth; v.z += r.nz * r.depth; v.speed = Math.min(v.speed, 0.5); updateBox(v.collider, v.x, v.z, v.heading); }
+    }
     v.wheelSpin += (v.speed / (v.parts.wheelR || 0.35)) * dt;
     v.sync(dt);
   }

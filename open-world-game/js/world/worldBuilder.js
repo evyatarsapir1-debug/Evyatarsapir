@@ -30,7 +30,8 @@ export function makeMaterials() {
   };
   for (const s of ['glass', 'office', 'concrete', 'plaster', 'brick', 'industrial', 'storefront']) {
     const glass = s === 'glass';
-    m['f_' + s] = std({ map: T.getFacade(s), vertexColors: true, roughness: glass ? 0.25 : 0.8, metalness: glass ? 0.45 : 0.05, envMapIntensity: glass ? 1.2 : 0.6 });
+    m['f_' + s] = std({ map: T.getFacade(s), vertexColors: true, roughness: glass ? 0.25 : 0.8, metalness: glass ? 0.45 : 0.05, envMapIntensity: glass ? 1.2 : 0.6,
+      emissive: 0xffffff, emissiveMap: T.getFacadeLit(s), emissiveIntensity: 0 });
   }
   return m;
 }

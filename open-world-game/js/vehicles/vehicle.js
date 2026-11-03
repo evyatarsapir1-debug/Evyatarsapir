@@ -63,7 +63,7 @@ export class Vehicle {
     const rx = -fz, rz = fx; // right vector of the vehicle (facing +z, right is -x)
     let vf = this.vx * fx + this.vz * fz;
     let vs = this.vx * rx + this.vz * rz;
-    const thr = this.inWater ? 0 : ctl.throttle || 0;
+    const thr = this.inWater || this.wrecked ? 0 : ctl.throttle || 0;
     const steerIn = ctl.steer || 0;
     const sf = 1 / (1 + Math.abs(vf) * (this.isTwoWheel ? 0.03 : 0.05));
     this.steer = damp(this.steer, steerIn * T.steerMax * sf, 8, dt);
@@ -161,7 +161,7 @@ export class Vehicle {
       let any = false;
       this.roofY = -100;
       for (const s of _q) {
-        if (s.tag === 'slab') continue;
+        if (s.off || s.tag === 'slab') continue;
         if (!verticalOverlap(c.y0, c.y1, s)) continue;
         const r = obbVs(c, s);
         if (!r.hit) continue;
@@ -231,7 +231,7 @@ export class Vehicle {
   }
 
   repair() {
-    this.damage = 0;
+    this.damage = 0; this.wrecked = false;
     this.parts.paint.color.copy(this.parts.baseColor);
     for (const l of this.parts.lights) l.visible = true;
     const P = this.parts.panels;
@@ -245,6 +245,28 @@ export class Vehicle {
     this.parts.body.visible = !far;
     for (const w of this.parts.wheels) w.pivot.visible = !far;
     this.parts.lod.visible = far;
+  }
+
+  wreck() {
+    if (this.wrecked) return;
+    this.wrecked = true; this.damage = 100;
+    this.parts.paint.color.setHex(0x2b2622);
+    for (const l of this.parts.lights) l.visible = false;
+  }
+  upgradeEngine() {
+    this.tune = Math.min(3, (this.tune || 0) + 1);
+    this.T = { ...this.T, accel: this.T.accel * 1.15, maxSpeed: this.T.maxSpeed * 1.15 };
+  }
+  rebuildLod() {
+    // recolor the merged distance model to the new paint
+    const lod = this.parts.lod;
+    if (!lod) return;
+    const col = lod.geometry.attributes.color, c = this.parts.baseColor;
+    const old = this._lodPaint || this.parts.lodPaint;
+    if (!old) return;
+    for (let i = 0; i < col.count; i++) if (Math.abs(col.getX(i) - old.r) < 0.01 && Math.abs(col.getY(i) - old.g) < 0.01 && Math.abs(col.getZ(i) - old.b) < 0.01) col.setXYZ(i, c.r, c.g, c.b);
+    col.needsUpdate = true;
+    this._lodPaint = c.clone();
   }
 
   setColor(hex) { this.color = hex; this.parts.baseColor.set(hex); this.parts.paint.color.set(hex); }

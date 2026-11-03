@@ -113,6 +113,27 @@ function facade(style) {
 
 export function getFacade(style) { return cache['f_' + style] ||= facade(style); }
 
+// Night: the same window layout, with a random share of windows lit (used as an emissive map)
+function facadeLit(style) {
+  const [c, g] = canvas(256, 256);
+  g.fillStyle = '#000'; g.fillRect(0, 0, 256, 256);
+  const r = new RNG(style.length * 97 + 3);
+  const lit = () => { const k = r.float(); return k < 0.42 ? (k < 0.08 ? '#bfd4ff' : k < 0.3 ? '#ffd98a' : '#ffc070') : null; };
+  const win = (x, y, w, h) => { const col = lit(); if (col) { g.fillStyle = col; g.fillRect(x, y, w, h); } };
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
+    switch (style) {
+      case 'glass': win(x * 64 + 2, y * 64 + 3, 60, 58); break;
+      case 'office': win(x * 64, y * 64 + 18, 32, 36); win(x * 64 + 32, y * 64 + 18, 32, 36); break;
+      case 'concrete': case 'plaster': win(x * 64 + 16, y * 64 + 16, 32, 36); break;
+      case 'brick': win(x * 64 + 18, y * 64 + 14, 28, 38); break;
+      case 'industrial': if (y === 0) win(x * 64 + 8, 8, 48, 14); break;
+    }
+  }
+  if (style === 'storefront') { g.fillStyle = '#ffe2a8'; g.fillRect(12, 60, 150, 186); g.fillStyle = '#ffb84a'; g.fillRect(180, 80, 64, 176); }
+  return tex(c);
+}
+export function getFacadeLit(style) { return cache['fl_' + style] ||= facadeLit(style); }
+
 export function getRoof() {
   return cache.roof ||= (() => { const [c, g] = canvas(128, 128); noise(g, 128, 128, '#8b8b88', 30, 2500, 2, 11); return tex(c); })();
 }

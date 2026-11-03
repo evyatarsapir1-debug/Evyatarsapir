@@ -30,6 +30,10 @@ export class Player {
     this.nearVehicle = null;
     this.nearBench = null;
     this.message = null;
+    const can = new THREE.Mesh(new THREE.SphereGeometry(2.4, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2.6), new THREE.MeshStandardMaterial({ color: 0xff7a2a, side: THREE.DoubleSide, roughness: 0.8 }));
+    can.position.y = 4.2; can.scale.set(1, 0.5, 1.3); can.visible = false;
+    this.object.add(can);
+    this.canopy = can;
   }
 
   setPosition(x, z, facing = 0, y = null) {
@@ -70,7 +74,19 @@ export class Player {
     if (mag > 0.1) this.facing = dampAngle(this.facing, Math.atan2(dx, dz), 12, dt);
 
     if (this.grounded && !this.swimming && input.wasPressed('jump')) { this.vy = JUMP_V; this.grounded = false; }
+    const wasGrounded = this.grounded;
+    if (wasGrounded) this.fallTop = this.y; else this.fallTop = Math.max(this.fallTop ?? this.y, this.y);
     this.vy -= GRAVITY * dt;
+    // parachute: opens by itself when falling from high up (if you own one)
+    if (!this.grounded && this.vy < -9 && !this.parachute && world.econ?.items.parachute > 0 && this.y - heightAt(this.x, this.z, this.y) > 7) {
+      world.econ.items.parachute--; this.parachute = true; world.onMessage?.('המצנח נפתח!');
+    }
+    if (this.parachute) {
+      this.vy = Math.max(this.vy, -3.2);
+      const sp = 6 + my * 3;
+      this.facing += -mx * 1.4 * dt;
+      this.vx = Math.sin(this.facing) * sp; this.vz = Math.cos(this.facing) * sp;
+    }
     this.x += this.vx * dt; this.z += this.vz * dt; this.y += this.vy * dt;
     this._collide(world);
     let g = heightAt(this.x, this.z, this.y);
@@ -78,7 +94,14 @@ export class Player {
     const floatY = WATER_Y - 1.25;
     this.swimming = g < floatY - 0.05;
     if (this.swimming) g = floatY;
-    if (this.y <= g) { this.y = g; this.vy = 0; this.grounded = true; }
+    if (this.y <= g) {
+      if (!wasGrounded) {
+        const drop = (this.fallTop ?? this.y) - g;
+        if (drop > 4.5 && !this.parachute && !this.swimming) world.onHurt?.(Math.round((drop - 4) * 9), 'נפילה');
+        this.parachute = false;
+      }
+      this.y = g; this.vy = 0; this.grounded = true;
+    }
     else if (this.y - g > 0.05 && this.vy <= 0 && this.grounded && this.y - g < 0.6) { this.y = g; this.vy = 0; }
     else if (this.y > g + 0.05) this.grounded = false;
 
@@ -92,7 +115,8 @@ export class Player {
       this.prompt = { key: 'interact', text: 'שב על הספסל' };
       if (input.wasPressed('interact')) this._sitOn(this.nearBench);
     }
-    this.model.animate(dt, { speed: Math.hypot(this.vx, this.vz), grounded: this.grounded, vy: this.vy, mode: this.swimming ? 'swim' : 'foot' });
+    this.model.animate(dt, { speed: this.parachute ? 0 : Math.hypot(this.vx, this.vz), grounded: this.grounded || this.parachute, vy: this.vy, mode: this.swimming ? 'swim' : 'foot', aim: this.armed ? (this.firing > 0 ? 2 : 1) : 0, chute: this.parachute });
+    if (this.canopy) this.canopy.visible = !!this.parachute;
     this._sync();
   }
 
@@ -100,12 +124,13 @@ export class Player {
     for (let iter = 0; iter < 2; iter++) {
       world.statics.query(this.x - 2, this.z - 2, this.x + 2, this.z + 2, _q);
       for (const c of _q) {
-        if (c.tag === 'slab') continue;
+        if (c.off || c.tag === 'slab') continue;
         if (!verticalOverlap(this.y + 0.25, this.y + HEIGHT, c)) continue;
         const r = circleVs(this.x, this.z, RADIUS, c);
         if (r.hit) this._push(r);
       }
       if (world.peds) for (const o of world.peds) {
+        if (Math.abs((o.y ?? this.y) - this.y) > 1.5) continue;
         const dx = this.x - o.x, dz = this.z - o.z, d = Math.hypot(dx, dz), m = RADIUS + 0.3;
         if (d < m && d > 1e-4) this._push({ nx: dx / d, nz: dz / d, depth: m - d });
       }
@@ -279,7 +304,7 @@ export class Player {
     world.statics.query(x - 1, z - 1, x + 1, z + 1, _q);
     const y = heightAt(x, z, this.vehicle ? this.vehicle.y + 0.6 : this.y);
     if (y < WATER_Y - 1.2 && !(this.vehicle && this.vehicle.inWater)) return false;
-    for (const c of _q) if (c.tag !== 'slab' && verticalOverlap(y + 0.25, y + HEIGHT, c) && circleVs(x, z, RADIUS, c).hit) return false;
+    for (const c of _q) if (!c.off && c.tag !== 'slab' && verticalOverlap(y + 0.25, y + HEIGHT, c) && circleVs(x, z, RADIUS, c).hit) return false;
     for (const v of world.vehicles) if (v !== ignore && Math.abs(v.x - x) < 8 && Math.abs(v.z - z) < 8 && circleVs(x, z, RADIUS, v.collider).hit) return false;
     return true;
   }
@@ -315,7 +340,7 @@ export class Player {
     } else if (s.phase === 'close') {
       this.model.animate(dt, { speed: 0, grounded: true, mode: 'foot' });
       if (s.t > 0.25) {
-        v.driver = null; this.vehicle = null; this.ignoreVehicle = null;
+        v.driver = null; this.lastVehicle = v; this.vehicle = null; this.ignoreVehicle = null;
         this.state = 'foot'; this.seq = null; this.vx = this.vz = this.vy = 0; this.grounded = true;
       }
     }

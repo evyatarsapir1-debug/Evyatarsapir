@@ -48,6 +48,16 @@ export class CameraRig {
       lam = 20;
     } else {
       dist = this.dist;
+      // indoors: find the ceiling above the player and keep a close, level camera under it
+      this.ceiling = null;
+      this.statics.query(player.x - 0.5, player.z - 0.5, player.x + 0.5, player.z + 0.5, _q);
+      for (const c of _q) {
+        if ((c.tag === 'slab' || c.tag === 'roof') && c.y0 > player.y + 1.6 && (this.ceiling === null || c.y0 < this.ceiling)) {
+          const dx = player.x - c.x, dz = player.z - c.z;
+          if (Math.abs(dx * c.c - dz * c.s) < c.hw && Math.abs(dx * c.s + dz * c.c) < c.hd) this.ceiling = c.y0;
+        }
+      }
+      if (this.ceiling !== null) { dist = Math.min(dist, 3.2); this.pitch = Math.min(this.pitch, 0.42); }
       tx = player.x; ty = player.y + 1.55; tz = player.z;
       if (player.state === 'sitting') ty -= 0.45;
       // gentle auto-follow while walking
@@ -82,7 +92,7 @@ export class CameraRig {
     let t = 1;
     this.statics.query(Math.min(T.x, ex) - 1, Math.min(T.z, ez) - 1, Math.max(T.x, ex) + 1, Math.max(T.z, ez) + 1, _q);
     for (const c of _q) {
-      if (c.tag === 'water') continue;
+      if (c.tag === 'water' || c.tag === 'furniture' || c.off) continue;
       if (c.type === 'circle' && c.r < 0.5) continue; // ignore thin poles
       const h = segmentVsBox(T.x, T.y, T.z, ex, ey, ez, c, 0.25);
       if (h < t) t = h;
@@ -91,6 +101,7 @@ export class CameraRig {
     this.curDist = want < this.curDist ? want : damp(this.curDist, want, 4, dt);
     let px = T.x + dirX * this.curDist, py = T.y + dirY * this.curDist, pz = T.z + dirZ * this.curDist;
     py = Math.max(py, heightAt(px, pz, py) + 0.3);
+    if (!v && this.ceiling !== null) py = Math.min(py, this.ceiling - 0.25);
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt * 2.5);
       const s = this.shake * 0.25;

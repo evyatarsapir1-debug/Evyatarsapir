@@ -22,6 +22,7 @@ export class Input {
     const keyMap = {
       KeyE: 'interact', KeyF: 'vehicle', KeyC: 'camera', KeyH: 'horn', KeyM: 'map', Escape: 'pause', KeyP: 'pause',
       Space: 'jump', ShiftLeft: 'run', ShiftRight: 'run', KeyQ: 'down', KeyR: 'up', Tab: 'map',
+      KeyG: 'cycle', KeyI: 'bag', KeyL: 'light', KeyT: 'fire',
     };
     addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
@@ -38,8 +39,8 @@ export class Input {
 
     const c = this.canvas;
     let mouseDown = false, lx = 0, ly = 0;
-    c.addEventListener('mousedown', (e) => { mouseDown = true; lx = e.clientX; ly = e.clientY; });
-    addEventListener('mouseup', () => { mouseDown = false; });
+    c.addEventListener('mousedown', (e) => { mouseDown = true; lx = e.clientX; ly = e.clientY; if (e.button === 0 && this.fireByMouse) { this.pressed.add('fire'); this.mouseFire = true; } });
+    addEventListener('mouseup', () => { mouseDown = false; this.mouseFire = false; });
     addEventListener('mousemove', (e) => {
       if (document.pointerLockElement === c) { this.lookDX += e.movementX; this.lookDY += e.movementY; return; }
       if (!mouseDown) return;
@@ -117,6 +118,7 @@ export class Input {
       case 'gas': return false;
       case 'brake': return false;
       case 'horn': return k.has('KeyH');
+      case 'fire': return this.mouseFire || k.has('KeyT');
     }
     return false;
   }

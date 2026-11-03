@@ -4,6 +4,11 @@ import * as WG from './world/worldGen.js';
 const { districtAt } = WG;
 import { heightAt, surfaces } from './world/terrain.js';
 import { Pedestrians } from './npc/pedestrians.js';
+import { InteriorManager } from './world/interiorManager.js';
+import { Economy, fmt } from './game/economy.js';
+import { ShopUI, shopKind } from './game/shops.js';
+import { WeaponSystem, WEAPONS, WEAPON_ORDER } from './game/weapons.js';
+import { shared as vehicleMats } from './vehicles/vehicleModels.js';
 import { setAnisotropy } from './world/textures.js';
 import { makeMaterials } from './world/worldBuilder.js';
 import { ChunkManager } from './world/chunkManager.js';
@@ -63,11 +68,21 @@ class Game {
     this.vehicles = new VehicleManager(this.scene, this.statics);
     this.traffic = new Traffic(this.scene, this.graph, this.statics);
     this.peds = new Pedestrians(this.scene);
+    this.interiors = new InteriorManager(this.scene, this.mats);
     this.player = new Player(this.scene, defaultAppearance());
     this.rig = new CameraRig(this.camera, this.statics);
+    this.econ = new Economy();
+    this.weapons = new WeaponSystem(this.scene, this.statics);
+    this.flashlight = new THREE.SpotLight(0xfff2d8, 0, 40, 0.5, 0.5, 1.2);
+    this.scene.add(this.flashlight, this.flashlight.target);
+    this.headlight = new THREE.SpotLight(0xfff4e0, 0, 70, 0.55, 0.45, 1.3);
+    this.scene.add(this.headlight, this.headlight.target);
+    this.lampLights = [];
+    for (let i = 0; i < 8; i++) { const l = new THREE.PointLight(0xffd59a, 0, 24, 1.6); l.visible = false; this.scene.add(l); this.lampLights.push(l); }
     this.input = new Input(this.canvas);
     this.minimap = new MiniMap($('minimap'), $('fullMap'));
     this.creator = new Creator((app) => this.player.model.setAppearance(app));
+    this.shop = new ShopUI(this);
     this.applySettings(this.settings);
     bindSettings(this.settings, (s) => { this.applySettings(s); saveSettings(s); });
     await step(60, 'בונה שכונות...');
@@ -100,6 +115,7 @@ class Game {
     this.traffic?.setDensity(s.traffic);
     if (this.rig) { this.rig.sensitivity = s.sensitivity; this.rig.invertY = s.invertY; }
     this.audio.setVolume(s.volume);
+    if (this.env) { if (s.weather && s.weather !== 'auto') { this.env.setWeather(s.weather); this.env.weatherT = 1e9; } else if (this.env.weatherT > 1e8) this.env.weatherT = 120; }
     $('fps').classList.toggle('hidden', !s.showFps);
     this.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); });
   }
@@ -124,6 +140,9 @@ class Game {
       if (this.creatorBack === 'pause') { this.save(); this.resume(); return; }
       if (this.pendingNew || !hasSave()) this.newGame(); else { this.save(true); this.continueGame(); }
     };
+    $('sHour').oninput = (e) => { this.env.hour = +e.target.value; };
+    $('btnSettings').addEventListener('click', () => { $('sHour').value = this.env.hour; });
+    $('pSettings').addEventListener('click', () => { $('sHour').value = this.env.hour; });
     $('sBack').onclick = () => (this.settingsBack === 'pause' ? this.pause() : this.toMenu());
     $('pResume').onclick = () => this.resume();
     $('pMap').onclick = () => this.openMap();
@@ -134,6 +153,8 @@ class Game {
     $('pSave').onclick = () => { this.save(); this.toast('המשחק נשמר'); this.resume(); };
     $('pMenu').onclick = () => { this.save(); this.toMenu(); };
     $('mapClose').onclick = () => this.resume();
+    $('bagClose').onclick = () => this.closeBag();
+    $('prompt').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); const k = $('prompt').dataset.key; if (k) this.input.pressed.add(k); });
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.state === 'playing') { this.save(); this.pause(); } });
   }
 
@@ -176,6 +197,7 @@ class Game {
     this.player.state = 'foot';
     this.rig.yaw = START.facing; this.rig.pitch = 0.25; this.rig.first = true;
     this.playTime = 0;
+    this.econ.reset(); this.equip(null);
     this.save();
     this.startPlaying();
     this.toast('ברוכים הבאים לאזורה סיטי! מצא רכב חונה ולחץ F (או "כניסה") כדי לנהוג.', 6);
@@ -192,6 +214,8 @@ class Game {
     this.player.setPosition(p.x, p.z, p.facing, p.y);
     this.player.state = 'foot';
     this.playTime = s.playTime || 0;
+    this.econ.load(s.econ); this.equip(this.econ.equipped);
+    if (s.world) { this.env.hour = s.world.hour ?? 10; this.env.setWeather(s.world.weather || 'clear'); }
     if (s.vehicle) {
       const vd = s.vehicle;
       this.chunks.update(vd.x, vd.z, true);
@@ -220,10 +244,75 @@ class Game {
     this.input.endFrame();
   }
 
+  equip(id) {
+    this.econ.equipped = id && this.econ.weapons[id] ? id : null;
+    this.weapons.attachGun(this.player, this.econ.equipped);
+    this.player.armed = !!this.econ.equipped;
+  }
+  cycleWeapon() {
+    const owned = WEAPON_ORDER.filter((id) => this.econ.weapons[id]);
+    if (!owned.length) { this.toast('אין לך ציוד — אפשר לקנות בחנות "ארסנל הצללים"', 2.5); return; }
+    const list = [null, ...owned];
+    const i = list.indexOf(this.econ.equipped);
+    this.equip(list[(i + 1) % list.length]);
+    this.toast(this.econ.equipped ? WEAPONS[this.econ.equipped].name : 'ידיים ריקות', 1.5);
+  }
+  myVehicleNear(r) {
+    let best = null, bd = r;
+    for (const v of this.vehicles.kept) {
+      const d = Math.hypot(v.x - this.player.x, v.z - this.player.z);
+      if (d < bd && v.driver !== 'ai') { bd = d; best = v; }
+    }
+    return best;
+  }
+  openShop(kind, name) { this.state = 'shop'; this.shop.show(kind, name); }
+  closeShop() { if (this.state === 'shop') { this.state = 'playing'; this.input.endFrame(); this.clock.getDelta(); } }
+  hurt(n, why) {
+    if (n <= 0) return;
+    this.econ.hurt(n);
+    $('hurtFlash').classList.remove('on'); void $('hurtFlash').offsetWidth; $('hurtFlash').classList.add('on');
+    if (this.econ.health <= 0) this.knockedOut(why);
+  }
+  knockedOut(why) {
+    const fee = Math.min(this.econ.money, 500);
+    this.econ.money -= fee; this.econ.health = 100;
+    this.previewVehicleSafe();
+    if (this.player.state !== 'foot') { const v = this.player.vehicle; if (v) v.driver = null; this.player.vehicle = null; this.player.state = 'foot'; this.player._detach?.(); }
+    this.teleport(START.x, START.z, START.facing);
+    this.toast(`התעלפת${why ? ' (' + why + ')' : ''} והתעוררת במרכז העיר. טיפול רפואי: ${fmt(fee)}`, 4);
+  }
+  openBag() {
+    this.state = 'bag';
+    const el = $('bagPanel'), list = el.querySelector('.items'), E = this.econ, p = this.player;
+    const render = () => {
+      list.innerHTML = '';
+      const row = (name, desc, label, fn, disabled) => {
+        const r = document.createElement('div'); r.className = 'srow';
+        r.innerHTML = `<div class="sname"><b>${name}</b>${desc ? `<small>${desc}</small>` : ''}</div>`;
+        const b = document.createElement('button'); b.className = 'sbuy'; b.type = 'button'; b.textContent = label; b.disabled = !!disabled;
+        b.onclick = () => { const m = fn(); if (m) el.querySelector('.smsg').textContent = m; this.save(); render(); };
+        r.appendChild(b); list.appendChild(r);
+      };
+      el.querySelector('.smoney').textContent = `${fmt(E.money)} · בריאות ${Math.round(E.health)}`;
+      row(`חטיפים (${E.items.snacks})`, '+20 בריאות', 'לאכול', () => { E.items.snacks--; E.heal(20); return 'ננשנש. +20 בריאות'; }, E.items.snacks < 1 || E.health >= 100);
+      const v = p.state === 'driving' ? p.vehicle : this.myVehicleNear(8);
+      row(`ערכות תיקון (${E.items.repairKit})`, v ? `ל${v.T.name} (נזק ${Math.round(v.damage)}%)` : 'צריך להיות ליד הרכב שלך', 'לתקן', () => { E.items.repairKit--; v.repair(); return 'הרכב תוקן'; }, E.items.repairKit < 1 || !v);
+      row(`מצנחים (${E.items.parachute})`, 'נפתח לבד בנפילה מגובה', '—', () => null, true);
+      if (E.items.flashlight) row('פנס', E.flashlightOn ? 'דולק' : 'כבוי', E.flashlightOn ? 'לכבות' : 'להדליק', () => { E.flashlightOn = !E.flashlightOn; return null; });
+      row('ידיים ריקות', '', this.econ.equipped ? 'לבחור' : 'נבחר', () => { this.equip(null); return null; }, !this.econ.equipped);
+      for (const id of WEAPON_ORDER) if (E.weapons[id]) row(WEAPONS[id].name, `${E.weapons[id].ammo} יחידות · פריט משחק בדיוני`, E.equipped === id ? 'נבחר' : 'לבחור', () => { this.equip(id); return null; }, E.equipped === id);
+    };
+    el.querySelector('.smsg').textContent = '';
+    el.classList.add('show');
+    render();
+  }
+  closeBag() { $('bagPanel').classList.remove('show'); if (this.state === 'bag') { this.state = 'playing'; this.input.endFrame(); this.clock.getDelta(); } }
+
   // Teleport helper (used by automated tests / debugging); loads the area first so you never fall through the world.
   teleport(x, z, facing = 0, y = 1000) {
     this.chunks.update(x, z, true);
     this.player.setPosition(x, z, facing, y);
+    this.interiors.update(0, this.player, true);
     this.rig.yaw = facing; this.rig.first = true;
   }
 
@@ -247,6 +336,8 @@ class Game {
         player: { x: v ? v.x : p.x, z: v ? v.z : p.z, y: v ? v.y : p.y, facing: p.facing },
         vehicle: v ? { type: v.typeKey, color: v.color, x: v.x, z: v.z, y: v.y, heading: v.heading, damage: v.damage } : null,
         playTime: this.playTime || 0,
+        econ: this.econ.toJSON(),
+        world: { hour: this.env.hour, weather: this.env.weather },
       };
     }
     saveGame(data);
@@ -269,6 +360,36 @@ class Game {
     this.renderer.render(this.scene, this.camera);
   }
 
+  // time of day + weather -> every light-dependent material
+  _lighting(dt, cx, cz) {
+    const L = this.env.tick(dt);
+    const n = L.night, M = this.mats;
+    for (const st of ['glass', 'office', 'concrete', 'plaster', 'brick', 'industrial', 'storefront']) M['f_' + st].emissiveIntensity = n * (st === 'storefront' ? 1.3 : 1.05);
+    M.lamp.emissiveIntensity = 0.6 + n * 2.6;
+    M.signs.emissiveIntensity = 0.15 + n * 0.9;
+    vehicleMats.head.emissiveIntensity = 0.4 + n * 3;
+    vehicleMats.tail.emissiveIntensity = 0.3 + n * 1.6;
+    const dry = 1 - L.wet * 0.35;
+    for (const k of ['road', 'asphalt', 'lot', 'tiles', 'plaza']) { M[k].roughness = 0.9 - L.wet * 0.55; M[k].color.setScalar(dry); }
+    M.water.color.setHex(0x7fb6cf).multiplyScalar(0.35 + 0.65 * (1 - n));
+    // street lamps near the player actually light the street at night
+    const want = this.settings.quality === 'low' ? 0 : this.settings.quality === 'medium' ? 4 : 8;
+    this._lampT = (this._lampT || 0) - dt;
+    if (this._lampT <= 0) {
+      this._lampT = 0.5;
+      const lamps = [];
+      for (const [i, j] of this.physCells) for (const l of WG.cellData(i, j).lamps) { const d = (l.x - cx) ** 2 + (l.z - cz) ** 2; if (d < 70 * 70) lamps.push([d, l]); }
+      lamps.sort((a, b) => a[0] - b[0]);
+      this.lampLights.forEach((pl, k) => {
+        const e = lamps[k];
+        pl.visible = n > 0.05 && k < want && !!e;
+        if (pl.visible) { const l = e[1]; pl.position.set(l.x + l.dx * 1.5, l.y + 6.6, l.z + l.dz * 1.5); }
+      });
+    }
+    for (const pl of this.lampLights) pl.intensity = n * 22;
+    return L;
+  }
+
   _menuFrame(dt) {
     this.menuAngle += dt * 0.05;
     const cx = 520, cz = 520, r = 230;
@@ -276,7 +397,8 @@ class Game {
     this.camera.position.set(x, 95, z);
     this.camera.lookAt(cx, 30, cz);
     this.chunks.update(cx, cz);
-    this.env.update(new THREE.Vector3(cx, 0, cz));
+    this._lighting(dt, cx, cz);
+    this.env.update(new THREE.Vector3(cx, 0, cz), dt, this.camera);
     const all = [...this.vehicles.all(), ...this.traffic.cars];
     for (const veh of all) veh.setFar(true);
     this.traffic.update(dt, this.time, cx, cz, all, this.peds.obstacles());
@@ -308,26 +430,68 @@ class Game {
     if (input.wasPressed('pause')) { this.save(); this.pause(); input.endFrame(); return; }
     if (input.wasPressed('map')) { this.openMap(); input.endFrame(); return; }
     if (input.wasPressed('camera')) this.rig.toggleMode();
+    if (input.wasPressed('bag')) { this.openBag(); input.endFrame(); return; }
+    if (input.wasPressed('cycle')) this.cycleWeapon();
+    if (input.wasPressed('light')) { if (this.econ.items.flashlight) this.econ.flashlightOn = !this.econ.flashlightOn; else this.toast('אין לך פנס — אפשר לקנות בחנות ציוד', 2); }
+    input.fireByMouse = !!this.econ.equipped && p.state === 'foot';
 
     const all = [...this.vehicles.all(), ...this.traffic.cars];
     const pedObs = this.peds.obstacles();
     const world = {
       statics: this.statics, vehicles: all, benches: this.chunks.benches, peds: pedObs,
       onVehicleUsed: (v) => this.vehicles.markUsed(v),
+      econ: this.econ, onHurt: (n, why) => this.hurt(n, why), onMessage: (m) => this.toast(m, 2),
     };
+    this.interiors.update(dt, p);
     p.update(dt, input, this.rig.yaw, world);
+    // elevator call buttons on landings
+    if (!p.prompt) {
+      const ep = this.interiors.promptFor(p);
+      if (ep) { p.prompt = { key: 'interact', text: ep.text }; if (input.wasPressed('interact')) ep.action(); }
+    }
+    // shop counters
+    if (!p.prompt && p.state === 'foot') {
+      for (const L of this.interiors.places()) {
+        const c = L.spec.counter;
+        if (!c || c.lobby) continue;
+        const kind = shopKind(L.b.sign);
+        if (!kind || Math.abs(c.y - p.y) > 1 || Math.hypot(c.pt[0] - p.x, c.pt[1] - p.z) > 2.4) continue;
+        p.prompt = { key: 'interact', text: `קנייה — ${L.b.sign}` };
+        if (input.wasPressed('interact')) { this.openShop(kind, L.b.sign); input.endFrame(); return; }
+        break;
+      }
+    }
     const v = p.state === 'driving' ? p.vehicle : null;
-    if (v && v.lastImpact > 4) { this.rig.shake = Math.min(1, v.lastImpact / 15); this.audio.impact(v.lastImpact); v.lastImpact = 0; }
+    if (v && v.lastImpact > 4) { this.rig.shake = Math.min(1, v.lastImpact / 15); this.audio.impact(v.lastImpact); if (v.lastImpact > 12) this.hurt(Math.round((v.lastImpact - 12) * 2.5), 'תאונה'); v.lastImpact = 0; }
     if (v) v.horn = input.isHeld('horn');
 
     const focusX = v ? v.x : p.x, focusZ = v ? v.z : p.z;
     const obstacles = p.state === 'foot' || p.state === 'sitting' ? [{ x: p.x, z: p.z, r: 0.5 }, ...pedObs] : pedObs;
     this.traffic.update(dt, this.time, focusX, focusZ, all, obstacles);
     this.vehicles.update(dt, focusX, focusZ, all, (x, z) => this.chunks.isPhysicsReady(x, z));
-    this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches });
+    this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places() });
+    this.weapons.update(dt, {
+      player: p, econ: this.econ, input, camera: this.camera, vehicles: all,
+      peds: this.peds.peds.filter((q) => q.state !== 'inside'),
+      scare: (ped, src, hit) => this.peds.scare(ped, src, hit), hurtPlayer: (n) => this.hurt(n, 'פיצוץ'),
+      onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); }, message: (m) => this.toast(m, 2),
+    });
     this.rig.update(dt, input, p);
+    // flashlight
+    const fl = this.flashlight, on = this.econ.items.flashlight && this.econ.flashlightOn && p.state !== 'driving';
+    fl.intensity = on ? 60 : 0;
+    if (on) { fl.position.set(p.x, p.y + 1.5, p.z); fl.target.position.set(p.x + Math.sin(p.facing) * 8, p.y + 0.4, p.z + Math.cos(p.facing) * 8); }
     const pending = this.chunks.update(focusX, focusZ);
-    this.env.update(new THREE.Vector3(focusX, v ? v.y : p.y, focusZ));
+    const LI = this._lighting(dt, focusX, focusZ);
+    this.env.update(new THREE.Vector3(focusX, v ? v.y : p.y, focusZ), dt, this.camera);
+    // headlights of the player's car at night
+    const hl = this.headlight;
+    hl.intensity = v && !v.isHeli && LI.night > 0.3 ? 90 * LI.night : 0;
+    if (hl.intensity) {
+      const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
+      hl.position.set(v.x + fx * v.T.L * 0.5, v.y + 0.8, v.z + fz * v.T.L * 0.5);
+      hl.target.position.set(v.x + fx * 25, v.y, v.z + fz * 25);
+    }
     this.mats.water.map.offset.x = (this.time * 0.01) % 1;
     this.audio.update(v, p.controls?.throttle || 0, input.isHeld('horn'));
 
@@ -351,11 +515,23 @@ class Game {
     const p = this.player;
     // prompt
     const pr = $('prompt');
-    if (p.prompt && !this.input.isTouch) {
-      pr.innerHTML = `<kbd>${p.prompt.key === 'vehicle' ? 'F' : 'E'}</kbd>${p.prompt.text}`;
+    // clickable action button (works with mouse, touch and keyboard)
+    if (p.prompt) {
+      const label = p.prompt.key === 'vehicle' ? (v ? (v.isHeli ? 'צא מהמסוק' : 'צא מהרכב') : 'היכנס לרכב') : p.prompt.text;
+      const html = this.input.isTouch ? label : `<kbd>${p.prompt.key === 'vehicle' ? 'F' : 'E'}</kbd>${label}${p.prompt.key === 'vehicle' && !v ? ' · ' + p.prompt.text.replace('היכנס: ', '') : ''}`;
+      if (pr.dataset.html !== html) { pr.innerHTML = html; pr.dataset.html = html; }
+      pr.dataset.key = p.prompt.key;
       pr.classList.add('show');
     } else pr.classList.remove('show');
     if (p.message) { this.toast(p.message, 2); p.message = null; }
+    // money, health, equipment
+    $('money').textContent = fmt(this.econ.money);
+    $('clock').textContent = `${this.env.clockText} · ${this.env.weatherName}`;
+    $('hpFill').style.width = this.econ.health + '%';
+    $('hpFill').classList.toggle('low', this.econ.health < 30);
+    const wid = this.econ.equipped;
+    $('weaponHud').textContent = wid && p.state === 'foot' ? `${WEAPONS[wid].name} · ${this.econ.weapons[wid].ammo}` : '';
+    $('hud').classList.toggle('armed', !!wid && p.state === 'foot');
     // speedometer
     const sp = $('speedo');
     if (v) {
@@ -373,6 +549,8 @@ class Game {
       $('tExit').classList.toggle('show', !!v && p.prompt?.key === 'vehicle');
       $('tExitHeli').classList.toggle('show', !!v && p.prompt?.key === 'vehicle');
       $('runBtn').classList.toggle('on', p.sprint);
+      $('tFire').classList.toggle('show', !!this.econ.equipped && mode === 'foot');
+      $('tLight').classList.toggle('show', !!this.econ.items.flashlight);
       $('joyHint').style.display = this.input.joy.id === null && !v && this.playTime < 30 ? 'block' : 'none';
     }
     // minimap

@@ -34,7 +34,7 @@
         <button id="btnSettings" class="mbtn">הגדרות</button>
         <button id="btnExit" class="mbtn">יציאה</button>
       </div>
-      <div class="version">גרסה 0.3 — עולם פתוח אינסופי: ערים, גשרים, מנהרות, מבנים נגישים והולכי רגל</div>
+      <div class="version">גרסה 0.4 — עיר חיה: מעליות, דירות, חנויות, יום ולילה ומזג אוויר</div>
     </div>
   </div>
 
@@ -73,6 +73,9 @@
       <div class="row"><span>צפיפות תנועה</span><input type="range" id="sTraffic" min="0" max="40" step="1" /></div>
       <div class="row"><span>קול</span><input type="range" id="sVolume" min="0" max="1" step="0.05" /></div>
       <div class="row"><span>הצג FPS</span><input type="checkbox" id="sFps" /></div>
+      <div class="row"><span>מזג אוויר</span>
+        <select id="sWeather"><option value="auto">משתנה לבד</option><option value="clear">בהיר</option><option value="cloudy">מעונן</option><option value="rain">גשם</option><option value="fog">ערפל</option></select></div>
+      <div class="row"><span>שעה ביום</span><input type="range" id="sHour" min="0" max="23.5" step="0.5" /></div>
       <div class="creator-actions"><button class="mbtn primary" id="sBack">שמור וחזור</button></div>
     </div>
   </div>
@@ -130,14 +133,39 @@
       <button class="mbtn" id="exitBack">חזרה לתפריט</button></div>
   </div>
 
+  <!-- Shop -->
+  <div id="shopPanel" class="panel-overlay">
+    <div class="creator-panel">
+      <div class="shead"><h2 class="stitle">חנות</h2><button class="mbtn sclose" type="button">סגור</button></div>
+      <div class="smoney"></div>
+      <div class="smsg"></div>
+      <div class="items"></div>
+    </div>
+  </div>
+  <!-- Bag / inventory -->
+  <div id="bagPanel" class="panel-overlay">
+    <div class="creator-panel">
+      <div class="shead"><h2>התיק שלי</h2><button class="mbtn" id="bagClose" type="button">סגור</button></div>
+      <div class="smoney"></div>
+      <div class="smsg"></div>
+      <div class="items"></div>
+    </div>
+  </div>
+
   <!-- HUD -->
   <div id="hud" class="hidden">
     <canvas id="minimap" width="300" height="300"></canvas>
     <div id="district"></div>
     <div id="toast"></div>
-    <div id="prompt"></div>
+    <button id="prompt" type="button"></button>
+    <div id="elevPanel"><div class="etitle">מעלית</div><div class="status">קומה</div><div class="floors"></div></div>
     <div id="speedo"><div id="speedVal">0</div><div class="unit">קמ״ש</div><div id="vehName"></div><div id="dmgBar"><div id="dmgFill"></div></div></div>
     <div id="fps"></div>
+    <div id="stats"><div id="money">₪0</div><div id="hpBar"><div id="hpFill"></div></div><div id="clock"></div></div>
+    <div id="weaponHud"></div>
+    <div id="hurtFlash"></div>
+    <div id="crosshair"></div>
+    <button id="bagBtn" data-btn="bag" type="button">תיק</button>
     <button id="pauseBtn" data-btn="pause" aria-label="הפסקה">II</button>
   </div>
 
@@ -149,7 +177,10 @@
       <button class="tbtn big" data-btn="jump">קפיצה</button>
       <button class="tbtn" data-btn="run" id="runBtn">ריצה</button>
       <button class="tbtn ctx" data-btn="interact" id="tInteract">פעולה</button>
-      <button class="tbtn ctx accent" data-btn="vehicle" id="tVehicle">כניסה</button>
+      <button class="tbtn ctx accent wide" data-btn="vehicle" id="tVehicle">היכנס לרכב</button>
+      <button class="tbtn ctx big fire" data-btn="fire" id="tFire">ירי</button>
+      <button class="tbtn small" data-btn="cycle">ציוד</button>
+      <button class="tbtn ctx small" data-btn="light" id="tLight">פנס</button>
     </div>
     <div class="tbtns drive">
       <button class="tbtn pedal gas" data-btn="gas">גז</button>
@@ -157,13 +188,13 @@
       <button class="tbtn small" data-btn="handbrake">בלם יד</button>
       <button class="tbtn small" data-btn="camera">מצלמה</button>
       <button class="tbtn small" data-btn="horn">צופר</button>
-      <button class="tbtn ctx accent" data-btn="vehicle" id="tExit">יציאה</button>
+      <button class="tbtn ctx accent wide" data-btn="vehicle" id="tExit">צא מהרכב</button>
     </div>
     <div class="tbtns heli">
       <button class="tbtn pedal" data-btn="up">למעלה</button>
       <button class="tbtn pedal" data-btn="down">למטה</button>
       <button class="tbtn small" data-btn="camera">מצלמה</button>
-      <button class="tbtn ctx accent" data-btn="vehicle" id="tExitHeli">יציאה</button>
+      <button class="tbtn ctx accent wide" data-btn="vehicle" id="tExitHeli">צא מהמסוק</button>
     </div>
     <button class="tbtn mapbtn" data-btn="map">מפה</button>
   </div>

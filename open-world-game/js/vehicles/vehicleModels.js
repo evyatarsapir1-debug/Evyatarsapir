@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GeoBuilder } from '../world/geoBuilder.js';
 
-const shared = {
+export const shared = {
   tire: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 }),
   rim: new THREE.MeshStandardMaterial({ color: 0xbfc5ca, metalness: 0.8, roughness: 0.3 }),
   glass: new THREE.MeshStandardMaterial({ color: 0x1c2a36, metalness: 0.6, roughness: 0.08, transparent: true, opacity: 0.55 }),
@@ -77,6 +77,7 @@ function optimize(parts) {
     const c = o.material === shared.wheel ? 0x202020 : o.material.color ? o.material.color.getHex() : 0x888888;
     lb.addGeometry(o.geometry, o.matrixWorld, c);
   });
+  parts.lodPaint = parts.paint.color.clone();
   const lod = new THREE.Mesh(lb.build(), shared.lod);
   lod.castShadow = true; lod.visible = false;
   parts.root.add(lod);
@@ -112,20 +113,45 @@ export function buildVehicleModel(type, color) {
       parts.panels.front = m(box(W, 0.35, 0.15), shared.dark, body, 0, clear + 0.25, L / 2 + 0.05);
       parts.panels.rear = m(box(W, 0.3, 0.15), shared.dark, body, 0, clear + 0.2, -L / 2 - 0.05);
     } else {
-      const lowH = H * 0.48;
-      const sporty = T === undefined ? false : (T.maxSpeed > 60);
+      const lowH = H * (T.van ? 0.4 : 0.48);
+      const sporty = T.maxSpeed > 60 || T.coupe;
       // lower body
       const lower = m(box(W, lowH, L), paint, body, 0, clear + lowH / 2, 0);
       lower.receiveShadow = true;
       // hood slope hint
       m(box(W * 0.98, 0.06, L * 0.3), paint, body, 0, clear + lowH + 0.02, L * 0.33);
-      // cabin (glass) + roof
-      const cabL = L * (sporty ? 0.42 : 0.5), cabH = H - lowH - clear, cabZ = sporty ? -L * 0.06 : -L * 0.05;
-      const cab = m(box(W * 0.88, cabH * 0.92, cabL), shared.glass, body, 0, clear + lowH + cabH * 0.46, cabZ, false);
-      parts.glassParts.push(cab);
-      m(box(W * 0.86, 0.07, cabL * 0.82), paint, body, 0, clear + lowH + cabH * 0.95, cabZ - cabL * 0.02);
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-        m(box(0.06, cabH * 0.92, 0.08), paint, body, sx * W * 0.43, clear + lowH + cabH * 0.46, cabZ + sz * cabL * 0.47);
+      // cabin (glass) + roof — shaped per body style
+      let cabL = L * (sporty ? 0.42 : 0.5), cabH = H - lowH - clear, cabZ = sporty ? -L * 0.06 : -L * 0.05;
+      if (T.pickup) { cabL = L * 0.36; cabZ = L * 0.05; }
+      if (T.van) { cabL = L * 0.8; cabZ = -L * 0.08; }
+      if (T.convertible) {
+        // open top: only a raked windshield, seats and a roll bar
+        m(box(W * 0.86, cabH * 0.55, 0.05), shared.glass, body, 0, clear + lowH + cabH * 0.27, cabZ + cabL * 0.45, false).rotation.x = -0.35;
+        m(box(W * 0.8, 0.5, 0.5), shared.seat, body, 0, clear + lowH + 0.05, cabZ - cabL * 0.05);
+        m(box(W * 0.84, 0.08, 0.08), paint, body, 0, clear + lowH + cabH * 0.55, cabZ - cabL * 0.35);
+      } else {
+        const cab = m(box(W * 0.88, cabH * 0.92, cabL), shared.glass, body, 0, clear + lowH + cabH * 0.46, cabZ, false);
+        parts.glassParts.push(cab);
+        m(box(W * 0.86, 0.07, cabL * 0.82), paint, body, 0, clear + lowH + cabH * 0.95, cabZ - cabL * 0.02);
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+          m(box(0.06, cabH * 0.92, 0.08), paint, body, sx * W * 0.43, clear + lowH + cabH * 0.46, cabZ + sz * cabL * 0.47);
+        }
+        if (T.van) for (const sx of [-1, 1]) m(box(0.04, cabH * 0.75, cabL * 0.55), paint, body, sx * W * 0.445, clear + lowH + cabH * 0.42, cabZ - cabL * 0.2);
+      }
+      if (T.pickup) {
+        // open cargo bed behind the cab
+        const bedL = L * 0.42, bz = -L / 2 + bedL / 2;
+        m(box(W, 0.45, 0.08), paint, body, 0, clear + lowH + 0.22, -L / 2 + 0.04);
+        for (const sx of [-1, 1]) m(box(0.08, 0.45, bedL), paint, body, sx * (W / 2 - 0.04), clear + lowH + 0.22, bz);
+        m(box(W - 0.2, 0.04, bedL - 0.1), shared.dark, body, 0, clear + lowH + 0.01, bz);
+      }
+      if (T.spoiler) {
+        for (const sx of [-0.5, 0.5]) m(box(0.06, 0.3, 0.08), shared.dark, body, sx * W * 0.7, clear + lowH + 0.15, -L / 2 + 0.25);
+        m(box(W * 0.95, 0.05, 0.35), shared.dark, body, 0, clear + lowH + 0.32, -L / 2 + 0.25);
+      }
+      if (T.scoop) {
+        m(box(W * 0.3, 0.12, L * 0.18), shared.dark, body, 0, clear + lowH + 0.08, L * 0.28);
+        for (const sx of [-0.12, 0.12]) m(box(0.12, 0.012, L * 0.98), shared.white, body, sx, clear + lowH + 0.005, 0);
       }
       parts.seat.set(W * 0.22, clear + lowH * 0.5 - 0.42, cabZ + cabL * 0.05);
       // driver door (left side for left-hand drive = +x)

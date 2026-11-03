@@ -34,6 +34,57 @@ function colFromRect(r, y0, y1, tag) {
   return makeBox((r[0] + r[2]) / 2, (r[1] + r[3]) / 2, (r[2] - r[0]) / 2, (r[3] - r[1]) / 2, 0, y0, y1, tag);
 }
 
+// --------------------------------------------------------------------------- furniture library
+// Each piece is a list of boxes in its own frame: u = across (width), v = towards its front, y = up.
+// Box: [u0, u1, v0, v1, y0, y1, color, material?]
+const WOOD = 0x7a5233, DARKWOOD = 0x4e3423, WHITE = 0xf2f0ec, STEEL = 0xc9ced3;
+const shade = (c, k = 0.85) => { const r = ((c >> 16) & 255) * k, g = ((c >> 8) & 255) * k, b = (c & 255) * k; return (r << 16) | (g << 8) | b; };
+export const PIECES = {
+  sofa: (c = 0x4a6fa5) => [[-1, 1, -0.45, 0.45, 0, 0.42, c], [-1, 1, -0.45, -0.22, 0.42, 0.86, c], [-1, -0.82, -0.45, 0.45, 0.42, 0.62, c], [0.82, 1, -0.45, 0.45, 0.42, 0.62, c],
+    [-0.8, -0.02, -0.22, 0.42, 0.42, 0.52, shade(c, 1.12)], [0.02, 0.8, -0.22, 0.42, 0.42, 0.52, shade(c, 1.12)]],
+  armchair: (c = 0x8a5a44) => [[-0.45, 0.45, -0.42, 0.42, 0, 0.42, c], [-0.45, 0.45, -0.42, -0.22, 0.42, 0.85, c], [-0.45, -0.32, -0.42, 0.42, 0.42, 0.6, c], [0.32, 0.45, -0.42, 0.42, 0.42, 0.6, c]],
+  bed: (c = 0x5d8aa8) => [[-0.8, 0.8, -1.05, 1.05, 0, 0.3, DARKWOOD], [-0.78, 0.78, -1.0, 1.02, 0.3, 0.52, 0xf7f7f7], [-0.81, 0.81, -0.25, 1.05, 0.5, 0.57, c],
+    [-0.8, 0.8, -1.12, -1.02, 0, 1.05, DARKWOOD], [-0.62, -0.06, -0.96, -0.6, 0.52, 0.65, 0xffffff], [0.06, 0.62, -0.96, -0.6, 0.52, 0.65, 0xffffff]],
+  nightstand: () => [[-0.25, 0.25, -0.22, 0.22, 0, 0.5, WOOD], [-0.1, 0.1, -0.1, 0.1, 0.5, 0.75, 0xfff3d6, 'lamp']],
+  tv: () => [[-0.85, 0.85, -0.22, 0.22, 0, 0.48, 0x3a3a3a], [-0.08, 0.08, -0.06, 0.0, 0.48, 0.58, 0x222222], [-0.7, 0.7, -0.05, 0.0, 0.58, 1.38, 0x0b0e13], [-0.66, 0.66, 0.0, 0.01, 0.62, 1.34, 0x1d3b5a, 'screen']],
+  kitchen: (len = 2.6) => {
+    const h = len / 2, out = [[-h, h - 0.8, -0.31, 0.31, 0, 0.88, WHITE], [-h, h - 0.8, -0.32, 0.32, 0.88, 0.92, 0x3b3b3b],
+      [-h + 0.4, -h + 1.0, -0.2, 0.2, 0.92, 0.94, 0x111111], [h - 0.78, h, -0.34, 0.34, 0, 1.85, 0xdfe3e6], [-h, h - 0.8, -0.31, -0.02, 1.5, 2.15, WHITE],
+      [-h + 1.3, -h + 1.8, -0.15, 0.15, 0.92, 0.95, STEEL]];
+    return out;
+  },
+  table: () => [[-0.7, 0.7, -0.42, 0.42, 0.72, 0.77, WOOD], ...[[-0.65, -0.58], [0.58, 0.65]].flatMap(([u0, u1]) => [[u0, u1, -0.38, -0.31, 0, 0.72, DARKWOOD], [u0, u1, 0.31, 0.38, 0, 0.72, DARKWOOD]]),
+    [-0.22, 0.22, -0.95, -0.55, 0, 0.45, 0x2f2f2f], [-0.22, 0.22, -0.98, -0.92, 0.45, 0.9, 0x2f2f2f], [-0.22, 0.22, 0.55, 0.95, 0, 0.45, 0x2f2f2f], [-0.22, 0.22, 0.92, 0.98, 0.45, 0.9, 0x2f2f2f]],
+  coffee: () => [[-0.55, 0.55, -0.3, 0.3, 0.38, 0.43, WOOD], [-0.5, 0.5, -0.25, 0.25, 0, 0.38, DARKWOOD]],
+  wardrobe: (c = 0x8b6b4a) => [[-0.6, 0.6, -0.3, 0.3, 0, 2.05, c], [-0.01, 0.01, 0.3, 0.31, 0.1, 1.95, 0x2a2a2a], [-0.12, -0.08, 0.31, 0.34, 0.9, 1.2, STEEL], [0.08, 0.12, 0.31, 0.34, 0.9, 1.2, STEEL]],
+  lamp: () => [[-0.16, 0.16, -0.16, 0.16, 0, 0.04, 0x333333], [-0.025, 0.025, -0.025, 0.025, 0, 1.45, 0x333333], [-0.2, 0.2, -0.2, 0.2, 1.4, 1.72, 0xfff3d6, 'lamp']],
+  desk: () => [[-0.7, 0.7, -0.35, 0.35, 0.72, 0.76, 0xe8e4dc], [-0.68, -0.62, -0.3, 0.3, 0, 0.72, 0x555555], [0.62, 0.68, -0.3, 0.3, 0, 0.72, 0x555555],
+    [-0.3, 0.3, -0.3, -0.25, 0.8, 1.15, 0x111418], [-0.27, 0.27, -0.25, -0.24, 0.83, 1.12, 0x2a5a8a, 'screen'], [-0.25, 0.25, 0.45, 0.9, 0, 0.48, 0x333333], [-0.25, 0.25, 0.85, 0.9, 0.48, 0.95, 0x333333]],
+  plant: () => [[-0.2, 0.2, -0.2, 0.2, 0, 0.4, 0xb5653d], [-0.35, 0.35, -0.35, 0.35, 0.4, 1.2, 0x3f7a32]],
+  rug: (c = 0x9b3d3d) => [[-1.1, 1.1, -0.75, 0.75, 0, 0.012, c]],
+  bookcase: () => [[-0.5, 0.5, -0.18, 0.18, 0, 1.9, WOOD], ...[0.35, 0.8, 1.25].map((y, i) => [-0.45, 0.45, -0.12, 0.17, y, y + 0.3, [0xa33b3b, 0x2e6da4, 0x3f8f4f][i]])],
+  mailboxes: () => [[-1.0, 1.0, -0.15, 0.15, 0.9, 1.8, 0x8c939a], ...[0, 1, 2, 3].map((i) => [-0.95 + i * 0.5, -0.55 + i * 0.5, 0.15, 0.16, 1.35, 1.7, 0x5b6168])],
+  desk_reception: () => [[-1.3, 1.3, -0.4, 0.4, 0, 1.05, 0x6b5a4a], [-1.35, 1.35, -0.45, 0.45, 1.05, 1.1, 0xd8d2c8]],
+};
+function mapUV(u0, u1, v0, v1, dir) {
+  switch (dir) {
+    case '-d': return [-u1, -u0, -v1, -v0];
+    case '+a': return [v0, v1, -u1, -u0];
+    case '-a': return [-v1, -v0, u0, u1];
+    default: return [u0, u1, v0, v1];
+  }
+}
+// place a furniture piece at local (a, d), floor height y, facing dir ('+d' | '-d' | '+a' | '-a')
+function piece(F, spec, kind, a, d, y, dir = '+d', arg, solid = true) {
+  let ma0 = Infinity, ma1 = -Infinity, md0 = Infinity, md1 = -Infinity, my = 0;
+  for (const [u0, u1, v0, v1, ya, yb, col, mat] of PIECES[kind](arg)) {
+    const [A0, A1, D0, D1] = mapUV(u0, u1, v0, v1, dir);
+    spec.boxes.push(boxFromRect(F.rect(a + A0, a + A1, d + D0, d + D1), y + ya, y + yb, col, mat || 'prop'));
+    ma0 = Math.min(ma0, A0); ma1 = Math.max(ma1, A1); md0 = Math.min(md0, D0); md1 = Math.max(md1, D1); my = Math.max(my, yb);
+  }
+  if (solid && kind !== 'rug') spec.colliders.push(colFromRect(F.rect(a + ma0 + 0.03, a + ma1 - 0.03, d + md0 + 0.03, d + md1 - 0.03), y - 0.1, y + my, 'furniture'));
+}
+
 // Outer walls as colliders, with a door opening on the front face
 function shellColliders(b, top, door, out) {
   const x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
@@ -75,6 +126,7 @@ export function interiorSpec(b) {
     const isCafe = CAFE.some((k) => b.sign?.includes(k)), isClothes = CLOTHES.some((k) => b.sign?.includes(k));
     // counter near the back
     const cw = Math.min(3.2, L * 0.4);
+    spec.counter = { pt: F.pt(hl - cw / 2 - 0.6, D - 2.9), keeper: F.pt(hl - cw / 2 - 0.6, D - 1.0), yaw: Math.atan2(F.fx, F.fz), y: y0 };
     furn(hl - cw - 0.6, hl - 0.6, D - 2.2, D - 1.5, y0, y0 + 1.05, 0x7a5233);
     furn(hl - cw - 0.6, hl - 0.6, D - 2.25, D - 1.45, y0 + 1.05, y0 + 1.1, 0xd8d2c8, false);
     if (isCafe) {
@@ -105,12 +157,16 @@ export function interiorSpec(b) {
     shellColliders(b, top, spec.door, C);
     C.push(makeBox(b.x, b.z, b.w / 2 + 0.5, b.d / 2 + 0.5, 0, top, top + Math.min(b.w, b.d) * 0.35, 'roof'));
     spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1: y0 + H1, wall: 0xf3e9d8, floor: 0xb38a5c, ceil: 0xfafafa, door: spec.door, b });
-    // ground floor furniture: sofa, coffee table, TV, kitchen counter, dining table
-    furn(-hl + 0.4, -hl + 2.4, 1.2, 2.1, y0, y0 + 0.8, 0x4a6fa5);
-    furn(-hl + 0.8, -hl + 2.0, 2.6, 3.3, y0, y0 + 0.45, 0x6b4a2f);
-    furn(-hl + 0.6, -hl + 2.2, Math.min(D - 1.6, 4.6), Math.min(D - 1.6, 4.6) + 0.3, y0 + 0.4, y0 + 1.2, 0x1a1a1a);
-    furn(hl - 0.7, hl - 0.05, 1.0, Math.min(D - 2, 4.4), y0, y0 + 0.92, 0xe8e2d6);
-    furn(1.0 - 0.7, 1.0 + 0.7, D * 0.5 - 0.5, D * 0.5 + 0.5, y0, y0 + 0.76, 0x8b5a2b);
+    // ground floor: living room, kitchen, dining
+    piece(F, spec, 'rug', -hl + 2.2, 2.7, y0, '+d', 0x8c3b3b, false);
+    piece(F, spec, 'sofa', -hl + 2.2, 1.25, y0, '+d', 0x4a6fa5);
+    piece(F, spec, 'coffee', -hl + 2.2, 2.6, y0, '+d');
+    piece(F, spec, 'tv', -hl + 2.2, Math.min(D - 2.0, 4.6), y0, '-d');
+    piece(F, spec, 'kitchen', hl - 0.35, Math.min(D - 2.4, 2.9), y0, '-a', Math.min(D - 2.6, 3.4));
+    piece(F, spec, 'table', 1.2, D * 0.5, y0, '+d');
+    piece(F, spec, 'plant', -hl + 0.45, 0.45, y0);
+    piece(F, spec, 'bookcase', hl - 1.5, D - 0.25, y0, '-d');
+    spec.home = { pt: F.pt(-hl + 2.2, 1.3), yaw: Math.atan2(-F.fx, -F.fz), y: y0, sit: true };
     lamp(0, D * 0.4, y0 + H1 - 0.03);
     if (two) {
       const y1 = y0 + H1;
@@ -135,9 +191,11 @@ export function interiorSpec(b) {
       furn(sa0, sa1, sd0 - 0.08, sd0, y1, y1 + 0.95, 0x6b4a2f, true);
       spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0: y1, y1: top, wall: 0xe9eef3, floor: null, ceil: 0xfafafa, door: null, b });
       // bedroom
-      furn(hl - 2.2, hl - 0.2, 0.5, 2.1, y1, y1 + 0.55, 0xf2f2f2);
-      furn(hl - 2.2, hl - 0.2, 0.3, 0.5, y1, y1 + 1.0, 0x6b4a2f);
-      furn(-hl + 0.3, -hl + 1.0, 0.5, 2.3, y1, y1 + 2.0, 0x8b6b4a);
+      piece(F, spec, 'bed', hl - 1.3, 1.25, y1, '+d', 0x5d8aa8);
+      piece(F, spec, 'nightstand', hl - 2.45, 0.35, y1, '+d');
+      piece(F, spec, 'wardrobe', -hl + 0.95, 0.4, y1, '+d');
+      piece(F, spec, 'lamp', -hl + 0.4, D - 2.0, y1);
+      piece(F, spec, 'desk', 0.4, 0.45, y1, '+d');
       lamp(0, D * 0.4, top - 0.03);
     }
   } else if (b.interior === 'hall') {
@@ -147,12 +205,15 @@ export function interiorSpec(b) {
     if (b.h > H) C.push(makeBox(b.x, b.z, b.w / 2, b.d / 2, 0, y0 + H, y0 + b.h));
     spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1: y0 + H, wall: 0xe6e1d6, floor: 0xcfc8bb, ceil: 0xf2f2f2, door: spec.door, b });
     furn(-2, 2, D * 0.55, D * 0.55 + 1, y0, y0 + 1.1, 0x5a6e7f); // info desk
+    spec.counter = { pt: F.pt(0, D * 0.55 - 0.9), keeper: F.pt(0, D * 0.55 + 1.7), yaw: Math.atan2(F.fx, F.fz), y: y0 };
     for (let a = -hl + 4; a < hl - 3; a += 6) for (const dd of [D * 0.25, D * 0.8]) {
       if (dd < 2 || dd > D - 1.5) continue;
       furn(a - 0.3, a + 0.3, dd - 0.3, dd + 0.3, y0, y0 + H, 0xd8d2c6); // pillars
     }
     for (let a = -hl + 2; a < hl - 4; a += 5) furn(a, a + 2.2, D * 0.4, D * 0.4 + 0.6, y0, y0 + 0.5, 0x6b4a2f);
     for (let a = -hl + 3; a < hl; a += 7) for (let d = 3; d < D; d += 7) lamp(a, d, y0 + H - 0.03);
+  } else if (b.interior === 'apartment' || b.interior === 'tower') {
+    apartmentSpec(b, F, spec, piece, lamp, furn);
   } else if (b.interior === 'mall') {
     const H1 = 5, top = y0 + b.h - 0.5;
     spec.door = { face: b.face, w: 4, h: 3.4 };
@@ -190,6 +251,143 @@ export function interiorSpec(b) {
   }
   b._spec = spec;
   return spec;
+}
+
+// --------------------------------------------------------------------------- apartment buildings & towers
+// Lobby + elevator on the ground floor, then on every floor a central corridor with apartments on both sides.
+// Each apartment has a living room (sofa, TV, kitchen, table) and a bedroom (bed, wardrobe, lamp).
+export const FLOOR_H = 3.2;
+function apartmentSpec(b, F, spec, piece, lamp, furn) {
+  const C = spec.colliders, y0 = CURB_H, L = F.L, D = F.D, hl = L / 2;
+  const usable = b.tower && b.setback ? b.h * 0.62 : b.h;
+  const nF = Math.max(2, Math.min(b.tower ? 15 : 12, Math.floor((usable - 0.5) / FLOOR_H)));
+  const topY = y0 + nF * FLOOR_H;
+  const office = b.tower;
+  spec.door = { face: b.face, w: 2.2, h: 2.7 };
+  shellColliders(b, topY, spec.door, C);
+  C.push(makeBox(b.x, b.z, b.w / 2, b.d / 2, 0, topY, y0 + b.h + 1));
+  spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1: topY, wall: 0xeee8dc, floor: 0xc7b79c, ceil: 0xf6f6f6, door: spec.door, b });
+  const cd0 = D / 2 - 1.0, cd1 = D / 2 + 1.0;            // corridor band
+  const sa0 = hl - 2.6, sd0 = cd0 - 0.4, sd1 = cd1 + 0.4; // elevator shaft
+  const WT = 0.14, wallC = 0xe7e1d6, corrC = 0xd9d2c4;
+  const floors = [];
+  for (let k = 0; k < nF; k++) floors.push(y0 + k * FLOOR_H);
+  spec.floors = floors;
+  const wallBox = (a0, a1, d0, d1, ya, yb, color) => {
+    const r = F.rect(a0, a1, d0, d1);
+    spec.boxes.push(boxFromRect(r, ya, yb, color, 'wall'));
+    C.push(colFromRect(r, ya, yb));
+  };
+  // wall along the lateral axis at depth dc, from a0 to a1, with door gaps [{a, w}]
+  const wallA = (a0, a1, dc, ya, yb, gaps, color) => {
+    let a = a0;
+    for (const g of [...gaps].sort((p, q) => p.a - q.a)) {
+      if (g.a - g.w / 2 > a) wallBox(a, g.a - g.w / 2, dc - WT / 2, dc + WT / 2, ya, yb, color);
+      wallBox(g.a - g.w / 2, g.a + g.w / 2, dc - WT / 2, dc + WT / 2, ya + 2.25, yb, color);
+      a = g.a + g.w / 2;
+    }
+    if (a1 > a) wallBox(a, a1, dc - WT / 2, dc + WT / 2, ya, yb, color);
+  };
+  const wallD = (d0, d1, ac, ya, yb, color) => wallBox(ac - WT / 2, ac + WT / 2, d0, d1, ya, yb, color);
+  // units along the lateral axis
+  const nU = Math.max(2, Math.round(L / 7.5));
+  const uw = L / nU;
+  const units = [];
+  for (let i = 0; i < nU; i++) units.push([-hl + i * uw, -hl + (i + 1) * uw]);
+  spec.homes = [];
+  const furnishUnit = (u0, u1, dFac, dCor, y, k) => {
+    // dFac: depth of the facade wall, dCor: depth of the corridor wall
+    const s = Math.sign(dCor - dFac), um = (u0 + u1) / 2;
+    const inward = s > 0 ? '+d' : '-d', back = s > 0 ? '-d' : '+d';
+    const lm = (u0 + um) / 2, bm = (um + u1) / 2;
+    const depth = Math.abs(dCor - dFac);
+    const at = (t) => dFac + s * t;
+    if (office) {
+      piece(F, spec, 'desk', lm, at(1.3), y, back);
+      piece(F, spec, 'desk', bm, at(1.3), y, back);
+      piece(F, spec, 'plant', u0 + 0.5, at(0.5), y);
+      piece(F, spec, 'bookcase', bm, at(depth - 0.45), y, back);
+    } else {
+      piece(F, spec, 'rug', lm, at(depth * 0.45), y, '+d', 0x7d5a8c, false);
+      piece(F, spec, 'sofa', lm, at(0.75), y, inward, [0x4a6fa5, 0x8a5a44, 0x5b7f5a, 0x7a6f66][k % 4]);
+      piece(F, spec, 'coffee', lm, at(1.9), y, inward);
+      if (depth > 5.5) piece(F, spec, 'tv', lm, at(depth - 2.0), y, back);
+      piece(F, spec, 'kitchen', u0 + 0.38, at(depth * 0.5), y, '+a', Math.min(depth - 2.6, 3.0));
+      piece(F, spec, 'bed', bm, at(1.2), y, inward, [0x5d8aa8, 0xa86f5d, 0x6d9a6a][k % 3]);
+      piece(F, spec, 'wardrobe', u1 - 0.4, at(depth - 1.9), y, '-a');
+      piece(F, spec, 'lamp', u1 - 0.35, at(0.35), y);
+      spec.homes.push({ pt: F.pt(lm, at(0.85)), yaw: Math.atan2(-F.fx * s, -F.fz * s), y, floor: k, sit: true });
+    }
+    lamp(lm, at(depth * 0.5), y + FLOOR_H - 0.28);
+    lamp(bm, at(depth * 0.5), y + FLOOR_H - 0.28);
+    return { lm, s };
+  };
+  for (let k = 0; k < nF; k++) {
+    const y = floors[k], yb = y + FLOOR_H - 0.25;
+    // slab of this floor (k>0) with the shaft opening, plus the corridor floor tint
+    if (k > 0) {
+      const pieces = [F.rect(-hl, sa0, 0, D), F.rect(sa0, hl, 0, sd0), F.rect(sa0, hl, sd1, D)];
+      for (const r of pieces) {
+        spec.surfaces.push(makeSurface(r[0], r[1], r[2], r[3], y));
+        spec.slabs.push({ rect: r, y, color: 0xc7b79c, under: 0xf6f6f6 });
+        C.push(colFromRect(r, y - 0.25, y - 0.02, 'slab'));
+      }
+    }
+    spec.boxes.push(boxFromRect(F.rect(-hl, sa0, cd0, cd1), y + 0.025, y + 0.035, corrC, 'wall'));
+    // elevator shaft walls (doors are dynamic)
+    wallA(sa0, hl, sd0, y, y + FLOOR_H, [], 0xb8b2a6);
+    wallA(sa0, hl, sd1, y, y + FLOOR_H, [], 0xb8b2a6);
+    wallBox(sa0 - WT / 2, sa0 + WT / 2, sd0, D / 2 - 0.6, y, y + FLOOR_H, 0xb8b2a6);
+    wallBox(sa0 - WT / 2, sa0 + WT / 2, D / 2 + 0.6, sd1, y, y + FLOOR_H, 0xb8b2a6);
+    wallBox(sa0 - WT / 2, sa0 + WT / 2, D / 2 - 0.6, D / 2 + 0.6, y + 2.3, y + FLOOR_H, 0xb8b2a6);
+    lamp(-hl / 2, D / 2, yb - 0.03); lamp(hl / 2 - 1.5, D / 2, yb - 0.03);
+    // back band: apartments on every floor
+    const backGaps = [];
+    units.forEach(([u0, u1], i) => {
+      const { lm } = furnishUnit(u0, u1, D, cd1, y, k * 7 + i);
+      backGaps.push({ a: lm, w: 1.0 });
+      if (i > 0) wallD(cd1, D, u0, y, yb, wallC);
+      wallD(cd1 + 1.4, D, (u0 + u1) / 2, y, yb, wallC); // living / bedroom partition
+    });
+    wallA(-hl, sa0, cd1, y, yb, backGaps, wallC);
+    if (k === 0) {
+      // lobby across the whole front band
+      piece(F, spec, 'sofa', -hl / 2, 1.0, y, '+d', 0x5a6e7f);
+      piece(F, spec, 'plant', -hl + 0.6, 0.6, y); piece(F, spec, 'plant', hl - 0.6, 0.6, y);
+      piece(F, spec, 'mailboxes', -hl + 1.4, cd0 - 0.4, y, '+d');
+      piece(F, spec, office ? 'desk_reception' : 'armchair', hl / 2, 1.6, y, '+d');
+      spec.counter = { pt: F.pt(hl / 2, 0.6), keeper: F.pt(hl / 2, 2.4), yaw: Math.atan2(F.fx, F.fz), y: y0, lobby: true };
+    } else {
+      const frontGaps = [];
+      units.forEach(([u0, u1], i) => {
+        const { lm } = furnishUnit(u0, u1, 0, cd0, y, k * 5 + i);
+        frontGaps.push({ a: lm, w: 1.0 });
+        if (i > 0) wallD(0, cd0, u0, y, yb, wallC);
+        wallD(0, cd0 - 1.4, (u0 + u1) / 2, y, yb, wallC);
+      });
+      wallA(-hl, sa0, cd0, y, yb, frontGaps, wallC);
+    }
+  }
+  // top ceiling
+  const topR = F.rect(-hl, hl, 0, D);
+  C.push(colFromRect(topR, topY - 0.25, topY, 'slab'));
+  // elevator description (world space)
+  const [rx, rz] = [-F.fz, F.fx];
+  const ldoors = floors.map((y) => {
+    const c = colFromRect(F.rect(sa0 - 0.08, sa0 + 0.08, D / 2 - 0.6, D / 2 + 0.6), y, y + 2.3, 'ldoor');
+    C.push(c);
+    return c;
+  });
+  spec.elevator = {
+    floors, ldoors,
+    cabin: F.rect(sa0 + 0.12, hl - 0.05, sd0 + 0.1, sd1 - 0.1),
+    shaft: F.rect(sa0, hl, sd0, sd1),
+    doorPt: F.pt(sa0 - 0.9, D / 2), doorCenter: F.pt(sa0, D / 2),
+    insidePt: F.pt((sa0 + hl) / 2, D / 2),
+    out: [-rx, -rz],          // world direction from the shaft towards the corridor
+    lat: [-F.fx, -F.fz],      // world direction along the door (depth axis)
+    width: 1.2, height: 2.3,
+  };
 }
 
 // --------------------------------------------------------------------------- parking garage
