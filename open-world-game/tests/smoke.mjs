@@ -47,7 +47,7 @@ const sim = (sec, o = {}) => page.evaluate(([s, o]) => {
   __sim(s, o);
 }, [sec, o]);
 const g = (fn, arg) => page.evaluate(fn, arg);
-const shot = async (name) => { await page.waitForTimeout(400); await page.screenshot({ path: `${OUT}/${name}.png` }); };
+const shot = async (name) => { await page.waitForTimeout(400); await page.screenshot({ path: `${OUT}/${name}.png`, timeout: 120000 }); };
 
 // ---------------------------------------------------------------- on foot
 await g(() => __game.teleport(530, 545, 0));
@@ -106,7 +106,7 @@ const stairs = await g(() => {
   for (let ix = 0; ix < 10; ix++) for (let iz = 0; iz < 4; iz++) {
     const b = __wg.cellData(ix, iz).buildings.find((b) => b.interior === 'house' && b.h >= 5.6);
     if (!b) continue;
-    const st = b._spec.stairs[0];
+    const st = __wg.specOf(b).stairs[0];
     const [x0, z0, x1, z1] = st.rect;
     const mid = st.axis === 'x' ? (z0 + z1) / 2 : (x0 + x1) / 2;
     const start = st.axis === 'x' ? [st.startMin ? x0 + 0.3 : x1 - 0.3, mid] : [mid, st.startMin ? z0 + 0.3 : z1 - 0.3];
@@ -220,7 +220,7 @@ await shot('09-street');
 const elev = await g(() => {
   let b = null;
   for (let ix = 0; ix < 10 && !b; ix++) for (let iz = 0; iz < 10 && !b; iz++) b = __wg.cellData(ix, iz).buildings.find((q) => q.interior === 'apartment');
-  const e = b._spec.elevator, game = __game;
+  const e = __wg.specOf(b).elevator, game = __game;
   game.teleport(e.doorPt[0], e.doorPt[1], 0, 0.2);
   const step = (n, f) => { for (let i = 0; i < n; i++) { f && f(); game.time += 1 / 30; game._playFrame(1 / 30); } };
   step(5);
@@ -254,7 +254,7 @@ const shopRes = await g(() => {
   const out = {};
   for (const [cell, sign] of [[[7, 5], 'אופנת אזורה'], [[2, 5], 'ארסנל הצללים'], [[7, 6], 'פלאפל הכיכר']]) {
     const b = __wg.cellData(cell[0], cell[1]).buildings.find((q) => q.sign === sign);
-    const c = b._spec.counter;
+    const c = __wg.specOf(b).counter;
     game.teleport(c.pt[0], c.pt[1], c.yaw + Math.PI);
     step(10);
     out[sign] = { prompt: game.player.prompt?.text };
@@ -332,7 +332,7 @@ const fur = await g(() => {
   for (let ix = 0; ix < 10 && !b; ix++) for (let iz = 0; iz < 3 && !b; iz++) b = __wg.cellData(ix, iz).buildings.find((q) => q.interior === 'house' && q.h >= 5.6);
   const out = {};
   for (const kind of ['sit', 'sleep']) {
-    const s = b._spec.seats.find((q) => q.kind === kind && (kind === 'sleep' || q.label === 'כורסה' || q.label === 'ספה'));
+    const s = __wg.specOf(b).seats.find((q) => q.kind === kind && (kind === 'sleep' || q.label === 'כורסה' || q.label === 'ספה'));
     game.teleport(s.x + Math.sin(s.yaw) * 1.3, s.z + Math.cos(s.yaw) * 1.3, s.yaw + Math.PI, s.y + 0.3);
     step(5);
     const prompt = game.player.prompt?.text;
@@ -418,7 +418,7 @@ check('airport: planes take off and land', !!air.took && !!air.landed, `takeoff 
 const tw = await g(() => {
   const game = __game, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(); game.time += 1 / 30; game._playFrame(1 / 30); } };
   const b = __wg.cellData(-6, 6).buildings.find((q) => q.interior === 'ctower');
-  const e = b._spec.elevator;
+  const e = __wg.specOf(b).elevator;
   game.teleport(e.doorPt[0], e.doorPt[1], 0, 0.2); step(5);
   game.input.pressed.add('interact'); step(70);
   game.input.keys.add('KeyW'); step(30, () => { game.rig.yaw = Math.atan2(e.insidePt[0] - game.player.x, e.insidePt[1] - game.player.z); game.rig.idle = 0; }); game.input.keys.delete('KeyW');

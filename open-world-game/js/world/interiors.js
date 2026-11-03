@@ -130,6 +130,9 @@ function shellColliders(b, top, door, out) {
   }
 }
 
+const DOORS = { shop: [1.8, 2.6], house: [1.2, 2.2], hall: [3.0, 3.2], mall: [4, 3.4], apartment: [2.2, 2.7], tower: [2.2, 2.7], terminal: [8, 3.4], hangar: [46, 16], ctower: [1.8, 2.6] };
+export function doorFor(b) { const d = DOORS[b.interior]; return d ? { face: b.face, w: d[0], h: d[1] } : null; }
+
 export function interiorSpec(b) {
   if (b._spec) return b._spec;
   const F = frame(b);
@@ -182,6 +185,7 @@ export function interiorSpec(b) {
     const top = y0 + b.h;
     spec.door = { face: b.face, w: 1.2, h: 2.2 };
     shellColliders(b, top, spec.door, C);
+    spec.doors = [{ hinge: F.pt(-0.6, -0.15), dir: [-F.fz, F.fx], w: 1.2, y: y0, color: 0x5a3b26, front: true }];
     C.push(makeBox(b.x, b.z, b.w / 2 + 0.5, b.d / 2 + 0.5, 0, top, top + Math.min(b.w, b.d) * 0.35, 'roof'));
     spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1: y0 + H1, wall: 0xf3e9d8, floor: 0xb38a5c, ceil: 0xfafafa, door: spec.door, b });
     // ground floor: living room, kitchen, dining
@@ -444,8 +448,9 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
   const usable = b.tower && b.setback ? b.h * 0.62 : b.h;
   const nF = Math.max(2, Math.min(b.tower ? 15 : 12, Math.floor((usable - 0.5) / FLOOR_H)));
   const topY = y0 + nF * FLOOR_H;
-  const office = b.tower;
   spec.door = { face: b.face, w: 2.2, h: 2.7 };
+  spec.doors = []; spec.floorRanges = [];
+  const mark = () => ({ b: spec.boxes.length, l: spec.lamps.length, s: spec.slabs.length, d: spec.doors.length });
   shellColliders(b, topY, spec.door, C);
   C.push(makeBox(b.x, b.z, b.w / 2, b.d / 2, 0, topY, y0 + b.h + 1));
   spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1: topY, wall: 0xeee8dc, floor: 0xc7b79c, ceil: 0xf6f6f6, door: spec.door, b });
@@ -466,6 +471,8 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
     for (const g of [...gaps].sort((p, q) => p.a - q.a)) {
       if (g.a - g.w / 2 > a) wallBox(a, g.a - g.w / 2, dc - WT / 2, dc + WT / 2, ya, yb, color);
       wallBox(g.a - g.w / 2, g.a + g.w / 2, dc - WT / 2, dc + WT / 2, ya + 2.25, yb, color);
+      // a real swinging apartment door in the opening
+      spec.doors.push({ hinge: F.pt(g.a - g.w / 2, dc), dir: [-F.fz, F.fx], w: g.w, y: ya, color: 0x6b4a2f });
       a = g.a + g.w / 2;
     }
     if (a1 > a) wallBox(a, a1, dc - WT / 2, dc + WT / 2, ya, yb, color);
@@ -477,7 +484,7 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
   const units = [];
   for (let i = 0; i < nU; i++) units.push([-hl + i * uw, -hl + (i + 1) * uw]);
   spec.homes = [];
-  const furnishUnit = (u0, u1, dFac, dCor, y, k) => {
+  const furnishUnit = (u0, u1, dFac, dCor, y, k, office) => {
     // dFac: depth of the facade wall, dCor: depth of the corridor wall
     const s = Math.sign(dCor - dFac), um = (u0 + u1) / 2;
     const inward = s > 0 ? '+d' : '-d', back = s > 0 ? '-d' : '+d';
@@ -507,6 +514,8 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
   };
   for (let k = 0; k < nF; k++) {
     const y = floors[k], yb = y + FLOOR_H - 0.25;
+    const office = b.tower && nF > 6 && k >= 1 && k <= 2;   // towers: offices low down, homes above
+    const fr = mark();
     // slab of this floor (k>0) with the shaft opening, plus the corridor floor tint
     if (k > 0) {
       const pieces = [F.rect(-hl, sa0, 0, D), F.rect(sa0, hl, 0, sd0), F.rect(sa0, hl, sd1, D)];
@@ -527,7 +536,7 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
     // back band: apartments on every floor
     const backGaps = [];
     units.forEach(([u0, u1], i) => {
-      const { lm } = furnishUnit(u0, u1, D, cd1, y, k * 7 + i);
+      const { lm } = furnishUnit(u0, u1, D, cd1, y, k * 7 + i, office);
       backGaps.push({ a: lm, w: 1.0 });
       if (i > 0) wallD(cd1, D, u0, y, yb, wallC);
       wallD(cd1 + 1.4, D, (u0 + u1) / 2, y, yb, wallC); // living / bedroom partition
@@ -538,18 +547,19 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
       piece(F, spec, 'sofa', -hl / 2, 1.0, y, '+d', 0x5a6e7f);
       piece(F, spec, 'plant', -hl + 0.6, 0.6, y); piece(F, spec, 'plant', hl - 0.6, 0.6, y);
       piece(F, spec, 'mailboxes', -hl + 1.4, cd0 - 0.4, y, '+d');
-      piece(F, spec, office ? 'desk_reception' : 'armchair', hl / 2, 1.6, y, '+d');
+      piece(F, spec, b.tower ? 'desk_reception' : 'armchair', hl / 2, 1.6, y, '+d');
       spec.counter = { pt: F.pt(hl / 2, 0.6), keeper: F.pt(hl / 2, 2.4), yaw: Math.atan2(F.fx, F.fz), y: y0, lobby: true };
     } else {
       const frontGaps = [];
       units.forEach(([u0, u1], i) => {
-        const { lm } = furnishUnit(u0, u1, 0, cd0, y, k * 5 + i);
+        const { lm } = furnishUnit(u0, u1, 0, cd0, y, k * 5 + i, office);
         frontGaps.push({ a: lm, w: 1.0 });
         if (i > 0) wallD(0, cd0, u0, y, yb, wallC);
         wallD(0, cd0 - 1.4, (u0 + u1) / 2, y, yb, wallC);
       });
       wallA(-hl, sa0, cd0, y, yb, frontGaps, wallC);
     }
+    spec.floorRanges.push({ k, start: fr, end: mark() });
   }
   // top ceiling
   const topR = F.rect(-hl, hl, 0, D);

@@ -371,9 +371,8 @@ function generateCell(ix, iz) {
   for (const b of B) {
     b.door = b.door || (() => { const [fx, fz] = faceVector(b.face); const half = (fx !== 0 ? b.w : b.d) / 2; return { x: b.x + fx * (half + 0.3), z: b.z + fz * (half + 0.3), face: b.face }; })();
     if (b.interior) {
-      const spec = interiorSpec(b);
-      d.colliders.push(...spec.colliders);
-      d.surfaces.push(...spec.surfaces);
+      d.lazyInteriors ||= [];
+      d.lazyInteriors.push(b);   // interior physics is built only when the player gets close (cellPhysics)
     } else {
       const h = b.house ? b.h + Math.min(b.w, b.d) * 0.35 : b.h;
       d.colliders.push(makeBox(b.x, b.z, b.w / 2, b.d / 2, 0, 0, h + CURB_H));
@@ -472,6 +471,21 @@ function ridgeColliders(d) {
     d.colliders.push(makeBox(L, (zi0 + zi1) / 2, TUNNEL_HALF + 0.6, (zi1 - zi0) / 2, 0, TUNNEL_H, RIDGE.h, 'rock'));
   }
 }
+
+// Physics for a cell, built on first use: adds the walls/floors/stairs/elevator shafts of enterable buildings.
+// Loose furniture colliders are added by the InteriorManager only while the interior is loaded.
+export function cellPhysics(d) {
+  if (!d.physDone) {
+    d.physDone = true;
+    for (const b of d.lazyInteriors || []) {
+      const spec = interiorSpec(b);
+      for (const c of spec.colliders) if (c.tag !== 'furniture') d.colliders.push(c);
+      d.surfaces.push(...spec.surfaces);
+    }
+  }
+  return d;
+}
+export const specOf = interiorSpec;
 
 // convenience used by the vehicle manager / spawn logic
 export { faceVector };

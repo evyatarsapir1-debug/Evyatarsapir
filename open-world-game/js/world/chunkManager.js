@@ -8,8 +8,8 @@ import * as THREE from 'three';
 import { GeoBuilder, mat } from './geoBuilder.js';
 import { P, CURB_H, ROAD_HALF, SIDEWALK, RAIL, faceVector } from './layout.js';
 import { signUV } from './textures.js';
-import { cellData, ridgeHeight, tunnelLines, RIDGE, TUNNEL_H, TUNNEL_HALF, WATER_Y, baseHeight, nodeNbrs } from './worldGen.js';
-import { interiorSpec, garageSpec } from './interiors.js';
+import { cellData, cellPhysics, ridgeHeight, tunnelLines, RIDGE, TUNNEL_H, TUNNEL_HALF, WATER_Y, baseHeight, nodeNbrs } from './worldGen.js';
+import { interiorSpec, garageSpec, doorFor } from './interiors.js';
 
 const CH = 200;               // render chunk size (2x2 cells)
 const STYLES = ['glass', 'office', 'concrete', 'plaster', 'brick', 'industrial', 'storefront'];
@@ -179,7 +179,7 @@ function buildBuilding(b, out, B) {
   const f = (s) => out[s] ||= new GeoBuilder();
   const uS = 12, vS = 12.8;
   const rect = [b.x - b.w / 2, b.z - b.d / 2, b.x + b.w / 2, b.z + b.d / 2];
-  const spec = b.interior ? interiorSpec(b) : null;
+  const spec = b.interior ? { door: doorFor(b) } : null;
   const door = spec ? spec.door : null;
   if (b.house) {
     faces(f('plaster'), rect, CURB_H, CURB_H + b.h, uS, vS, b.color, door);
@@ -643,7 +643,7 @@ export class ChunkManager {
       if (this.phys.has(k)) continue;
       const cx = i * P + 50, cz = j * P + 50;
       if ((cx - px) ** 2 + (cz - pz) ** 2 > (R + 71) ** 2) continue;
-      const cd = cellData(i, j);
+      const cd = cellPhysics(cellData(i, j));
       this.statics.addGroup(k, cd.colliders);
       for (const s of cd.surfaces) this.surfaces.addSurface(s, k);
       this.phys.add(k); changed = true;

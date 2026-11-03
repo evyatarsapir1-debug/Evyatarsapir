@@ -308,8 +308,8 @@ export function markInteriors(B, rng) {
     else if (b.mall) b.interior = 'mall';
     else if (b.station || b.airport || b.sign === 'בית העירייה' || b.garage) b.interior = 'hall';
     else if (b.house) { if (rng.chance(0.7)) b.interior = 'house'; }
-    else if (b.tower) { if (rng.chance(0.45)) b.interior = 'tower'; }
-    else if (!b.storefront && ['plaster', 'concrete', 'brick'].includes(b.style) && b.h >= 9 && b.w >= 14 && b.d >= 14) { if (rng.chance(0.6)) b.interior = 'apartment'; }
+    else if (b.tower) b.interior = 'tower';
+    else if (!b.storefront && ['plaster', 'concrete', 'brick', 'office', 'glass'].includes(b.style) && b.h >= 9 && b.w >= 12 && b.d >= 12) b.interior = 'apartment';
     else if (b.storefront && b.sign && !b.tower && b.w >= 8 && b.d >= 8 && rng.chance(0.6)) b.interior = 'shop';
   }
 }

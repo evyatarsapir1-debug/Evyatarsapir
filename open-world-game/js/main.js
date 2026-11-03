@@ -74,7 +74,7 @@ class Game {
     this.vehicles = new VehicleManager(this.scene, this.statics);
     this.traffic = new Traffic(this.scene, this.graph, this.statics);
     this.peds = new Pedestrians(this.scene);
-    this.interiors = new InteriorManager(this.scene, this.mats);
+    this.interiors = new InteriorManager(this.scene, this.mats, this.statics);
     this.airport = new AirportManager(this.scene, this.statics, null);
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());

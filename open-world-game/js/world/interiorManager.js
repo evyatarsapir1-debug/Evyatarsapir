@@ -143,8 +143,9 @@ class Elevator {
 }
 
 export class InteriorManager {
-  constructor(scene, mats) {
-    this.scene = scene; this.mats = mats;
+  constructor(scene, mats, statics) {
+    this.scene = scene; this.mats = mats; this.statics = statics;
+    this.doorGeo = new THREE.BoxGeometry(1, 2.15, 0.05).translate(0.5, 1.075, 0);
     this.loaded = new Map(); // key -> { b, group, elevator }
     this.group = new THREE.Group(); this.group.name = 'interiors';
     scene.add(this.group);
@@ -154,10 +155,10 @@ export class InteriorManager {
 
   _key(b) { return `${b.x.toFixed(1)},${b.z.toFixed(1)}`; }
 
-  _build(b) {
-    const spec = interiorSpec(b);
+  // meshes for a (part of a) spec
+  _meshes(view, b) {
     const B = { interior: new GeoBuilder(), props: new GeoBuilder(), lamp: new GeoBuilder(), glass: new GeoBuilder(), signs: new GeoBuilder() };
-    buildInterior(spec, b, B);
+    buildInterior(view, b, B);
     const g = new THREE.Group();
     const M = this.mats;
     for (const [k, m] of [['interior', M.interior], ['props', M.props], ['lamp', M.lamp], ['glass', M.glass], ['signs', M.signs]]) {
@@ -166,6 +167,38 @@ export class InteriorManager {
       mesh.receiveShadow = k !== 'lamp'; mesh.castShadow = false;
       mesh.matrixAutoUpdate = false; mesh.updateMatrix();
       g.add(mesh);
+    }
+    return g;
+  }
+  // multi-storey buildings: the shell is always built, each floor only when the player is near it
+  _view(spec, part) {
+    const R = spec.floorRanges;
+    if (!R) return spec;
+    const first = R[0].start, last = R[R.length - 1].end;
+    if (part === 'always') {
+      const out = (arr, key) => [...arr.slice(0, first[key]), ...arr.slice(last[key])];
+      return { ...spec, boxes: out(spec.boxes, 'b'), lamps: out(spec.lamps, 'l'), slabs: out(spec.slabs, 's') };
+    }
+    const r = R[part];
+    return { ...spec, rooms: [], stairs: [], signs: [], door: null, boxes: spec.boxes.slice(r.start.b, r.end.b), lamps: spec.lamps.slice(r.start.l, r.end.l), slabs: spec.slabs.slice(r.start.s, r.end.s) };
+  }
+
+  _build(b) {
+    const spec = interiorSpec(b);
+    const g = this._meshes(this._view(spec, 'always'), b);
+    const M = this.mats;
+    const floorsMap = new Map();
+    // furniture collisions only while the interior is loaded
+    const key = 'int:' + this._key(b);
+    this.statics?.addGroup(key, spec.colliders.filter((c) => c.tag === 'furniture'));
+    // swinging doors
+    let doors = null;
+    if (spec.doors?.length) {
+      const mesh = new THREE.InstancedMesh(this.doorGeo, new THREE.MeshStandardMaterial({ roughness: 0.6 }), spec.doors.length);
+      spec.doors.forEach((d, i) => mesh.setColorAt(i, new THREE.Color(d.color)));
+      mesh.frustumCulled = false;
+      g.add(mesh);
+      doors = { mesh, open: new Float32Array(spec.doors.length).fill(-1) };
     }
     // flight boards with the live schedule
     for (const bd of spec.boards || []) {
@@ -196,11 +229,12 @@ export class InteriorManager {
     }
     this.group.add(g);
     const elevator = spec.elevator ? new Elevator(spec.elevator, M, this.group) : null;
-    return { b, spec, group: g, elevator, belts };
+    return { b, spec, group: g, elevator, belts, floorsMap, doors, physKey: key };
   }
 
   _dispose(L) {
-    L.group.traverse((o) => o.geometry && o.geometry.dispose());
+    this.statics?.removeGroup(L.physKey);
+    L.group.traverse((o) => o.geometry && o.geometry !== this.doorGeo && o.geometry.dispose());
     this.group.remove(L.group);
     L.elevator?.dispose();
   }
@@ -230,6 +264,39 @@ export class InteriorManager {
     for (const [k, [b]] of todo) {
       if (!force && built >= 1) break;
       this.loaded.set(k, this._build(b)); built++;
+    }
+    // floors near the player + doors
+    const _dm = new THREE.Matrix4(), _dq = new THREE.Quaternion(), _dp = new THREE.Vector3(), _ds = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+    let floorBuilt = false;
+    for (const L of this.loaded.values()) {
+      const S = L.spec;
+      if (S.floorRanges) {
+        const inside = Math.abs(px - L.b.x) < L.b.w / 2 + 2 && Math.abs(pz - L.b.z) < L.b.d / 2 + 2;
+        let pf = 0;
+        if (inside) S.floors.forEach((fy, k) => { if (Math.abs(fy - player.y) < Math.abs(S.floors[pf] - player.y)) pf = k; });
+        const want = new Set([pf - 1, pf, pf + 1].filter((k) => k >= 0 && k < S.floors.length));
+        for (const [k, grp] of L.floorsMap) if (!want.has(k)) { grp.traverse((o) => o.geometry && o.geometry.dispose()); L.group.remove(grp); L.floorsMap.delete(k); }
+        for (const k of [pf, pf + 1, pf - 1]) {
+          if (!want.has(k) || L.floorsMap.has(k) || (floorBuilt && !force)) continue;
+          const grp = this._meshes(this._view(S, k), L.b);
+          L.group.add(grp); L.floorsMap.set(k, grp); floorBuilt = true;
+        }
+      }
+      const D = L.doors;
+      if (D) {
+        let changed = false;
+        S.doors.forEach((d, i) => {
+          const cx = d.hinge[0] + d.dir[0] * d.w / 2, cz = d.hinge[1] + d.dir[1] * d.w / 2;
+          const near = Math.abs(player.y - d.y) < 1.6 && Math.hypot(px - cx, pz - cz) < 2.2;
+          const tgt = near ? 1 : 0;
+          if (D.open[i] === tgt) return;
+          const o = D.open[i] < 0 ? tgt : D.open[i] + Math.sign(tgt - D.open[i]) * Math.min(Math.abs(tgt - D.open[i]), dt * 3);
+          D.open[i] = o; changed = true;
+          _dq.setFromAxisAngle(_up, Math.atan2(-d.dir[1], d.dir[0]) - o * Math.PI / 2);
+          D.mesh.setMatrixAt(i, _dm.compose(_dp.set(d.hinge[0], d.y + 0.01, d.hinge[1]), _dq, _ds.set(d.w - 0.04, 1, 1)));
+        });
+        if (changed) D.mesh.instanceMatrix.needsUpdate = true;
+      }
     }
     // baggage belts
     const _mm = new THREE.Matrix4(), _qq = new THREE.Quaternion(), _pp = new THREE.Vector3(), _ss = new THREE.Vector3(1, 1, 1);
