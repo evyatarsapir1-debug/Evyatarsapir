@@ -71,7 +71,7 @@ export class Combat {
     const fx = Math.sin(player.facing), fz = Math.cos(player.facing);
     let best = null, bd = reach;
     for (const p of peds) {
-      if (p.shopKey || p.state === 'inside' || p.state === 'down' || p.state === 'dazed') continue;
+      if (p.shopKey || p.car || p.state === 'inside' || p.state === 'down' || p.state === 'dazed' || p.state === 'pulled' || p.state === 'thrown') continue;
       if (Math.abs(p.y - player.y) > 1) continue;
       const dx = p.x - player.x, dz = p.z - player.z, d = Math.hypot(dx, dz);
       if (d < bd && (dx * fx + dz * fz) / (d || 1) > cone) { bd = d; best = p; }
@@ -90,7 +90,7 @@ export class Combat {
         hit = true;
         if (r === 'down') this._drop(p);
         // bystanders react according to their personality
-        for (const o of pedSys.peds) if (o !== p && !o.shopKey && Math.hypot(o.x - player.x, o.z - player.z) < 14) pedSys.react(o, player, false);
+        for (const o of pedSys.peds) if (o !== p && !o.shopKey && !o.car && Math.hypot(o.x - player.x, o.z - player.z) < 14) pedSys.react(o, player, false);
       }
     }
     // a strike that lands on a car leaves a small dent

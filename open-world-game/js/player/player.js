@@ -107,10 +107,14 @@ export class Player {
 
     // contextual interactions
     this.nearVehicle = this._findVehicle(world.vehicles);
-    this.nearSeat = this.nearVehicle ? null : this._findSeat(world);
+    this.nearJack = this.nearVehicle ? null : this._findJackable(world.vehicles);
+    this.nearSeat = this.nearVehicle || this.nearJack ? null : this._findSeat(world);
     if (this.nearVehicle) {
       this.prompt = { key: 'vehicle', text: `היכנס: ${this.nearVehicle.T.name}` };
       if (input.wasPressed('vehicle') || input.wasPressed('interact')) this.enterVehicle(this.nearVehicle, world);
+    } else if (this.nearJack) {
+      this.prompt = { key: 'vehicle', text: `חטוף: ${this.nearJack.T.name}`, label: 'הוצא את הנהג' };
+      if (input.wasPressed('vehicle') || input.wasPressed('interact')) this.jackVehicle(this.nearJack, world);
     } else if (this.nearSeat) {
       this.prompt = { key: 'interact', text: this.nearSeat.kind === 'sleep' ? 'לישון' : 'לשבת', seat: this.nearSeat.label };
       if (input.wasPressed('interact')) this.useSeat(this.nearSeat);
@@ -158,14 +162,34 @@ export class Player {
     let best = null, bd = 2.8;
     for (const v of vehicles) {
       if (v.driver === 'ai' || v.driver === 'player') continue;
-      if (v.isHeli && v.y > Math.max(heightAt(v.x, v.z, v.y + 0.3), v.roofY ?? -100) + 0.5) continue;
+      if (v.isAir && v.y > Math.max(heightAt(v.x, v.z, v.y + 0.3), v.roofY ?? -100) + 0.5) continue;
       if (Math.abs(v.y - this.y) > 1.6) continue;
+      const dp = v.doorPoint();
+      const d = v.isPlane ? Math.hypot(dp.x - this.x, dp.z - this.z) - 1.2 : Math.min(Math.hypot(dp.x - this.x, dp.z - this.z), Math.hypot(v.x - this.x, v.z - this.z) - Math.max(v.T.W, v.T.L) / 2 + 0.6);
+      if (d < bd) { bd = d; best = v; }
+    }
+    return best;
+  }
+  // a traffic car with a driver, slow enough to pull them out (GTA-style carjacking)
+  _findJackable(vehicles) {
+    let best = null, bd = 2.6;
+    for (const v of vehicles) {
+      if (v.driver !== 'ai' || !v.driverPed || v.driverPed.state !== 'driving' || v.isAir) continue;
+      if (Math.abs(v.speed) > 7 || Math.abs(v.y - this.y) > 1.6) continue;
+      if (Math.abs(v.x - this.x) > 12 || Math.abs(v.z - this.z) > 12) continue;
       const dp = v.doorPoint();
       const d = Math.min(Math.hypot(dp.x - this.x, dp.z - this.z), Math.hypot(v.x - this.x, v.z - this.z) - Math.max(v.T.W, v.T.L) / 2 + 0.6);
       if (d < bd) { bd = d; best = v; }
     }
     return best;
   }
+  jackVehicle(v, world) {
+    world.onJack?.(v);           // leaves traffic, stops
+    v.jacking = true;
+    this.enterVehicle(v, world);
+    this.seq.jack = v.driverPed;
+  }
+
   // ---------------------------------------------------------------- furniture: sit / sleep
   // Seats come from benches outside and from furniture inside loaded interiors.
   // The seat you are facing wins when several are close.
@@ -272,7 +296,17 @@ export class Player {
       v.doorTarget = 1;
       this.facing = dampAngle(this.facing, v.heading + Math.PI / 2 * 0 - Math.PI / 2, 10, dt);
       this.model.animate(dt, { speed: 0, grounded: true, mode: 'foot', doorReach: true });
-      if (s.t > 0.35) { s.phase = 'sit'; s.t = 0; }
+      if (s.t > 0.35) {
+        if (s.jack) { s.phase = 'yank'; s.t = 0; world.onYank?.(v, s.jack); }
+        else { s.phase = 'sit'; s.t = 0; }
+      }
+    } else if (s.phase === 'yank') {
+      // grab the driver and throw them out: reach in, then a hard pull back with a step
+      const k = Math.min(1, s.t / 0.9);
+      const pull = k < 0.35 ? 0 : Math.sin(Math.min(1, (k - 0.35) / 0.4) * Math.PI / 2);
+      this.facing = dampAngle(this.facing, v.heading - Math.PI / 2 + pull * 0.9, 10, dt);
+      this.model.animate(dt, { speed: 0, grounded: true, mode: 'foot', doorReach: k < 0.55, attack: k > 0.45 && k < 0.8 ? { type: 'jabL', t: (k - 0.45) * 1.2, m: { dur: 0.42 } } : null });
+      if (s.t > 0.9) { s.phase = 'sit'; s.t = 0; s.fromX = this.x; s.fromZ = this.z; s.fromY = this.y; v.jacking = false; }
     } else if (s.phase === 'sit') {
       const k = Math.min(1, s.t / 0.55);
       v.object.updateMatrixWorld();
@@ -308,14 +342,15 @@ export class Player {
     const throttle = input.isHeld('gas') ? 1 : input.isHeld('brake') ? -1 : input.moveY;
     const ctl = { throttle, steer: input.moveX, handbrake: input.isHeld('handbrake'), lift: (input.isHeld('up') ? 1 : 0) - (input.isHeld('down') || input.isHeld('run') ? 1 : 0) };
     if (v.isHeli) ctl.handbrake = false;
+    if (v.isPlane) ctl.lift = (input.isHeld('up') || input.isHeld('jump') ? 1 : 0) - (input.isHeld('down') ? 1 : 0);
     this.controls = ctl;
     v.update(dt, ctl, world.statics, world.vehicles);
     this.x = v.x; this.z = v.z; this.y = v.y;
     this.model.animate(dt, { speed: Math.abs(v.speed), mode: v.parts.seatMode, steer: v.steer / (v.T.steerMax || 1), pedal: v.T.kind === 'bike' && Math.abs(v.speed) > 0.3 });
-    const landed = !v.isHeli || v.y < Math.max(heightAt(v.x, v.z, v.y + 0.3), v.roofY ?? -100) + 0.4;
+    const landed = !v.isAir || v.y < Math.max(heightAt(v.x, v.z, v.y + 0.3), v.roofY ?? -100) + 0.4;
     if (landed && Math.abs(v.speed) < 3) this.prompt = { key: 'vehicle', text: 'צא מהרכב' };
     if (input.wasPressed('vehicle')) {
-      if (!landed) this.message = 'יש לנחות לפני היציאה מהמסוק';
+      if (!landed) this.message = v.isPlane ? 'יש לנחות לפני היציאה מהמטוס' : 'יש לנחות לפני היציאה מהמסוק';
       else if (Math.abs(v.speed) > 3) this.message = 'האט כדי לצאת מהרכב';
       else this.exitVehicle(world);
     }
@@ -326,7 +361,8 @@ export class Player {
     // find a free spot: driver side first, then the other side, then behind
     const c = Math.cos(v.heading), s = Math.sin(v.heading);
     const sideOff = v.isTwoWheel ? 0.9 : v.T.W / 2 + 0.7;
-    const cands = [[sideOff, v.parts.seat.z], [-sideOff, v.parts.seat.z], [0, -v.T.L / 2 - 1], [0, v.T.L / 2 + 1]];
+    const dz = v.parts.doorZ ?? v.parts.seat.z;
+    const cands = [[sideOff, dz], [-sideOff, dz], [0, -v.T.L / 2 - 1], [0, v.T.L / 2 + 1]];
     let spot = null;
     for (const [lx, lz] of cands) {
       const x = v.x + lx * c + lz * s, z = v.z - lx * s + lz * c;

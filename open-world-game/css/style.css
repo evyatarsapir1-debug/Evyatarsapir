@@ -209,6 +209,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 .tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "fire light cyc" "jump run ."; }
 .tbtns.drive { grid-template-columns: 58px 58px 48px; grid-template-areas: ". cam horn" "brake gas hb"; }
 .tbtns.heli { grid-template-columns: 58px 58px 48px; grid-template-areas: ". . cam" "brake gas ."; }
+.tbtns.plane { grid-template-columns: 58px 58px 48px; grid-template-areas: "dn up cam" "brake gas ."; }
 .tbtn { pointer-events: auto; width: 56px; height: 56px; border-radius: 50%; border: 1.5px solid #ffffff4d; background: #00000038; color: #ffffffe6;
   font: inherit; font-weight: 800; font-size: 12px; touch-action: none; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); text-shadow: 0 1px 3px #000a; }
 .tbtn.down { background: #ff8a3d80; border-color: #fff; }

@@ -87,7 +87,15 @@ export class Traffic {
     return null;
   }
 
+  // the player took this car: it leaves the traffic system but stays in the world
+  release(v) {
+    const i = this.cars.indexOf(v);
+    if (i >= 0) this.cars.splice(i, 1);
+    v.ai = null; v.speed = 0; v.vx = v.vz = 0; v.horn = false;
+  }
+
   remove(v) {
+    v.removed = true;
     this.scene.remove(v.object);
     v.object.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
     this.cars.splice(this.cars.indexOf(v), 1);
@@ -153,7 +161,7 @@ export class Traffic {
       const lat = Math.abs(dx * rx + dz * rz);
       const width = (T.W + o.T.W) / 2 + 0.6 + (p.kind === 'quad' ? 1.2 : 0);
       if (lat > width) continue;
-      if (o.isHeli && o.y > v.y + 3) continue;
+      if (o.isAir && o.y > v.y + 3) continue;
       const gap = along - (T.L + o.T.L) / 2;
       if (gap < minGap) minGap = gap;
     }
@@ -209,7 +217,7 @@ export class Traffic {
     // hard guarantee: never overlap another vehicle (e.g. the player's car stopped across the lane)
     updateBox(v.collider, v.x, v.z, v.heading);
     for (const o of vehicles) {
-      if (o === v || Math.abs(o.x - v.x) > 9 || Math.abs(o.z - v.z) > 9 || (o.isHeli && o.y > 3)) continue;
+      if (o === v || Math.abs(o.x - v.x) > 9 || Math.abs(o.z - v.z) > 9 || (o.isAir && o.y > 3)) continue;
       const r = obbVs(v.collider, o.collider);
       if (r.hit) { v.x += r.nx * r.depth; v.z += r.nz * r.depth; v.speed = Math.min(v.speed, 0.5); updateBox(v.collider, v.x, v.z, v.heading); }
     }

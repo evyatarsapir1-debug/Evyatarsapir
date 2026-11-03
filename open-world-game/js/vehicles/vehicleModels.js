@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GeoBuilder } from '../world/geoBuilder.js';
+import { airlinerGeometry, JET_MAT, LIVERIES, FY } from '../world/airliner.js';
 
 export const shared = {
   tire: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 }),
@@ -21,6 +22,9 @@ export const shared = {
   lod: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.35 }),
 };
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+const archCache = new Map();
+// half-ring over a wheel (dark plastic arch)
+const ARCH = (r) => { const k = r.toFixed(2); if (!archCache.has(k)) archCache.set(k, new THREE.TorusGeometry(r + 0.06, 0.055, 6, 14, Math.PI)); return archCache.get(k); };
 
 function m(geo, mat, parent, x, y, z, cast = true) {
   const o = new THREE.Mesh(geo, mat);
@@ -34,7 +38,18 @@ function wheelGeo(r, w) {
   if (wheelCache.has(k)) return wheelCache.get(k);
   const b = new GeoBuilder();
   b.addGeometry(new THREE.CylinderGeometry(r, r, w, 16), _rz, 0x1a1a1a);
-  b.addGeometry(new THREE.CylinderGeometry(r * 0.6, r * 0.6, w + 0.02, 8), _rz, 0xbfc5ca);
+  b.addGeometry(new THREE.CylinderGeometry(r * 0.62, r * 0.62, w + 0.01, 14), _rz, 0x2a2d30);
+  b.addGeometry(new THREE.CylinderGeometry(r * 0.6, r * 0.6, w + 0.02, 14, 1, true), _rz, 0xc9ced3);
+  for (const sx of [-1, 1]) {
+    // hub + five spokes on each face
+    b.addGeometry(new THREE.CylinderGeometry(r * 0.16, r * 0.16, 0.02, 8), new THREE.Matrix4().multiplyMatrices(new THREE.Matrix4().makeTranslation(sx * (w / 2 + 0.005), 0, 0), _rz), 0xd5d9dd);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const m4 = new THREE.Matrix4().makeRotationX(a).premultiply(new THREE.Matrix4().makeTranslation(sx * (w / 2 + 0.004), 0, 0));
+      m4.multiply(new THREE.Matrix4().makeTranslation(0, r * 0.32, 0));
+      b.addGeometry(new THREE.BoxGeometry(0.02, r * 0.5, r * 0.13), m4, 0xc9ced3);
+    }
+  }
   const g = b.build();
   wheelCache.set(k, g);
   return g;
@@ -84,7 +99,22 @@ function optimize(parts) {
   parts.lod = lod;
 }
 
+// Flyable passenger jet: the same detailed model as the airport planes, gear swaps out when retracted.
+function buildJet(color) {
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const livery = LIVERIES[(color | 0) % LIVERIES.length] || LIVERIES[0];
+  const mesh = new THREE.Mesh(airlinerGeometry(livery, true), JET_MAT);
+  mesh.castShadow = true; body.add(mesh);
+  const paint = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  return {
+    root: g, body, paint, baseColor: new THREE.Color(0xffffff), wheels: [], door: null, rotor: null, tailRotor: null, panels: {}, lights: [],
+    seat: new THREE.Vector3(0.55, FY - 0.55, 16.2), doorZ: 13.4, seatMode: 'drive', doorSide: 1, glassParts: [], wheelR: 0.6,
+    jetMesh: mesh, gearGeo: mesh.geometry, cleanGeo: airlinerGeometry(livery, false), lod: null, shared: true,
+  };
+}
+
 export function buildVehicleModel(type, color) {
+  if (type.kind === 'plane') return buildJet(color);
   const T = type, g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
   const paint = new THREE.MeshStandardMaterial({ color, metalness: 0.55, roughness: 0.32, envMapIntensity: 1.1 });
@@ -173,6 +203,35 @@ export function buildVehicleModel(type, color) {
         parts.lights.push(m(box(0.38, 0.14, 0.06), shared.head, body, sx * (W / 2 - 0.3), clear + lowH * 0.72, L / 2 + 0.01, false));
         m(box(0.36, 0.13, 0.06), shared.tail, body, sx * (W / 2 - 0.3), clear + lowH * 0.75, -L / 2 - 0.01, false);
       }
+      // ---- body details: door seams + handles on both sides, mirrors, grille, wheel arches, side skirts
+      const fourDoor = !(sporty || T.convertible || T.pickup || T.van || T.kind === 'bike');
+      const dz0 = cabZ + cabL * 0.42, dzMid = cabZ - cabL * 0.2 + (fourDoor ? 0.12 : -0.15), dz1 = fourDoor ? cabZ - cabL * 0.48 : dzMid;
+      for (const sx of [-1, 1]) {
+        const x = sx * (W / 2 + 0.004);
+        for (const z of fourDoor ? [dz0, dzMid, dz1] : [dz0, dzMid]) m(box(0.012, lowH * 0.82, 0.022), shared.dark, body, x, clear + lowH * 0.52, z, false);
+        m(box(0.012, 0.02, (dz0 - dz1)), shared.dark, body, x, clear + lowH * 0.1, (dz0 + dz1) / 2, false);
+        // handles (the driver side has its own on the opening door)
+        if (sx < 0) m(box(0.04, 0.035, 0.17), shared.chrome, body, x - sx * 0.01, clear + lowH * 0.75, dz0 - 0.32, false);
+        if (fourDoor) m(box(0.04, 0.035, 0.17), shared.chrome, body, x + sx * 0.01, clear + lowH * 0.75, dzMid - 0.3, false);
+        // side mirror
+        const my = clear + lowH + 0.08, mz = cabZ + cabL * 0.47;
+        m(box(0.2, 0.05, 0.06), paint, body, sx * (W / 2 + 0.07), my, mz, false);
+        m(box(0.08, 0.13, 0.2), paint, body, sx * (W / 2 + 0.17), my + 0.04, mz, false);
+        m(box(0.02, 0.1, 0.16), shared.glass, body, sx * (W / 2 + 0.17), my + 0.04, mz - 0.11, false);
+        // side skirt
+        m(box(0.05, 0.08, wb * 0.62), shared.dark, body, sx * (W / 2 + 0.01), clear + 0.04, 0, false);
+        // wheel arches
+        for (const az of [wb / 2, -wb / 2]) {
+          const arch = m(ARCH(r), shared.dark, body, sx * (W / 2 - 0.02), r, az, false);
+          arch.rotation.y = Math.PI / 2;
+        }
+      }
+      // grille with chrome bar + lower intake
+      m(box(W * 0.46, lowH * 0.3, 0.03), shared.dark, body, 0, clear + lowH * 0.68, L / 2 + 0.012, false);
+      m(box(W * 0.46, 0.025, 0.035), shared.chrome, body, 0, clear + lowH * 0.68, L / 2 + 0.02, false);
+      m(box(W * 0.6, lowH * 0.12, 0.03), shared.dark, body, 0, clear + lowH * 0.32, L / 2 + 0.1, false);
+      // rear window frame line + third brake light
+      if (!T.convertible) m(box(W * 0.25, 0.04, 0.03), shared.tail, body, 0, clear + lowH + cabH * 0.8, cabZ - cabL * 0.5 - 0.01, false);
       parts.panels.front = m(box(W + 0.04, lowH * 0.35, 0.14), shared.dark, body, 0, clear + lowH * 0.2, L / 2 + 0.03);
       parts.panels.rear = m(box(W + 0.04, lowH * 0.35, 0.14), shared.dark, body, 0, clear + lowH * 0.2, -L / 2 - 0.03);
       m(box(0.5, 0.08, 0.02), shared.white, body, 0, clear + lowH * 0.3, -L / 2 - 0.11); // plate

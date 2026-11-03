@@ -18,6 +18,7 @@ const MAX = 64;
 const CORNERS = [[10, 10], [90, 10], [90, 90], [10, 90]];
 const cap = (r, len) => new THREE.CapsuleGeometry(r, len, 2, 6);
 const _q = [];
+const _seatV = new THREE.Vector3();
 
 class Rig {
   constructor() {
@@ -84,7 +85,7 @@ export class Pedestrians {
   }
 
   setDensity(n) { this.target = Math.min(MAX - 8, n); }
-  obstacles() { return this.peds.filter((p) => p.state !== 'inside' && p.state !== 'shopkeeper' && p.state !== 'resident').map((p) => ({ x: p.x, z: p.z, y: p.y, r: 0.45 })); }
+  obstacles() { return this.peds.filter((p) => p.state !== 'inside' && p.state !== 'shopkeeper' && p.state !== 'resident' && !p.car).map((p) => ({ x: p.x, z: p.z, y: p.y, r: 0.45 })); }
 
   _appearance() {
     const r = this.rng;
@@ -187,9 +188,10 @@ export class Pedestrians {
     // population
     for (let i = this.peds.length - 1; i >= 0; i--) {
       const p = this.peds[i];
-      if (!p.shopKey && Math.hypot(p.x - px, p.z - pz) > 140) { this._release(p); this.peds.splice(i, 1); this._colors(); }
+      const gone = p.car ? p.state === 'driving' && (p.car.removed || (p.car.driver !== 'ai' && !p.car.jacking)) : !p.shopKey && Math.hypot(p.x - px, p.z - pz) > 140;
+      if (gone) { if (p.car && p.car.driverPed === p) p.car.driverPed = null; this._release(p); this.peds.splice(i, 1); this._colors(); }
     }
-    const walkers = this.peds.filter((p) => !p.shopKey).length;
+    const walkers = this.peds.filter((p) => !p.shopKey && !p.car).length;
     if (walkers < this.target && cells.length && this.peds.length < MAX) this._spawnWalker(px, pz, cells);
     this._skT = (this._skT || 0) - dt;
     if (this._skT <= 0) { this._skT = 1; this._syncInteriorPeople(ctx.places, ctx.player); }
@@ -201,22 +203,109 @@ export class Pedestrians {
   _release(p) { if (p.bench) this.benchesTaken.delete(p.bench.key); }
 
   _goalOnLoop(p) {
+    if (CORNERS[p.corner] === undefined) { p.ix = Math.floor(p.x / P); p.iz = Math.floor(p.z / P); p.corner = 0; p.dir = 1; }
     const c = CORNERS[p.corner];
     return [p.ix * P + c[0], p.iz * P + c[1]];
+  }
+
+  // a person sitting at the wheel of a traffic car
+  addDriver(v) {
+    if (this.peds.length >= MAX) return null;
+    const p = this._add({ x: v.x, z: v.z, state: 'driving', car: v, y: v.y });
+    p.phone = false; p.suitcase = false; p.app.h = Math.min(p.app.h, 0.97);
+    v.driverPed = p;
+    return p;
+  }
+  // carjacking: the player pulls this driver out and throws them onto the road
+  yank(p, v, from) {
+    if (!p) return;
+    v.object.updateMatrixWorld();
+    const w = v.seatWorld(new THREE.Vector3());
+    const dp = v.doorPoint();
+    p.state = 'pulled'; p.timer = 0.55; p.pull = { x0: w.x, y0: w.y, z0: w.z, x1: dp.x, z1: dp.z };
+    const ox = dp.x - v.x, oz = dp.z - v.z, L = Math.hypot(ox, oz) || 1;
+    p.throwDir = [ox / L, oz / L];
+    p.from = [from.x, from.z];
+    this.say(p, ['היי! זה האוטו שלי!', 'מה אתה עושה?!', 'עזוב אותי!', 'לא! הרכב שלי!'][this.rng.int(0, 3)], 2.6);
+  }
+  _vehicleSeat(p, dt) {
+    const v = p.car;
+    v.object.updateMatrixWorld();
+    const w = v.seatWorld(_seatV);
+    p.x = w.x; p.y = w.y - (v.isTwoWheel ? 0 : 0.1); p.z = w.z; p.yaw = v.heading; p.speed = 0;
+    p.pose = v.isTwoWheel ? 'ride' : 'drive';
   }
 
   _think(p, dt, time, ctx) {
     const { player, vehicles, graph, statics } = ctx;
     p.timer -= dt;
+    if (p.state === 'driving') { if (p.sayT > 0) p.sayT -= dt; this._vehicleSeat(p, dt); return; }
+    if (p.state === 'pulled') {
+      // dragged out through the door
+      if (p.sayT > 0) p.sayT -= dt;
+      const k = clamp(1 - p.timer / 0.55, 0, 1), e = k * k * (3 - 2 * k), P = p.pull;
+      const gy = heightAt(P.x1, P.z1, P.y0 + 0.5);
+      p.x = P.x0 + (P.x1 - P.x0) * e; p.z = P.z0 + (P.z1 - P.z0) * e; p.y = P.y0 + (gy - P.y0) * e + Math.sin(k * Math.PI) * 0.35;
+      p.yaw = dampAngle(p.yaw, Math.atan2(p.from[0] - p.x, p.from[1] - p.z), 6, dt);
+      p.pose = 'pulled'; p.speed = 0;
+      if (p.timer <= 0) {
+        // thrown: flies a couple of meters, tumbles and rolls on the asphalt
+        const [tx, tz] = p.throwDir;
+        p.state = 'thrown'; p.car = null;
+        p.vx = tx * 5.2 + (Math.random() - 0.5) * 1.5; p.vz = tz * 5.2 + (Math.random() - 0.5) * 1.5; p.vy = 3.6;
+        p.fallYaw = Math.atan2(-tx, -tz); p.tumble = 0; p.spin = 7 + Math.random() * 3; p.bounced = 0; p.timer = 3.2;
+      }
+      return;
+    }
+    if (p.state === 'thrown') {
+      if (p.sayT > 0) p.sayT -= dt;
+      const gy = heightAt(p.x, p.z, p.y + 0.6);
+      p.x += p.vx * dt; p.z += p.vz * dt;
+      if (p.y > gy + 0.01 || p.vy > 0) {
+        p.vy -= 17 * dt; p.y += p.vy * dt; p.tumble += p.spin * dt;
+        if (p.y <= gy) {
+          p.y = gy;
+          if (p.bounced < 1 && p.vy < -3) { p.vy = -p.vy * 0.28; p.bounced++; p.spin *= 0.5; }
+          else p.vy = 0;
+        }
+      } else {
+        // sliding / rolling to a stop, ending face-down on the road
+        p.y = gy;
+        p.vx *= Math.exp(-3.2 * dt); p.vz *= Math.exp(-3.2 * dt);
+        // come to rest lying on the back (matches the 'fall' pose they get up from)
+        const rest = Math.round((p.tumble + Math.PI / 2) / (Math.PI * 2)) * Math.PI * 2 - Math.PI / 2;
+        p.tumble = damp(p.tumble, rest, 6, dt);
+      }
+      // walls/cars stop the slide
+      statics?.query(p.x - 1, p.z - 1, p.x + 1, p.z + 1, _q);
+      for (const c of _q) { if (c.off || c.tag === 'slab' || !verticalOverlap(p.y + 0.1, p.y + 1, c)) continue; const r = circleVs(p.x, p.z, 0.3, c); if (r.hit) { p.x += r.nx * r.depth; p.z += r.nz * r.depth; p.vx *= 0.3; p.vz *= 0.3; } }
+      p.pose = 'thrown'; p.speed = 0;
+      if (p.timer <= 0) {
+        p.tumble = 0; p.vx = p.vz = 0;
+        p.state = 'fall'; p.timer = 1.6; p.afterFall = null;
+        p.ix = Math.floor(p.x / P); p.iz = Math.floor(p.z / P); p.corner = this.rng.int(0, 3); p.dir = 1;
+        // getting up, then each personality reacts
+        p.afterJack = true;
+      }
+      return;
+    }
+    if (p.afterJack && p.state !== 'fall') {
+      p.afterJack = false;
+      const src = { x: player.x, z: player.z };
+      if (p.temper === 'fight' && player.state === 'foot') { p.state = 'fight'; this.say(p, 'אתה הולך לשלם על זה!'); }
+      else if (p.temper === 'call') { p.state = 'callHelp'; p.timer = 3.5; p.fleeFrom = [src.x, src.z]; this.say(p, 'הלו? גנבו לי את האוטו!', 3.5); }
+      else if (p.temper === 'freeze') { p.state = 'surprised'; p.timer = 2.5; this.say(p, 'אני לא מאמין...'); }
+      else { p.state = 'flee'; p.timer = 7; p.fleeFrom = [src.x, src.z]; this.say(p, ['קח אותו, קח!', 'משוגע!', 'הצילו!'][this.rng.int(0, 2)]); }
+    }
     let goal = null, speed = p.walkSpeed, pose = 'walk';
     // ---- danger: fast vehicle heading at us
     if (p.hitT > 0) p.hitT -= dt;
     if (p.sayT > 0) p.sayT -= dt;
     if (p.barT > 0) p.barT -= dt;
-    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed'].includes(p.state)) {
+    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'driving', 'pulled', 'thrown'].includes(p.state)) {
       for (const v of vehicles) {
         const sp = Math.hypot(v.vx, v.vz);
-        if (sp < 4 || Math.abs(v.x - p.x) > 12 || Math.abs(v.z - p.z) > 12) continue;
+        if (sp < 4 || Math.abs(v.x - p.x) > 12 || Math.abs(v.z - p.z) > 12 || v.y - p.y > 3) continue;
         const dx = p.x - v.x, dz = p.z - v.z;
         const along = (dx * v.vx + dz * v.vz) / sp;
         const lat = Math.abs(dx * v.vz - dz * v.vx) / sp;
@@ -414,6 +503,7 @@ export class Pedestrians {
 
   // something dangerous happened near this person (explosion, energy blast): duck / fall, then run away
   scare(p, src, hit) {
+    if (p.state === 'driving' || p.state === 'pulled' || p.state === 'thrown') return;
     if (p.state === 'shopkeeper' || p.state === 'resident') { p.pose = 'idle'; return; }
     p.seat = null; p.fixedY = null;
     this._release(p);
@@ -430,7 +520,7 @@ export class Pedestrians {
 
   // a person got hit in a fist fight
   hit(p, src, dmg, kick) {
-    if (p.state === 'down' || p.state === 'dazed') return false;
+    if (p.state === 'down' || p.state === 'dazed' || p.state === 'driving' || p.state === 'pulled' || p.state === 'thrown') return false;
     this._release(p); p.seat = null; p.fixedY = null;
     p.hp = Math.max(0, p.hp - dmg); p.barT = 6; p.hitT = 0.35;
     const dx = p.x - src.x, dz = p.z - src.z, L = Math.hypot(dx, dz) || 1;
@@ -449,7 +539,7 @@ export class Pedestrians {
 
   // someone saw (or felt) a fight: every personality reacts differently
   react(p, src, wasHit = false) {
-    if (['fight', 'down', 'dazed', 'shopkeeper', 'resident', 'inside'].includes(p.state)) return;
+    if (['fight', 'down', 'dazed', 'shopkeeper', 'resident', 'inside', 'driving', 'pulled', 'thrown'].includes(p.state)) return;
     if (!wasHit && p.reactedAt && performance.now() - p.reactedAt < 8000) return;
     p.reactedAt = performance.now();
     this._release(p); p.seat = null; p.fixedY = null;
@@ -578,6 +668,25 @@ export class Pedestrians {
       case 'sit':
         t.legL = t.legR = -1.45; t.kneeL = t.kneeR = 1.4; t.armL = t.armR = -0.35; t.elbowL = t.elbowR = -0.9; t.spine = -0.05; hipsY = 0.5;
         break;
+      case 'drive': case 'ride':
+        // seated at the wheel, hands on it (riders: legs apart, arms on the bars)
+        { const ride = p.pose === 'ride', st = (p.car?.steer || 0) * 0.35;
+          t.legL = t.legR = ride ? -0.95 : -1.25; t.kneeL = t.kneeR = ride ? 1.2 : 1.1;
+          t.armL = (ride ? -1.15 : -1.05) + st; t.armR = (ride ? -1.15 : -1.05) - st; t.elbowL = t.elbowR = ride ? -0.2 : -0.55;
+          t.side = ride ? 0.15 : 0.12; t.spine = ride ? 0.35 : -0.05; hipsY = ride ? 0.62 : 0.5; }
+        t.head = Math.sin(now * 0.7 + p.phase) * 0.08;
+        break;
+      case 'pulled':
+        // dragged by the collar: legs trailing, arms flailing
+        t.legL = -0.9; t.legR = -0.5; t.kneeL = 1.0; t.kneeR = 0.6; t.armL = -2.2 + Math.sin(now * 14) * 0.5; t.armR = -1.6 + Math.cos(now * 13) * 0.5;
+        t.elbowL = t.elbowR = -0.5; t.side = 0.4; t.spine = -0.35; t.head = -0.3; hipsY = 0.75;
+        break;
+      case 'thrown':
+        if (p.vy === 0 && Math.abs(p.vx) + Math.abs(p.vz) < 0.6) { t.armL = -2.6; t.armR = -2.4; t.legL = 0.1; t.legR = -0.2; t.side = 0.3; hipsY = 0.95; break; }
+        // limbs loose while flying/rolling
+        t.legL = -0.4 + Math.sin(now * 9) * 0.5; t.legR = 0.2 + Math.cos(now * 8) * 0.5; t.kneeL = 0.9; t.kneeR = 0.5;
+        t.armL = -2.5 + Math.sin(now * 11) * 0.6; t.armR = -1.2 + Math.cos(now * 10) * 0.6; t.elbowL = t.elbowR = -0.7; t.side = 0.6; t.spine = 0.3; hipsY = 0.95;
+        break;
       case 'fall':
         t.bodyX = -1.45; t.armL = -2.6; t.armR = -2.4; t.legL = 0.1; t.legR = -0.2; hipsY = 0.2;
         break;
@@ -618,6 +727,13 @@ export class Pedestrians {
       this._pose(p, dt);
       R.root.position.set(p.x, p.y, p.z);
       R.root.rotation.set(0, p.state === 'fall' ? p.fallYaw : p.yaw, 0);
+      if (p.state === 'thrown') {
+        // somersault around the hips while flying, settling on the ground
+        // rotate about the hips: keep the hip point at its height above the road (lower when lying flat)
+        const yaw = p.fallYaw, a = p.tumble, h = 0.95, hc = 0.16 + 0.79 * Math.abs(Math.cos(a));
+        R.root.rotation.set(a, yaw, 0, 'YXZ');
+        R.root.position.set(p.x - h * Math.sin(a) * Math.sin(yaw), p.y + hc - h * Math.cos(a), p.z - h * Math.sin(a) * Math.cos(yaw));
+      } else R.root.rotation.order = 'XYZ';
       R.body.scale.set(p.app.w, p.app.h, p.app.w);
       R.root.updateMatrixWorld(true);
       const a = R.a;

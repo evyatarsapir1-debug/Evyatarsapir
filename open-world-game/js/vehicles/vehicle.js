@@ -33,6 +33,8 @@ export class Vehicle {
     this.horn = false;
     this.lastImpact = 0;
     this.isHeli = this.T.kind === 'heli';
+    this.isPlane = this.T.kind === 'plane';
+    this.isAir = this.isHeli || this.isPlane;
     this.isTwoWheel = this.T.kind === 'moto' || this.T.kind === 'bike';
     this.collider = makeBox(x, z, this.T.W / 2, this.T.L / 2, heading, this.y, this.y + this.T.H, 'vehicle');
     this.collider.owner = this;
@@ -45,7 +47,7 @@ export class Vehicle {
   // World position of the point next to the driver door where the player stands to get in
   doorPoint() {
     const side = this.isTwoWheel ? 0.9 : this.T.W / 2 + 0.75;
-    const lz = this.isTwoWheel ? 0 : this.parts.seat.z;
+    const lz = this.isTwoWheel ? 0 : this.parts.doorZ ?? this.parts.seat.z;
     const c = Math.cos(this.heading), s = Math.sin(this.heading);
     // local +x maps to world (cos h, -sin h); local +z to (sin h, cos h)
     return { x: this.x + side * c + lz * s, z: this.z - side * s + lz * c };
@@ -59,6 +61,7 @@ export class Vehicle {
   update(dt, ctl, statics, others) {
     const T = this.T;
     if (this.isHeli) return this._updateHeli(dt, ctl, statics, others);
+    if (this.isPlane) return this._updatePlane(dt, ctl, statics, others);
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     const rx = -fz, rz = fx; // right vector of the vehicle (facing +z, right is -x)
     let vf = this.vx * fx + this.vz * fz;
@@ -151,6 +154,77 @@ export class Vehicle {
     this.sync(dt);
   }
 
+  // Arcade flight model for the passenger jet. Ground: taxi with nose-wheel steering, brakes and a slow pushback.
+  // Air: throttle sets thrust, `lift` pitches the nose, steering banks into a turn; too slow = it sinks.
+  _updatePlane(dt, ctl, statics, others) {
+    const T = this.T, ROTATE = 58, STALL = 46;
+    const ground = Math.max(heightAt(this.x, this.z, this.y + 0.5), WATER_Y - 0.2);
+    const onGround = this.y <= ground + 0.05;
+    const thr = this.driver ? (ctl.throttle || 0) : 0;
+    const lift = this.driver ? (ctl.lift || 0) : 0;
+    let v = this.speed;
+    // engines
+    this.thrust = damp(this.thrust || 0, Math.max(0, thr), 0.9, dt);
+    v += T.accel * this.thrust * dt;
+    v -= v * Math.abs(v) * (T.accel / (T.maxSpeed * T.maxSpeed)) * dt;
+    if (onGround) {
+      if (thr < 0) v = v > 0.3 ? Math.max(0, v - T.brake * 2.2 * -thr * dt) : Math.max(-3, v - 1.5 * dt);
+      else if (thr === 0) v -= Math.sign(v) * Math.min(Math.abs(v), 0.6 * dt);
+      if (ctl.handbrake) v -= Math.sign(v) * Math.min(Math.abs(v), 14 * dt);
+      // nose-wheel steering, less effective at speed
+      const steer = (ctl.steer || 0) * T.steerMax / (1 + Math.abs(v) * 0.06);
+      this.steer = damp(this.steer, steer, 6, dt);
+      this.heading += -(v / T.wheelbase) * Math.tan(this.steer) * dt;
+      this.roll = damp(this.roll, 0, 4, dt);
+      // rotation: pull up once fast enough
+      const wantPitch = v > ROTATE * 0.92 && lift > 0 ? 0.16 : 0;
+      this.pitch = damp(this.pitch, -wantPitch, wantPitch ? 1.2 : 4, dt);
+      this.vy = v > ROTATE && -this.pitch > 0.1 ? 2 : 0;
+    } else {
+      // pitch with the climb/descend controls, otherwise ease back towards gentle level flight
+      const p0 = -this.pitch;
+      let pt = clamp(p0 + lift * 0.5 * dt, -0.3, 0.27);
+      if (!lift) pt = damp(pt, clamp(pt, -0.05, 0.08), 0.6, dt);
+      this.pitch = -pt;
+      // bank and turn
+      this.roll = damp(this.roll, -(ctl.steer || 0) * 0.62, 2.2, dt);
+      this.heading += Math.tan(this.roll) * 19 / Math.max(25, v) * dt;
+      this.steer = 0;
+      // gravity along the flight path, lift vs. stall
+      v -= Math.sin(pt) * 9.8 * 0.55 * dt;
+      const L = clamp((v - STALL) / 14, 0, 1);
+      let targetVy = v * Math.sin(pt) * L - (1 - L) * 14;
+      // landing assist (ground effect): close to the ground with flying speed, the sink rate is gently limited
+      const agl = this.y - ground;
+      if (agl < 25 && L > 0.6) targetVy = Math.max(targetVy, -2 - agl * 0.35);
+      this.vy = damp(this.vy, targetVy, L > 0.5 ? 3 : 1.2, dt);
+      if (L < 0.5) this.pitch = damp(this.pitch, 0.12, 0.8, dt); // nose drops in a stall
+    }
+    v = clamp(v, -3, T.maxSpeed * 1.08);
+    this.speed = v;
+    const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
+    const hv = v * Math.cos(this.pitch);
+    this.vx = fx * hv; this.vz = fz * hv;
+    this.x += this.vx * dt; this.z += this.vz * dt;
+    this.y += this.vy * dt;
+    if (this.y > 900) { this.y = 900; this.vy = Math.min(0, this.vy); }
+    const g2 = Math.max(heightAt(this.x, this.z, this.y + 0.5), WATER_Y - 0.2);
+    if (this.y < g2) {
+      // touchdown: soft landings roll on, hard ones are a crash
+      const sink = -this.vy;
+      if (sink > 8 || (sink > 3 && -this.pitch < -0.15)) { this.lastImpact = Math.max(this.lastImpact, sink * 2.2); this.addDamage(sink * 6, 0, 1); }
+      this.y = g2; this.vy = 0;
+      if (-this.pitch > 0) this.pitch = damp(this.pitch, 0, 3, dt);
+      this.roll = 0;
+    }
+    this.airborne = this.y > g2 + 0.3;
+    this.inWater = !this.airborne && g2 <= WATER_Y - 0.15 && heightAt(this.x, this.z, this.y + 0.5) < WATER_Y - 0.5;
+    if (this.inWater) { this.speed *= Math.exp(-1.5 * dt); this.y = WATER_Y - 1.2; }
+    this.roofY = -100;
+    this._collide(statics, others);
+    this.sync(dt);
+  }
+
   _collide(statics, others) {
     const c = this.collider;
     for (let iter = 0; iter < 2; iter++) {
@@ -240,7 +314,7 @@ export class Vehicle {
 
   // distance level of detail: one merged mesh far away, full animated rig up close
   setFar(far) {
-    if (this._far === far) return;
+    if (this._far === far || this.isPlane) return;
     this._far = far;
     this.parts.body.visible = !far;
     for (const w of this.parts.wheels) w.pivot.visible = !far;
@@ -276,6 +350,11 @@ export class Vehicle {
     o.position.set(this.x, this.y, this.z);
     o.rotation.set(0, this.heading, 0);
     this.parts.body.rotation.set(this.pitch, 0, this.roll);
+    if (this.isPlane) {
+      const g = this.parts.jetMesh;
+      const want = this.airborne && this.y - heightAt(this.x, this.z, this.y) > 25 ? this.parts.cleanGeo : this.parts.gearGeo;
+      if (g.geometry !== want) g.geometry = want;
+    }
     for (const w of this.parts.wheels) {
       w.spin.rotation.x = this.wheelSpin;
       if (w.front) w.pivot.rotation.y = -this.steer;

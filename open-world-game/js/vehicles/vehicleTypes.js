@@ -19,6 +19,7 @@ export const VEHICLE_TYPES = {
   fuel:    { name: 'מכלית דלק', kind: 'car', L: 8.0, W: 2.45, H: 3.1, wheelbase: 4.6, maxSpeed: 22, accel: 3.5, brake: 9, steerMax: 0.6, grip: 7.5, mass: 9000, colors: [0xecf0f1], price: 80000, truck: true, tank: true },
   moto:    { name: 'אופנוע', kind: 'moto', L: 2.1, W: 0.8, H: 1.2, wheelbase: 1.45, maxSpeed: 55, accel: 11, brake: 16, steerMax: 0.5, grip: 10, mass: 220, colors: [0x111111, 0xc0392b, 0x2471a3, 0xf1c40f], price: 15000 },
   bicycle: { name: 'אופניים', kind: 'bike', L: 1.75, W: 0.6, H: 1.1, wheelbase: 1.05, maxSpeed: 11, accel: 3, brake: 7, steerMax: 0.6, grip: 9, mass: 15, colors: [0x2ecc71, 0xe74c3c, 0x3498db, 0x34495e], price: 600 },
+  jet:     { name: 'מטוס נוסעים', kind: 'plane', L: 39, W: 4.2, H: 6.2, wheelbase: 16, maxSpeed: 112, accel: 6.5, brake: 5, steerMax: 0.5, grip: 6, mass: 60000, colors: [0, 1, 2], price: 0 },
   heli:    { name: 'מסוק', kind: 'heli', L: 9.5, W: 2.4, H: 3.0, wheelbase: 3, maxSpeed: 45, accel: 8, brake: 6, steerMax: 0, grip: 3, mass: 2500, colors: [0x1f3a5f, 0xe74c3c, 0xf5f5f5], price: 400000 },
 };
 

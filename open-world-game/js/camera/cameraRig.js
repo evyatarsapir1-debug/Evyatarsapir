@@ -37,13 +37,14 @@ export class CameraRig {
       const L = v.T.L;
       dist = clamp(this.dist, 2.2, 14) * 0.6 + L * 0.9 + 2.2;
       if (v.isHeli) dist += 4;
+      if (v.isPlane) dist = clamp(this.dist, 2.2, 14) * 0.8 + 30;
       tx = v.x; ty = v.y + v.T.H * 0.85 + 0.6; tz = v.z;
       // auto-align behind the vehicle when the player is not looking around
       const moving = Math.abs(v.speed) > 1.5;
-      if (this.idle > 1.2 && (moving || v.isHeli)) {
+      if (this.idle > 1.2 && (moving || v.isAir)) {
         const behind = v.speed < -1 ? v.heading + Math.PI : v.heading;
         this.yaw = dampAngle(this.yaw, behind, 2.8, dt);
-        this.pitch = damp(this.pitch, v.isHeli ? 0.32 : 0.2, 2, dt);
+        this.pitch = damp(this.pitch, v.isPlane ? 0.16 - v.pitch * 0.8 : v.isHeli ? 0.32 : 0.2, 2, dt);
       }
       lam = 20;
     } else {

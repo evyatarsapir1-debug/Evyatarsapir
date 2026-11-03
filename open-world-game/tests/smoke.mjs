@@ -435,7 +435,7 @@ const fight = await g(() => {
   if (game.player.state !== 'foot') { game.player.exitVehicle({ statics: game.statics, vehicles: game.vehicles.all() }); step(60); }
   game.equip(null);
   game.teleport(311, 309, 0); step(60);
-  const ped = game.peds.peds.find((q) => !q.shopKey && !q.defeated);
+  const ped = game.peds.peds.find((q) => !q.shopKey && !q.defeated && !q.car);
   if (!ped) return { err: 'no pedestrian' };
   ped.temper = 'flee';
   const place = () => { game.player.setPosition(ped.x, ped.z - 1.0, 0, ped.y + 0.3); game.player.facing = 0; ped.state = 'phone'; ped.timer = 30; ped.x = game.player.x; ped.z = game.player.z + 1.0; };
@@ -452,6 +452,53 @@ check('fight: combo jab -> cross -> kick', JSON.stringify(fight.seq) === '["jabR
 check('fight: a person goes down after enough hits (non-graphic)', fight.down, JSON.stringify(fight));
 check('fight: dropped money can be collected', fight.drops.length === 0 || ([60, 120, 210].includes(fight.drops[0]) && fight.earned === fight.drops[0]), JSON.stringify({ drops: fight.drops, earned: fight.earned }));
 check('fight: people have different personalities', fight.tempers.length >= 4, fight.tempers.join(', '));
+
+// ---------------------------------------------------------------- traffic drivers + carjacking
+const jack = await g(() => {
+  const game = __game, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (game.player.state !== 'foot') { game.player.state = 'foot'; game.player.vehicle = null; }
+  game.teleport(520, 520, 0, 0.3); step(120);
+  const withDriver = game.traffic.cars.filter((v) => v.driverPed && v.driverPed.state === 'driving').length;
+  const v = game.traffic.cars.filter((c) => c.driverPed && c.T.kind === 'car').sort((a, b) => Math.hypot(a.x - 520, a.z - 520) - Math.hypot(b.x - 520, b.z - 520))[0];
+  if (!v) return { withDriver, cars: game.traffic.cars.length };
+  v.ai.cruise = v.ai.baseCruise = 0; step(90);
+  const dp = v.doorPoint();
+  game.teleport(dp.x, dp.z, v.heading, 0.3); step(4);
+  const prompt = game.player.prompt?.label;
+  const ped = v.driverPed;
+  game.input.pressed.add('vehicle'); step(1);
+  const states = new Set(); let maxY = 0;
+  step(150, () => { states.add(ped.state); if (ped.state === 'thrown') maxY = Math.max(maxY, ped.y - 0.2); });
+  return { withDriver, cars: game.traffic.cars.length, prompt, states: [...states], driving: game.player.state === 'driving' && game.player.vehicle === v, left: !game.traffic.cars.includes(v), pedDist: Math.hypot(ped.x - v.x, ped.z - v.z), airborne: maxY };
+});
+check('traffic: cars have visible drivers', jack.withDriver >= Math.min(4, jack.cars), `${jack.withDriver}/${jack.cars} cars`);
+check('carjack: "pull the driver out" button next to a car', jack.prompt === 'הוצא את הנהג', jack.prompt);
+check('carjack: driver is pulled out, thrown onto the road, gets up', ['pulled', 'thrown', 'fall'].every((s) => jack.states?.includes(s)) && jack.pedDist > 2, JSON.stringify(jack));
+check('carjack: the player drives the taken car', jack.driving && jack.left);
+await shot('20-carjack');
+
+// ---------------------------------------------------------------- flyable passenger jet
+const fly = await g(() => {
+  const game = __game, A = game.airport, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (game.player.state === 'driving') { game.player.vehicle.speed = 0; game.player.vehicle.vx = game.player.vehicle.vz = 0; game.input.pressed.add('vehicle'); step(40); }
+  const jet = A.planes.find((q) => q.state === 'parked') || A.planes[0];
+  if (jet.state !== 'parked') { jet.state = 'parked'; jet.place(-300, 612, Math.PI); jet.mesh.visible = true; jet.timer = 300; }
+  const c = Math.cos(jet.heading), s = Math.sin(jet.heading);
+  game.teleport(jet.x + 3.6 * c + 13.4 * s, jet.z - 3.6 * s + 13.4 * c, 0, 0.2); step(6);
+  const prompt = game.player.prompt?.label;
+  game.input.pressed.add('vehicle'); step(1); step(70);
+  const v = game.player.vehicle;
+  if (!v || !v.isPlane) return { prompt, state: game.player.state };
+  v.x = -900; v.z = 790; v.heading = Math.PI / 2; v.speed = 0;
+  game.input.keys.add('KeyW');
+  step(30 * 22, () => { if (v.speed > 60) game.input.keys.add('KeyR'); });
+  game.input.keys.clear();
+  return { prompt, state: game.player.state, alt: v.y, kmh: v.speed * 3.6, gearUp: v.parts.jetMesh.geometry === v.parts.cleanGeo, hidden: !jet.mesh.visible };
+});
+check('jet: "board plane" button at a parked airliner', fly.prompt === 'היכנס למטוס', fly.prompt);
+check('jet: player can fly it — takes off, climbs, retracts the gear', fly.alt > 60 && fly.kmh > 230 && fly.gearUp, JSON.stringify(fly));
+await shot('21-flying');
+await g(() => { const v = __game.player.vehicle; if (v) { v.x = -600; v.z = 790; v.y = 0; v.vy = 0; v.speed = 0; v.pitch = 0; v.airborne = false; } __game.input.pressed.add('vehicle'); for (let i = 0; i < 40; i++) { __game.time += 1 / 30; __game._playFrame(1 / 30); } });
 
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);

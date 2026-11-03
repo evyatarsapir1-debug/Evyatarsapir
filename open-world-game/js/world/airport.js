@@ -3,62 +3,30 @@
 // The departures board in the terminal (and the phone's airport contact) read the live schedule.
 import * as THREE from 'three';
 import { GeoBuilder } from './geoBuilder.js';
+import { buildAirliner, airlinerGeometry, JET_MAT, LIVERIES } from './airliner.js';
+export { LIVERIES };
 import { AIRPORT } from './worldGen.js';
 import { makeBox, updateBox, obbVs } from '../physics/collision.js';
 import { clamp, damp, dampAngle, wrapAngle } from '../core/mathx.js';
 import { Vehicle } from '../vehicles/vehicle.js';
 
-const LIVERIES = [
-  { name: 'אזורה איירליינס', tail: 0x1f5fa8, stripe: 0x2fb5e8 },
-  { name: 'מפרץ אייר', tail: 0xe0533b, stripe: 0xf3a33a },
-  { name: 'רכס תעופה', tail: 0x2e8a5d, stripe: 0x9bd16a },
-];
 const DESTS = ['רומא', 'אתונה', 'פריז', 'ברצלונה', 'לונדון', 'אילת', 'ניו יורק', 'ברלין', 'לרנקה', 'אמסטרדם'];
 
-const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
-const M = (x, y, z, rx, ry, rz, sx, sy, sz) => { _e.set(rx, ry, rz); _q.setFromEuler(_e); return _m.compose(_p.set(x, y, z), _q, _s.set(sx, sy, sz)); };
-const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 20), CONE = new THREE.ConeGeometry(0.5, 1, 20), BOX = new THREE.BoxGeometry(1, 1, 1), SPH = new THREE.SphereGeometry(0.5, 16, 10);
-
-// Passenger jet, nose towards +Z, wheels on the ground at y=0. ~38m long, 34m wingspan.
-export function buildAirliner(builder, livery, gear = true, ox = 0, oy = 0, oz = 0, heading = 0) {
-  const W = 0xf3f5f7, G = 0xc8ced4, D = 0x1c242c;
-  const T = new THREE.Matrix4().makeRotationY(heading).setPosition(ox, oy, oz);
-  const add = (geo, m, c) => builder.addGeometry(geo, new THREE.Matrix4().multiplyMatrices(T, m), c);
-  add(CYL, M(0, 3.6, 0, Math.PI / 2, 0, 0, 4, 30, 4), W);                       // fuselage
-  add(SPH, M(0, 3.6, 15, 0, 0, 0, 4, 3.8, 6), W);                                // nose
-  add(CONE, M(0, 4.0, -18, -Math.PI / 2, 0, 0, 3.8, 7, 3.2), W);                 // tail cone
-  add(BOX, M(0, 3.2, 17.1, 0.35, 0, 0, 2.6, 0.7, 0.6), D);                       // cockpit windows
-  for (const s of [-1, 1]) add(BOX, M(s * 1.98, 4.1, 0, 0, 0, 0, 0.05, 0.35, 26), D);   // cabin windows
-  add(BOX, M(0, 2.4, 0, 0, 0, 0, 4.05, 0.5, 30), livery.stripe);                  // belly stripe
-  for (const s of [-1, 1]) {
-    add(BOX, M(s * 9, 2.6, -1, 0, s * 0.42, 0, 15, 0.35, 4.6), G);              // wings (swept)
-    add(BOX, M(s * 16, 2.9, -4.5, 0, s * 0.42, 0, 3, 0.3, 2.4), G);
-    add(CYL, M(s * 6.5, 1.5, 1.5, Math.PI / 2, 0, 0, 2.1, 4.2, 2.1), 0xd8dde2);  // engines
-    add(CYL, M(s * 6.5, 1.5, 3.65, Math.PI / 2, 0, 0, 1.7, 0.1, 1.7), D);
-    add(BOX, M(s * 3.6, 4.8, -16.5, 0, s * 0.3, 0, 6, 0.25, 2.4), G);           // horizontal stabiliser
-  }
-  add(BOX, M(0, 8.0, -16.5, -0.35, 0, 0, 0.35, 6.5, 4.2), livery.tail);          // tail fin
-  if (gear) {
-    add(BOX, M(0, 0.9, 13, 0, 0, 0, 0.25, 1.8, 0.25), D); add(CYL, M(0, 0.45, 13, 0, 0, Math.PI / 2, 0.9, 0.5, 0.9), 0x222222);
-    for (const s of [-1, 1]) { add(BOX, M(s * 3, 1.0, -1.5, 0, 0, 0, 0.3, 2, 0.3), D); add(CYL, M(s * 3, 0.55, -1.5, 0, 0, Math.PI / 2, 1.1, 0.8, 1.1), 0x222222); }
-  }
-}
+export { buildAirliner };
+// left front passenger door (L1) in plane-local coordinates, at ground level
+export const JET_DOOR = { x: 2.9, z: 13.4 };
 
 class Plane {
   constructor(scene, idx) {
     this.idx = idx;
     this.livery = LIVERIES[idx % LIVERIES.length];
-    const b = new GeoBuilder();
-    buildAirliner(b, this.livery, true);
-    this.gearMesh = null;
-    this.mesh = new THREE.Mesh(b.build(), new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.35, roughness: 0.4 }));
+    this.mesh = new THREE.Mesh(airlinerGeometry(this.livery, true), JET_MAT);
     this.mesh.castShadow = true;
-    const bn = new GeoBuilder(); buildAirliner(bn, this.livery, false);
-    this.cleanGeo = bn.build(); this.gearGeo = this.mesh.geometry;
+    this.cleanGeo = airlinerGeometry(this.livery, false); this.gearGeo = this.mesh.geometry;
     scene.add(this.mesh);
     this.x = 0; this.y = 0; this.z = 0; this.heading = Math.PI; this.pitch = 0; this.speed = 0;
     this.route = null; this.i = 0; this.state = 'parked'; this.timer = 0;
-    this.colliders = [makeBox(0, 0, 2.2, 19, 0, 0.6, 6, 'plane'), makeBox(0, 0, 17, 2.5, 0, 2.3, 3.4, 'plane')];
+    this.colliders = [makeBox(0, 0, 2.2, 19, 0, 0.6, 6, 'plane'), makeBox(0, 0, 17, 2.5, 0, 2.6, 4.1, 'plane')];
   }
   place(x, z, heading, y = 0) { this.x = x; this.z = z; this.y = y; this.heading = heading; this.speed = 0; this.sync(); }
   sync() {
@@ -71,7 +39,7 @@ class Plane {
     updateBox(this.colliders[0], this.x, this.z, this.heading);
     updateBox(this.colliders[1], this.x - fx * 1.5, this.z - fz * 1.5, this.heading);
     this.colliders[0].y0 = this.y + 0.6; this.colliders[0].y1 = this.y + 6;
-    this.colliders[1].y0 = this.y + 2.3; this.colliders[1].y1 = this.y + 3.4;
+    this.colliders[1].y0 = this.y + 2.6; this.colliders[1].y1 = this.y + 4.1;
   }
 }
 
@@ -98,6 +66,26 @@ export class AirportManager {
     this.boardTexture.colorSpace = THREE.SRGBColorSpace;
     this._boardT = 0;
     this.service = [];
+  }
+
+  // a jet standing still on the ground whose front door the player is next to
+  boardable(player) {
+    if (player.state !== 'foot') return null;
+    for (const p of this.planes) {
+      if (!p.mesh.visible || p.y > 0.5 || p.speed > 0.5 || p.state === 'taken') continue;
+      if (Math.abs(p.x - player.x) > 30 || Math.abs(p.z - player.z) > 30) continue;
+      const c = Math.cos(p.heading), s = Math.sin(p.heading);
+      const dx = p.x + JET_DOOR.x * c + JET_DOOR.z * s, dz = p.z - JET_DOOR.x * s + JET_DOOR.z * c;
+      if (Math.hypot(dx - player.x, dz - player.z) < 4.5) return p;
+    }
+    return null;
+  }
+  // the player takes this jet: the airport plane is hidden and returns to the schedule later
+  take(p) {
+    p.state = 'taken'; p.mesh.visible = false; p.timer = 240;
+    if (this.runway === p) this.runway = null;
+    p.gate = null;
+    return { x: p.x, z: p.z, heading: p.heading, livery: p.livery };
   }
 
   _departRoute(gx) {
@@ -167,7 +155,7 @@ export class AirportManager {
         this.scene.add(v.object); this.service.push(v);
       }
     } else if (!near && this.service.length) {
-      for (const v of this.service) { this.scene.remove(v.object); v.object.traverse((o) => o.geometry && o.geometry.dispose()); }
+      for (const v of this.service) { v.removed = true; this.scene.remove(v.object); v.object.traverse((o) => o.geometry && o.geometry.dispose()); }
       this.service = [];
     }
     for (const v of this.service) {
@@ -222,6 +210,7 @@ export class AirportManager {
         }
         break;
       case 'depart': case 'arrive': this._follow(p, dt); break;
+      case 'taken': p.timer -= dt; if (p.timer <= 0) { p.state = 'away'; p.timer = 30; } break;
     }
   }
 

@@ -14,7 +14,7 @@ import { Phone } from './phone/phone.js';
 import { Missions, CONTACTS, MISSIONS } from './game/missions.js';
 import { Radio } from './core/audio.js';
 import { PARK_OFFSET } from './world/layout.js';
-import { AirportManager } from './world/airport.js';
+import { AirportManager, LIVERIES } from './world/airport.js';
 import { Combat } from './game/combat.js';
 import { setAnisotropy } from './world/textures.js';
 import { makeMaterials } from './world/worldBuilder.js';
@@ -405,6 +405,25 @@ class Game {
     this.equip(list[(i + 1) % list.length]);
     this.toast(this.econ.equipped ? WEAPONS[this.econ.equipped].name : 'ידיים ריקות', 1.5);
   }
+  // swap the airport's AI jet for a flyable one at the same spot, and walk the player to its front door
+  boardJet(jet, world) {
+    const t = this.airport.take(jet);
+    const v = new Vehicle('jet', Math.max(0, LIVERIES.indexOf(t.livery)), t.x, t.z, t.heading, 0);
+    this.scene.add(v.object);
+    this.vehicles.adopt(v);
+    world.vehicles.push(v);
+    this.player.enterVehicle(v, world);
+    this.toast('עלית למטוס — גז להאצה, "משוך" להמראה במהירות 210+ קמ״ש', 4);
+    return v;
+  }
+  // carjacking: the car leaves traffic / airport service and becomes a normal vehicle the player can keep
+  jackCar(v) {
+    this.traffic.release(v);
+    const i = this.airport.service.indexOf(v);
+    if (i >= 0) this.airport.service.splice(i, 1);
+    v.svc = null;
+    this.vehicles.markUsed(v);
+  }
   myVehicleNear(r) {
     let best = null, bd = r;
     for (const v of this.vehicles.kept) {
@@ -626,9 +645,19 @@ class Game {
       onVehicleUsed: (v) => this.vehicles.markUsed(v),
       econ: this.econ, onHurt: (n, why) => this.hurt(n, why), onMessage: (m) => this.toast(m, 2),
       seats: this._seats(), pedPositions: this.peds.peds,
+      onJack: (v) => this.jackCar(v),
+      onYank: (v, ped) => { this.peds.yank(ped, v, p); this.audio.impact?.(3); this.rig.shake = Math.max(this.rig.shake, 0.15); },
     };
     this.interiors.update(dt, p);
     p.update(dt, input, this.rig.yaw, world);
+    // board a passenger jet standing at the airport
+    if (!p.prompt && p.state === 'foot') {
+      const jet = this.airport.boardable(p);
+      if (jet) {
+        p.prompt = { key: 'vehicle', text: 'היכנס: מטוס נוסעים', label: 'היכנס למטוס' };
+        if (input.wasPressed('vehicle') || input.wasPressed('interact')) this.boardJet(jet, world);
+      }
+    }
     // elevator call buttons on landings
     if (!p.prompt) {
       const ep = this.interiors.promptFor(p);
@@ -655,6 +684,8 @@ class Game {
     const focusX = v ? v.x : p.x, focusZ = v ? v.z : p.z;
     const obstacles = p.state === 'foot' || p.state === 'sitting' ? [{ x: p.x, z: p.z, r: 0.5 }, ...pedObs] : pedObs;
     this.traffic.update(dt, this.time, focusX, focusZ, all, obstacles);
+    // every AI car has someone at the wheel
+    for (const car of all) if (car.driver === 'ai' && !car.driverPed && !car.isAir && !car.removed) this.peds.addDriver(car);
     this.vehicles.update(dt, focusX, focusZ, all, (x, z) => this.chunks.isPhysicsReady(x, z));
     this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
       onPlayerHit: (who, n) => { this.hurt(n, 'קטטה'); this.rig.shake = Math.max(this.rig.shake, 0.3); p.combatT = 5; } });
@@ -676,7 +707,7 @@ class Game {
     });
     this.weapons.update(dt, {
       player: p, econ: this.econ, input, camera: this.camera, vehicles: all,
-      peds: this.peds.peds.filter((q) => q.state !== 'inside'),
+      peds: this.peds.peds.filter((q) => q.state !== 'inside' && !q.car && q.state !== 'pulled' && q.state !== 'thrown'),
       scare: (ped, src, hit) => this.peds.scare(ped, src, hit), hurtPlayer: (n) => this.hurt(n, 'פיצוץ'),
       onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); }, message: (m) => this.toast(m, 2),
     });
@@ -721,7 +752,7 @@ class Game {
     const pr = $('prompt');
     // clickable action button (works with mouse, touch and keyboard)
     if (p.prompt && !(this.input.isTouch && (p.prompt.key === 'vehicle' || p.prompt.key === 'interact'))) {
-      const label = p.prompt.key === 'vehicle' ? (v ? (v.isHeli ? 'צא מהמסוק' : 'צא מהרכב') : 'היכנס לרכב') : p.prompt.text + (p.prompt.seat ? ` · ${p.prompt.seat}` : '');
+      const label = p.prompt.key === 'vehicle' ? (v ? (v.isHeli ? 'צא מהמסוק' : v.isPlane ? 'צא מהמטוס' : 'צא מהרכב') : p.prompt.label || 'היכנס לרכב') : p.prompt.text + (p.prompt.seat ? ` · ${p.prompt.seat}` : '');
       const html = this.input.isTouch ? label : `<kbd>${p.prompt.key === 'vehicle' ? 'F' : 'E'}</kbd>${label}${p.prompt.key === 'vehicle' && !v ? ' · ' + p.prompt.text.replace('היכנס: ', '') : ''}`;
       if (pr.dataset.html !== html) { pr.innerHTML = html; pr.dataset.html = html; }
       pr.dataset.key = p.prompt.key;
@@ -741,16 +772,18 @@ class Game {
     if (v) {
       sp.classList.add('show');
       $('speedVal').textContent = Math.round(Math.abs(v.speed) * 3.6);
-      $('vehName').textContent = v.isHeli ? `${v.T.name} · גובה ${Math.round(v.y)} מ׳` : v.T.name;
+      $('vehName').textContent = v.isAir ? `${v.T.name} · גובה ${Math.round(v.y)} מ׳` : v.T.name;
       $('dmgFill').style.width = v.damage + '%';
     } else sp.classList.remove('show');
     // touch controls by context
     if (this.input.isTouch) {
-      const mode = v ? (v.isHeli ? 'heli' : 'drive') : (p.state === 'foot' || p.state === 'sitting' ? 'foot' : null);
+      const mode = v ? (v.isHeli ? 'heli' : v.isPlane ? 'plane' : 'drive') : (p.state === 'foot' || p.state === 'sitting' ? 'foot' : null);
       document.querySelectorAll('.tbtns').forEach((el) => el.classList.toggle('show', el.classList.contains(mode)));
       $('tInteract').classList.toggle('show', p.prompt?.key === 'interact' && !v);
       if (p.prompt?.key === 'interact') { const t = p.prompt.text + (p.prompt.seat ? ` · ${p.prompt.seat}` : ''); if ($('tInteract').textContent !== t) $('tInteract').textContent = t; }
       $('tVehicle').classList.toggle('show', p.prompt?.key === 'vehicle' && !v);
+      { const t = p.prompt?.label || 'היכנס לרכב'; if ($('tVehicle').textContent !== t) $('tVehicle').textContent = t; }
+      { const t = v?.isPlane ? 'צא מהמטוס' : 'צא מהרכב'; if ($('tExit').textContent !== t) $('tExit').textContent = t; }
       $('tExit').classList.toggle('show', !!v && !v.isHeli && p.prompt?.key === 'vehicle');
       $('tExitHeli').classList.toggle('show', !!v && v.isHeli && p.prompt?.key === 'vehicle');
       $('runBtn').classList.toggle('on', p.sprint);
