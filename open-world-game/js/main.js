@@ -710,8 +710,8 @@ class Game {
       $('tInteract').classList.toggle('show', p.prompt?.key === 'interact' && !v);
       if (p.prompt?.key === 'interact') { const t = p.prompt.text + (p.prompt.seat ? ` · ${p.prompt.seat}` : ''); if ($('tInteract').textContent !== t) $('tInteract').textContent = t; }
       $('tVehicle').classList.toggle('show', p.prompt?.key === 'vehicle' && !v);
-      $('tExit').classList.toggle('show', !!v && p.prompt?.key === 'vehicle');
-      $('tExitHeli').classList.toggle('show', !!v && p.prompt?.key === 'vehicle');
+      $('tExit').classList.toggle('show', !!v && !v.isHeli && p.prompt?.key === 'vehicle');
+      $('tExitHeli').classList.toggle('show', !!v && v.isHeli && p.prompt?.key === 'vehicle');
       $('runBtn').classList.toggle('on', p.sprint);
       $('tFire').classList.toggle('show', !!this.econ.equipped && mode === 'foot');
       $('tLight').classList.toggle('show', !!this.econ.items.flashlight);

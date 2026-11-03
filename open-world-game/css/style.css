@@ -205,9 +205,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1620; col
 .tbtns { position: absolute; right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); display: none; gap: 8px;
   grid-auto-rows: min-content; align-items: end; justify-items: center; }
 .tbtns.show { display: grid; }
-.tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "act act act" "fire light cyc" "jump run ."; }
-.tbtns.drive { grid-template-columns: 58px 58px 48px; grid-template-areas: "act act act" ". cam horn" "gas brake hb"; }
-.tbtns.heli { grid-template-columns: 58px 58px 48px; grid-template-areas: "act act act" ". . cam" "gas brake ."; }
+.tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "fire light cyc" "jump run ."; }
+.tbtns.drive { grid-template-columns: 58px 58px 48px; grid-template-areas: ". cam horn" "brake gas hb"; }
+.tbtns.heli { grid-template-columns: 58px 58px 48px; grid-template-areas: ". . cam" "brake gas ."; }
 .tbtn { pointer-events: auto; width: 56px; height: 56px; border-radius: 50%; border: 1.5px solid #ffffff4d; background: #00000038; color: #ffffffe6;
   font: inherit; font-weight: 800; font-size: 12px; touch-action: none; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); text-shadow: 0 1px 3px #000a; }
 .tbtn.down { background: #ff8a3d80; border-color: #fff; }
@@ -216,15 +216,19 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1620; col
 .tbtn.accent { background: #ff8a3d99; border-color: #ffffffaa; }
 .tbtn.ctx { display: none; }
 .tbtn.ctx.show { display: block; }
-.tbtn.wide { width: auto; min-width: 92px; height: 34px; padding: 0 12px; border-radius: 17px; font-size: 12px; justify-self: end; }
+.tbtn.wide { width: auto; min-width: 0; height: 30px; padding: 0 12px; border-radius: 15px; font-size: 12px; white-space: nowrap; }
+/* contextual action (enter car / sit / get up / call elevator): small pill in the empty space above the speedometer */
+#actBar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(max(4px, env(safe-area-inset-bottom)) + 56px); display: flex; gap: 6px; pointer-events: none; }
 .tbtn.pedal { width: 54px; height: 66px; border-radius: 14px; font-size: 12px; }
 .tbtn.gas { background: #2e8b5752; border-color: #8dffb880; }
 .tbtn.brake { background: #b03a2e52; border-color: #ff9a8d80; }
 .tbtn.fire { background: #c0392b66; }
 .tbtn.on { background: #ff8a3d80; }
 /* on touch screens the speedometer sits at the bottom centre, away from the pedals */
-body.touch #speedo { right: auto; left: 50%; transform: translateX(-50%); bottom: max(6px, env(safe-area-inset-bottom)); padding: 4px 14px; min-width: 96px; background: #0006; }
-body.touch #speedVal { font-size: 26px; }
+body.touch #speedo { right: auto; left: 50%; transform: translateX(-50%); bottom: max(2px, env(safe-area-inset-bottom)); padding: 2px 10px 3px; min-width: 66px; border-radius: 10px; background: #0005; }
+body.touch #speedVal { font-size: 18px; }
+body.touch #speedo .unit, body.touch #vehName { font-size: 9px; }
+body.touch #dmgBar { height: 3px; margin-top: 2px; }
 body.touch #weaponHud { bottom: 70px; }
 .mapbtn { position: absolute; top: 172px; left: 12px; width: 50px; height: 50px; font-size: 12px; }
 
