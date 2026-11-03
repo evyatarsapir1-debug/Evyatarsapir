@@ -1,26 +1,43 @@
-// Streams detailed city geometry (buildings, props, signs) in 100m cells around the player.
-// Cells are built progressively (a few per frame) and disposed when far away so a big city stays fast.
+// Streams the endless world around the player.
+//  * Near chunks (200m squares) get full detail: ground, roads, sidewalks, buildings with real interiors,
+//    props, lamps, traffic lights, bridges, tunnels, parking garage.
+//  * Far chunks get a single low-detail 3D mesh (real boxes and terrain, not pictures) so the horizon is never empty.
+//  * Physics (colliders + walkable surfaces) is loaded per 100m cell around the player independently of rendering.
+// Everything is built progressively under a per-frame time budget.
 import * as THREE from 'three';
 import { GeoBuilder, mat } from './geoBuilder.js';
-import { P, CURB_H, faceVector } from './layout.js';
+import { P, CURB_H, ROAD_HALF, SIDEWALK, RAIL, faceVector } from './layout.js';
 import { signUV } from './textures.js';
+import { cellData, ridgeHeight, tunnelLines, RIDGE, TUNNEL_H, TUNNEL_HALF, WATER_Y, baseHeight, nodeNbrs } from './worldGen.js';
+import { interiorSpec, garageSpec } from './interiors.js';
 
+const CH = 200;               // render chunk size (2x2 cells)
 const STYLES = ['glass', 'office', 'concrete', 'plaster', 'brick', 'industrial', 'storefront'];
 
-// prototype geometries for props
 const G = {
   trunk: new THREE.CylinderGeometry(0.16, 0.26, 3, 6).translate(0, 1.5, 0),
   leaf: new THREE.IcosahedronGeometry(1.9, 0),
   leafSmall: new THREE.IcosahedronGeometry(1.4, 0),
   box: new THREE.BoxGeometry(1, 1, 1),
+  boxB: new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
   cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 10),
   cyl16: new THREE.CylinderGeometry(0.5, 0.5, 1, 18),
-  cone: new THREE.ConeGeometry(0.5, 1, 6),
+  cone: new THREE.ConeGeometry(0.5, 1, 10),
   disc: new THREE.CylinderGeometry(1, 1, 0.1, 24),
   torus: new THREE.TorusGeometry(1, 0.08, 6, 24).rotateX(Math.PI / 2),
+  rock: new THREE.DodecahedronGeometry(1, 0),
+  hay: new THREE.CylinderGeometry(0.8, 0.8, 1.4, 12).rotateZ(Math.PI / 2),
+  lampPole: new THREE.CylinderGeometry(0.09, 0.14, 7, 6).translate(0, 3.5, 0),
+  lampArm: new THREE.BoxGeometry(0.08, 0.08, 1.6).translate(0, 7, 0.8),
+  lampHead: new THREE.BoxGeometry(0.35, 0.15, 0.6).translate(0, 6.95, 1.5),
+  tlPole: new THREE.CylinderGeometry(0.1, 0.12, 5.2, 6).translate(0, 2.6, 0),
+  tlArm: new THREE.BoxGeometry(6, 0.12, 0.12).translate(3, 5.1, 0),
+  tlHead: new THREE.BoxGeometry(0.42, 1.25, 0.32).translate(5.6, 4.5, 0),
+  bulb: new THREE.SphereGeometry(0.13, 8, 6),
 };
 
-function addProp(pb, p) {
+// ---------------------------------------------------------------------------- props
+function addProp(pb, p, lampB) {
   const y = p.y ?? CURB_H;
   switch (p.kind) {
     case 'tree': {
@@ -48,9 +65,7 @@ function addProp(pb, p) {
       break;
     }
     case 'bin': pb.addGeometry(G.cyl, mat(p.x, y + 0.45, p.z, 0, 0.55, 0.9, 0.55), 0x2e5d3a); break;
-    case 'container':
-      pb.addGeometry(G.box, mat(p.x, y + 1.3, p.z, p.rot || 0, 6, 2.6, 2.4), p.color);
-      break;
+    case 'container': pb.addGeometry(G.box, mat(p.x, y + 1.3, p.z, p.rot || 0, 6, 2.6, 2.4), p.color); break;
     case 'chimney':
       pb.addGeometry(G.cyl16, mat(p.x, y + p.h / 2, p.z, 0, 3.2, p.h, 3.2), 0x9c9a95);
       pb.addGeometry(G.cyl16, mat(p.x, y + p.h - 1.5, p.z, 0, 3.3, 1.2, 3.3), 0xb03a2e);
@@ -97,167 +112,578 @@ function addProp(pb, p) {
       break;
     }
     case 'lifeguard':
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) pb.addGeometry(G.box, mat(p.x + sx, 1.2, p.z + sz, 0, 0.2, 2.4, 0.2), 0xffffff);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) pb.addGeometry(G.box, mat(p.x + sx, 1.2 - 0.6, p.z + sz, 0, 0.2, 3.6, 0.2), 0xffffff);
       pb.addGeometry(G.box, mat(p.x, 3.2, p.z, 0, 2.8, 1.8, 2.8), 0xe74c3c);
       pb.addGeometry(G.box, mat(p.x, 4.3, p.z, 0, 3.2, 0.25, 3.2), 0xf1c40f);
       break;
     case 'platformRoof':
-      for (let k = -3; k <= 3; k++) pb.addGeometry(G.box, mat(p.x + k * (p.w / 7), 2.75, p.z, 0, 0.3, 4.5, 0.3), 0x8c9399);
-      pb.addGeometry(G.box, mat(p.x, 5.1, p.z, 0, p.w, 0.3, p.d), 0x9aa3ab);
+      for (let k = -3; k <= 3; k++) pb.addGeometry(G.box, mat(p.x + k * (p.w / 7), y + 2.25, p.z, 0, 0.3, 4.5, 0.3), 0x8c9399);
+      pb.addGeometry(G.box, mat(p.x, y + 4.6, p.z, 0, p.w, 0.3, p.d), 0x9aa3ab);
+      break;
+    case 'rock': pb.addGeometry(G.rock, mat(p.x, y + 0.5 * p.s, p.z, p.rot || 0, 1.3 * p.s, 0.9 * p.s, 1.1 * p.s), 0x8d877c); break;
+    case 'hay': pb.addGeometry(G.hay, mat(p.x, y + 0.8, p.z, p.rot || 0, 1, 1, 1), 0xd8b45a); break;
+    case 'umbrella':
+      pb.addGeometry(G.cyl, mat(p.x, y + 1.2, p.z, 0, 0.08, 2.4, 0.08), 0xeeeeee);
+      pb.addGeometry(G.cone, mat(p.x, y + 2.35, p.z, 0, 3.2, 0.6, 3.2), p.color);
+      pb.addGeometry(G.box, mat(p.x + 1.4, y + 0.15, p.z, 0.3, 1.9, 0.12, 0.8), 0xffffff);
       break;
   }
 }
 
-function buildBuilding(b, out, pb, signs) {
+// ---------------------------------------------------------------------------- building faces with optional door
+const FACE = {
+  s: (r) => ({ o: [r[0], r[3]], dir: [1, 0], len: r[2] - r[0] }),
+  n: (r) => ({ o: [r[2], r[1]], dir: [-1, 0], len: r[2] - r[0] }),
+  e: (r) => ({ o: [r[2], r[3]], dir: [0, -1], len: r[3] - r[1] }),
+  w: (r) => ({ o: [r[0], r[1]], dir: [0, 1], len: r[3] - r[1] }),
+};
+function facePiece(bld, f, u0, u1, y0, y1, yBase, uS, vS, color, inward) {
+  if (u1 - u0 < 0.01 || y1 - y0 < 0.01) return;
+  const a = [f.o[0] + f.dir[0] * u0, f.o[1] + f.dir[1] * u0], b = [f.o[0] + f.dir[0] * u1, f.o[1] + f.dir[1] * u1];
+  const v0 = (y0 - yBase) / vS, v1 = (y1 - yBase) / vS;
+  if (!inward) bld.quad([a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]], [u0 / uS, v0, u1 / uS, v0, u1 / uS, v1, u0 / uS, v1], color);
+  else bld.quad([b[0], y0, b[1]], [a[0], y0, a[1]], [a[0], y1, a[1]], [b[0], y1, b[1]], [u1 / uS, v0, u0 / uS, v0, u0 / uS, v1, u1 / uS, v1], color);
+}
+// all four faces of rect; door (if any) is cut into face `door.face`, centered, starting at y0
+function faces(bld, rect, y0, y1, uS, vS, color, door, inward = false) {
+  for (const k of ['n', 's', 'e', 'w']) {
+    const f = FACE[k](rect);
+    if (door && door.face === k) {
+      const c = f.len / 2, hw = door.w / 2, dh = Math.min(y1, y0 + door.h);
+      facePiece(bld, f, 0, c - hw, y0, y1, y0, uS, vS, color, inward);
+      facePiece(bld, f, c + hw, f.len, y0, y1, y0, uS, vS, color, inward);
+      facePiece(bld, f, c - hw, c + hw, dh, y1, y0, uS, vS, color, inward);
+    } else facePiece(bld, f, 0, f.len, y0, y1, y0, uS, vS, color, inward);
+  }
+}
+
+function signQuad(signs, cx, cy, cz, nx, nz, sw, name) {
+  const sh = sw / 4, rx = nz, rz = -nx;
+  const [u0, v0, u1, v1] = signUV(name);
+  signs.quad([cx - rx * sw / 2, cy, cz - rz * sw / 2], [cx + rx * sw / 2, cy, cz + rz * sw / 2],
+    [cx + rx * sw / 2, cy + sh, cz + rz * sw / 2], [cx - rx * sw / 2, cy + sh, cz - rz * sw / 2], [u0, v0, u1, v0, u1, v1, u0, v1]);
+}
+
+function buildBuilding(b, out, B) {
   const f = (s) => out[s] ||= new GeoBuilder();
   const uS = 12, vS = 12.8;
+  const rect = [b.x - b.w / 2, b.z - b.d / 2, b.x + b.w / 2, b.z + b.d / 2];
+  const spec = b.interior ? interiorSpec(b) : null;
+  const door = spec ? spec.door : null;
   if (b.house) {
-    f('plaster').walls(b.x, b.z, b.w, b.d, CURB_H, CURB_H + b.h, b.color, uS, vS);
-    // gable roof along the longer axis
-    const rb = out.houseRoof ||= new GeoBuilder();
+    faces(f('plaster'), rect, CURB_H, CURB_H + b.h, uS, vS, b.color, door);
+    const rb = f('houseRoof');
     const alongX = b.w >= b.d, y0 = CURB_H + b.h, rise = Math.min(b.w, b.d) * 0.35, o = 0.5;
-    const x0 = b.x - b.w / 2 - o, x1 = b.x + b.w / 2 + o, z0 = b.z - b.d / 2 - o, z1 = b.z + b.d / 2 + o;
+    const x0 = rect[0] - o, x1 = rect[2] + o, z0 = rect[1] - o, z1 = rect[3] + o;
+    const tri = [0, 0, 0.1, 0, 0.05, 0.1, 0.05, 0.1];
     if (alongX) {
       const zm = b.z;
       rb.quad([x0, y0, z1], [x1, y0, z1], [x1, y0 + rise, zm], [x0, y0 + rise, zm], [0, 0, b.w / 3, 0, b.w / 3, 2, 0, 2], b.roofColor);
       rb.quad([x1, y0, z0], [x0, y0, z0], [x0, y0 + rise, zm], [x1, y0 + rise, zm], [0, 0, b.w / 3, 0, b.w / 3, 2, 0, 2], b.roofColor);
-      // gable ends
-      f('plaster').quad([b.x + b.w / 2, y0, b.z + b.d / 2], [b.x + b.w / 2, y0, b.z - b.d / 2], [b.x + b.w / 2, y0 + rise * 0.92, zm], [b.x + b.w / 2, y0 + rise * 0.92, zm], [0, 0, 0.1, 0, 0.05, 0.1, 0.05, 0.1], b.color);
-      f('plaster').quad([b.x - b.w / 2, y0, b.z - b.d / 2], [b.x - b.w / 2, y0, b.z + b.d / 2], [b.x - b.w / 2, y0 + rise * 0.92, zm], [b.x - b.w / 2, y0 + rise * 0.92, zm], [0, 0, 0.1, 0, 0.05, 0.1, 0.05, 0.1], b.color);
+      f('plaster').quad([rect[2], y0, rect[3]], [rect[2], y0, rect[1]], [rect[2], y0 + rise * 0.92, zm], [rect[2], y0 + rise * 0.92, zm], tri, b.color);
+      f('plaster').quad([rect[0], y0, rect[1]], [rect[0], y0, rect[3]], [rect[0], y0 + rise * 0.92, zm], [rect[0], y0 + rise * 0.92, zm], tri, b.color);
     } else {
       const xm = b.x;
       rb.quad([x1, y0, z1], [x1, y0, z0], [xm, y0 + rise, z0], [xm, y0 + rise, z1], [0, 0, b.d / 3, 0, b.d / 3, 2, 0, 2], b.roofColor);
       rb.quad([x0, y0, z0], [x0, y0, z1], [xm, y0 + rise, z1], [xm, y0 + rise, z0], [0, 0, b.d / 3, 0, b.d / 3, 2, 0, 2], b.roofColor);
-      f('plaster').quad([b.x + b.w / 2, y0, b.z - b.d / 2], [b.x - b.w / 2, y0, b.z - b.d / 2], [xm, y0 + rise * 0.92, b.z - b.d / 2], [xm, y0 + rise * 0.92, b.z - b.d / 2], [0, 0, 0.1, 0, 0.05, 0.1, 0.05, 0.1], b.color);
-      f('plaster').quad([b.x - b.w / 2, y0, b.z + b.d / 2], [b.x + b.w / 2, y0, b.z + b.d / 2], [xm, y0 + rise * 0.92, b.z + b.d / 2], [xm, y0 + rise * 0.92, b.z + b.d / 2], [0, 0, 0.1, 0, 0.05, 0.1, 0.05, 0.1], b.color);
+      f('plaster').quad([rect[2], y0, rect[1]], [rect[0], y0, rect[1]], [xm, y0 + rise * 0.92, rect[1]], [xm, y0 + rise * 0.92, rect[1]], tri, b.color);
+      f('plaster').quad([rect[0], y0, rect[3]], [rect[2], y0, rect[3]], [xm, y0 + rise * 0.92, rect[3]], [xm, y0 + rise * 0.92, rect[3]], tri, b.color);
     }
-    // front door + doorstep
-    const [fx, fz] = faceVector(b.face);
-    const dx = b.x + fx * (b.w / 2 + 0.03), dz = b.z + fz * (b.d / 2 + 0.03);
-    pb.addGeometry(G.box, mat(dx, CURB_H + 1.1, dz, fx !== 0 ? Math.PI / 2 : 0, 1.2, 2.2, 0.08), 0x5a3b26);
-    return;
-  }
-  let y = CURB_H;
-  const top = CURB_H + b.h;
-  const roof = out.roof ||= new GeoBuilder();
-  if (b.storefront) {
-    const sh = Math.min(4.2, b.h);
-    f('storefront').walls(b.x, b.z, b.w, b.d, y, y + sh, 0xffffff, 6, 4);
-    y += sh;
-  }
-  if (b.tower && b.setback) {
-    const mid = CURB_H + b.h * 0.62;
-    f(b.style).walls(b.x, b.z, b.w, b.d, y, mid, b.color, uS, vS);
-    roof.floor(b.x - b.w / 2, b.z - b.d / 2, b.x + b.w / 2, b.z + b.d / 2, mid, 0xbbbbbb, 6);
-    const w2 = b.w * 0.72, d2 = b.d * 0.72;
-    f(b.style).walls(b.x, b.z, w2, d2, mid, top, b.color, uS, vS);
-    roof.floor(b.x - w2 / 2, b.z - d2 / 2, b.x + w2 / 2, b.z + d2 / 2, top, 0xbbbbbb, 6);
-    // antenna
-    pb.addGeometry(G.cyl, mat(b.x, top + 8, b.z, 0, 0.4, 16, 0.4), 0xdddddd);
-    pb.addGeometry(G.box, mat(b.x, top + 16.2, b.z, 0, 0.6, 0.6, 0.6), 0xff3b30);
+    if (!door) {
+      const [fx, fz] = faceVector(b.face);
+      const dx = b.x + fx * (b.w / 2 + 0.03), dz = b.z + fz * (b.d / 2 + 0.03);
+      B.props.addGeometry(G.box, mat(dx, CURB_H + 1.1, dz, fx !== 0 ? Math.PI / 2 : 0, 1.2, 2.2, 0.08), 0x5a3b26);
+    }
   } else {
-    if (top > y) f(b.style).walls(b.x, b.z, b.w, b.d, y, top, b.color, uS, vS);
-    roof.floor(b.x - b.w / 2, b.z - b.d / 2, b.x + b.w / 2, b.z + b.d / 2, top, 0xaaaaaa, 6);
-    // parapet
-    f('concrete').walls(b.x, b.z, b.w + 0.3, b.d + 0.3, top, top + 0.8, 0xcfcac2, 60, 60);
-    if (b.h > 12 && b.w > 12 && b.d > 12) {
-      f('concrete').walls(b.x + b.w * 0.15, b.z - b.d * 0.1, 5, 4, top, top + 3, 0xbab5ad, 60, 60);
-      roof.floor(b.x + b.w * 0.15 - 2.5, b.z - b.d * 0.1 - 2, b.x + b.w * 0.15 + 2.5, b.z - b.d * 0.1 + 2, top + 3, 0x999999, 6);
+    let y = CURB_H;
+    const top = CURB_H + b.h;
+    const roof = f('roof');
+    if (b.storefront) {
+      const sh = Math.min(4.2, b.h);
+      faces(f('storefront'), rect, y, y + sh, 6, 4, 0xffffff, door);
+      y += sh;
+      if (top > y) faces(f(b.style), rect, y, top, uS, vS, b.color, null);
+    } else if (b.tower && b.setback) {
+      const mid = CURB_H + b.h * 0.62;
+      faces(f(b.style), rect, y, mid, uS, vS, b.color, door);
+      roof.floor(rect[0], rect[1], rect[2], rect[3], mid, 0xbbbbbb, 6);
+      const w2 = b.w * 0.72, d2 = b.d * 0.72;
+      faces(f(b.style), [b.x - w2 / 2, b.z - d2 / 2, b.x + w2 / 2, b.z + d2 / 2], mid, top, uS, vS, b.color, null);
+      roof.floor(b.x - w2 / 2, b.z - d2 / 2, b.x + w2 / 2, b.z + d2 / 2, top, 0xbbbbbb, 6);
+      B.props.addGeometry(G.cyl, mat(b.x, top + 8, b.z, 0, 0.4, 16, 0.4), 0xdddddd);
+      B.props.addGeometry(G.box, mat(b.x, top + 16.2, b.z, 0, 0.6, 0.6, 0.6), 0xff3b30);
+    } else {
+      faces(f(b.style), rect, y, top, uS, vS, b.color, door);
+    }
+    if (!(b.tower && b.setback)) {
+      roof.floor(rect[0], rect[1], rect[2], rect[3], top, 0xaaaaaa, 6);
+      faces(f('concrete'), [rect[0] - 0.15, rect[1] - 0.15, rect[2] + 0.15, rect[3] + 0.15], top, top + 0.8, 60, 60, 0xcfcac2, null);
+      if (b.h > 12 && b.w > 12 && b.d > 12) {
+        faces(f('concrete'), [b.x + b.w * 0.15 - 2.5, b.z - b.d * 0.1 - 2, b.x + b.w * 0.15 + 2.5, b.z - b.d * 0.1 + 2], top, top + 3, 60, 60, 0xbab5ad, null);
+        roof.floor(b.x + b.w * 0.15 - 2.5, b.z - b.d * 0.1 - 2, b.x + b.w * 0.15 + 2.5, b.z - b.d * 0.1 + 2, top + 3, 0x999999, 6);
+      }
+    }
+    const [fx, fz] = faceVector(b.face);
+    const half = fx !== 0 ? b.w / 2 : b.d / 2;
+    const frontLen = fx !== 0 ? b.d : b.w;
+    if (b.garage && !door) B.props.addGeometry(G.box, mat(b.x + fx * (half + 0.05), CURB_H + 2.6, b.z + fz * (half + 0.05), fx !== 0 ? Math.PI / 2 : 0, 10, 5.2, 0.1), 0x2a2d30);
+    if (b.sign) {
+      const tall = b.station || b.airport || b.mall || (b.tower && b.sign);
+      const sw = tall ? Math.min(frontLen * 0.6, 24) : Math.min(frontLen * 0.7, 7);
+      const sh = sw / 4;
+      const sy = tall ? (b.tower ? top * 0.62 - sh - 2 : top - sh - 1) : CURB_H + 4.25;
+      signQuad(B.signs, b.x + fx * (half + 0.15), sy, b.z + fz * (half + 0.15), fx, fz, sw, b.sign);
     }
   }
-  const [fx, fz] = faceVector(b.face);
-  const half = fx !== 0 ? b.w / 2 : b.d / 2;
-  const frontLen = fx !== 0 ? b.d : b.w;
-  if (b.garage) {
-    const cx = b.x + fx * (half + 0.05), cz = b.z + fz * (half + 0.05);
-    pb.addGeometry(G.box, mat(cx, CURB_H + 2.6, cz, fx !== 0 ? Math.PI / 2 : 0, 10, 5.2, 0.1), 0x2a2d30);
+  if (spec) buildInterior(spec, b, B);
+}
+
+function buildInterior(spec, b, B) {
+  const I = B.interior;
+  for (const r of spec.rooms) {
+    faces(I, r.rect, r.y0, r.y1, 3, 3, r.wall, r.door, true);
+    if (r.floor !== null) I.floor(r.rect[0], r.rect[1], r.rect[2], r.rect[3], r.y0 + 0.02, r.floor, 2);
+    // ceiling facing down
+    const [x0, z0, x1, z1] = r.rect, y = r.y1 - 0.01;
+    I.quad([x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1], [0, 0, 1, 0, 1, 1, 0, 1], r.ceil);
   }
-  if (b.sign) {
-    const tall = b.station || b.airport || (b.tower && b.sign);
-    const sw = tall ? Math.min(frontLen * 0.6, 24) : Math.min(frontLen * 0.7, 7);
-    const sh = sw / 4;
-    const sy = tall ? Math.min(top - sh - 1, b.tower ? top * 0.62 - sh - 2 : top - sh - 1) : CURB_H + 4.25;
-    const cx = b.x + fx * (half + 0.15), cz = b.z + fz * (half + 0.15);
-    const rx = fz, rz = -fx; // viewer's right
-    const [u0, v0, u1, v1] = signUV(b.sign);
-    signs.quad(
-      [cx - rx * sw / 2, sy, cz - rz * sw / 2], [cx + rx * sw / 2, sy, cz + rz * sw / 2],
-      [cx + rx * sw / 2, sy + sh, cz + rz * sw / 2], [cx - rx * sw / 2, sy + sh, cz - rz * sw / 2],
-      [u0, v0, u1, v0, u1, v1, u0, v1]);
+  // door frame
+  if (spec.door) {
+    const [fx, fz] = faceVector(b.face);
+    const half = fx !== 0 ? b.w / 2 : b.d / 2;
+    const cx = b.x + fx * (half - 0.15), cz = b.z + fz * (half - 0.15), rx = -fz, rz = fx, hw = spec.door.w / 2;
+    const ry = fx !== 0 ? Math.PI / 2 : 0;
+    for (const s of [-1, 1]) B.props.addGeometry(G.box, mat(cx + rx * s * (hw + 0.06), CURB_H + spec.door.h / 2, cz + rz * s * (hw + 0.06), ry, 0.12, spec.door.h, 0.42), 0x3b3f44);
+    B.props.addGeometry(G.box, mat(cx, CURB_H + spec.door.h + 0.06, cz, ry, spec.door.w + 0.24, 0.12, 0.42), 0x3b3f44);
+    // threshold mat inside
+    B.props.addGeometry(G.box, mat(cx - fx * 1.0, CURB_H + 0.025, cz - fz * 1.0, ry, spec.door.w, 0.02, 1.2), 0x6b2e2e);
+  }
+  for (const s of spec.slabs) {
+    const [x0, z0, x1, z1] = s.rect;
+    I.floor(x0, z0, x1, z1, s.y, s.color, 2);
+    const yb = s.y - 0.25;
+    I.quad([x0, yb, z0], [x1, yb, z0], [x1, yb, z1], [x0, yb, z1], [0, 0, 1, 0, 1, 1, 0, 1], s.under);
+  }
+  for (const st of spec.stairs) buildStairs(B.props, st);
+  for (const bx of spec.boxes) {
+    const target = bx.mat === 'glass' ? B.glass : B.props;
+    target.addGeometry(G.boxB, mat(bx.x, bx.y, bx.z, 0, bx.w, bx.h, bx.d), bx.color);
+  }
+  for (const l of spec.lamps) B.lamp.addGeometry(G.box, mat(l.x, l.y - 0.03, l.z, 0, 0.9, 0.05, 0.9), 0xffffff);
+  for (const s of spec.signs) signQuad(B.signs, s.x + s.nx * 0.05, s.y, s.z + s.nz * 0.05, s.nx, s.nz, s.w, s.name);
+}
+
+function buildStairs(pb, st) {
+  const n = Math.max(4, Math.round((st.y1 - st.y0) / 0.18));
+  const [x0, z0, x1, z1] = st.rect;
+  for (let i = 0; i < n; i++) {
+    const t0 = i / n, t1 = (i + 1) / n;
+    const h = (st.y1 - st.y0) * t1;
+    let a0, a1;
+    if (st.axis === 'x') {
+      const L = x1 - x0; a0 = st.startMin ? x0 + L * t0 : x1 - L * t1; a1 = a0 + L / n;
+      pb.addGeometry(G.boxB, mat((a0 + a1) / 2, st.y0, (z0 + z1) / 2, 0, a1 - a0, h, z1 - z0), st.color);
+    } else {
+      const L = z1 - z0; a0 = st.startMin ? z0 + L * t0 : z1 - L * t1; a1 = a0 + L / n;
+      pb.addGeometry(G.boxB, mat((x0 + x1) / 2, st.y0, (a0 + a1) / 2, 0, x1 - x0, h, a1 - a0), st.color);
+    }
   }
 }
 
-export class ChunkManager {
-  constructor(scene, city, mats) {
-    this.scene = scene; this.mats = mats;
-    this.cells = new Map();
-    this.loaded = new Map();
-    this.group = new THREE.Group(); this.group.name = 'chunks';
-    scene.add(this.group);
-    const cell = (x, z) => {
-      const ix = Math.floor(x / P), iz = Math.floor(z / P), k = ix + ',' + iz;
-      let c = this.cells.get(k);
-      if (!c) { c = { key: k, ix, iz, buildings: [], props: [] }; this.cells.set(k, c); }
-      return c;
-    };
-    for (const blk of city.blocks) {
-      const c = cell(blk.ox + 50, blk.oz + 50);
-      c.buildings.push(...blk.buildings); c.props.push(...blk.props);
+function buildGarage(g, B) {
+  const spec = garageSpec(g);
+  const C = B.props, conc = 0xb8b4ac;
+  for (const s of spec.slabs) C.addGeometry(G.boxB, mat((s.rect[0] + s.rect[2]) / 2, s.y - 0.3, (s.rect[1] + s.rect[3]) / 2, 0, s.rect[2] - s.rect[0], 0.3, s.rect[3] - s.rect[1]), 0xa9a59d);
+  for (const w of spec.walls) C.addGeometry(G.boxB, mat((w.rect[0] + w.rect[2]) / 2, w.y0, (w.rect[1] + w.rect[3]) / 2, 0, w.rect[2] - w.rect[0], w.y1 - w.y0, w.rect[3] - w.rect[1]), conc);
+  for (const p of spec.pillars) C.addGeometry(G.boxB, mat(p.x, p.y0, p.z, 0, 0.6, p.y1 - p.y0, 0.6), 0xc9c5bd);
+  for (const r of spec.ramps) {
+    const yN = r.lowAtNorth ? r.ya : r.yb, yS = r.lowAtNorth ? r.yb : r.ya;
+    C.quad([r.x0, yS + 0.01, r.z1], [r.x1, yS + 0.01, r.z1], [r.x1, yN + 0.01, r.z0], [r.x0, yN + 0.01, r.z0], [0, 0, 1, 0, 1, 1, 0, 1], 0x8f8b84);
+    C.quad([r.x0, yN - 0.3, r.z0], [r.x1, yN - 0.3, r.z0], [r.x1, yS - 0.3, r.z1], [r.x0, yS - 0.3, r.z1], [0, 0, 1, 0, 1, 1, 0, 1], 0x9a968e);
+  }
+  // painted bay lines on each level
+  for (const p of spec.parking) C.addGeometry(G.box, mat(p.x - 1.7, p.y + 0.02, p.z, 0, 0.08, 0.01, 4.8), 0xf2f2f2);
+  signQuad(B.signs, g.x + 12, CURB_H + 3.6, g.z - g.d / 2 - 0.1, 0, -1, 8, 'חניון');
+}
+
+// ---------------------------------------------------------------------------- ridge + tunnels
+function buildRidge(cd, B) {
+  const r = cd.ridge;
+  const tl = tunnelLines(r.x0 - 12, r.x1 + 12).filter((L) => L >= RIDGE.x0 && L <= RIDGE.x1);
+  const xs = new Set();
+  for (let x = r.x0; x <= r.x1 + 0.01; x += 5) xs.add(+x.toFixed(2));
+  xs.add(r.x1);
+  for (const L of tl) for (const o of [-12, -TUNNEL_HALF - 0.6, TUNNEL_HALF + 0.6, 12]) if (L + o > r.x0 && L + o < r.x1) xs.add(L + o);
+  const X = [...xs].sort((a, b) => a - b);
+  const zs = new Set([r.z0, r.z1]);
+  for (const zz of [RIDGE.z0, RIDGE.z0 + 1, RIDGE.z0 + 2.5, RIDGE.z0 + 4, RIDGE.z1 - 4, RIDGE.z1 - 2.5, RIDGE.z1 - 1, RIDGE.z1]) if (zz >= r.z0 && zz <= r.z1) zs.add(zz);
+  for (let z = Math.ceil(r.z0 / 8) * 8; z < r.z1; z += 8) zs.add(z);
+  const Z = [...zs].sort((a, b) => a - b);
+  const inBore = (x) => tl.some((L) => Math.abs(x - L) <= TUNNEL_HALF + 0.7);
+  const h = (x, z) => {
+    let y = ridgeHeight(x, z);
+    if (inBore(x)) y = Math.max(y, TUNNEL_H + 1.2);
+    return y;
+  };
+  const rb = B.rock;
+  const col = (y) => (y > 30 ? 0xc9c3b8 : y > 12 ? 0xb3a48c : 0x9aa07a);
+  for (let i = 0; i < X.length - 1; i++) for (let j = 0; j < Z.length - 1; j++) {
+    const xa = X[i], xb = X[i + 1], za = Z[j], zb = Z[j + 1];
+    const ya = h(xa, zb), yb = h(xb, zb), yc = h(xb, za), yd = h(xa, za);
+    if (ya + yb + yc + yd < 0.05) continue;
+    rb.quad([xa, ya, zb], [xb, yb, zb], [xb, yc, za], [xa, yd, za], [xa / 8, -zb / 8, xb / 8, -zb / 8, xb / 8, -za / 8, xa / 8, -za / 8], col((ya + yc) / 2));
+  }
+  for (const L of tl) {
+    const z0 = Math.max(r.z0, RIDGE.z0), z1 = Math.min(r.z1, RIDGE.z1);
+    const I = B.interior;
+    // bore walls, ceiling and lights
+    I.quad([L - TUNNEL_HALF, 0, z1], [L - TUNNEL_HALF, 0, z0], [L - TUNNEL_HALF, TUNNEL_H, z0], [L - TUNNEL_HALF, TUNNEL_H, z1], [0, 0, 1, 0, 1, 1, 0, 1], 0xcfcbc2);
+    I.quad([L + TUNNEL_HALF, 0, z0], [L + TUNNEL_HALF, 0, z1], [L + TUNNEL_HALF, TUNNEL_H, z1], [L + TUNNEL_HALF, TUNNEL_H, z0], [0, 0, 1, 0, 1, 1, 0, 1], 0xcfcbc2);
+    I.quad([L - TUNNEL_HALF, TUNNEL_H, z0], [L + TUNNEL_HALF, TUNNEL_H, z0], [L + TUNNEL_HALF, TUNNEL_H, z1], [L - TUNNEL_HALF, TUNNEL_H, z1], [0, 0, 1, 0, 1, 1, 0, 1], 0x9e9a92);
+    for (let z = z0 + 4; z < z1; z += 10) B.lamp.addGeometry(G.box, mat(L, TUNNEL_H - 0.08, z, 0, 0.5, 0.1, 4), 0xffffff);
+    // portals
+    for (const [zp, nz] of [[RIDGE.z0, -1], [RIDGE.z1, 1]]) {
+      if (zp < r.z0 - 0.01 || zp > r.z1 + 0.01) continue;
+      const f = nz < 0 ? FACE.n([L - 13, zp - 0.6, L + 13, zp]) : FACE.s([L - 13, zp, L + 13, zp + 0.6]);
+      const u = (x) => (nz < 0 ? L + 13 - x : x - (L - 13));
+      const ua = Math.min(u(L - TUNNEL_HALF), u(L + TUNNEL_HALF)), ub = Math.max(u(L - TUNNEL_HALF), u(L + TUNNEL_HALF));
+      facePiece(B.props, f, 0, ua, 0, TUNNEL_H + 4, 0, 4, 4, 0xbdb7ab, false);
+      facePiece(B.props, f, ub, 26, 0, TUNNEL_H + 4, 0, 4, 4, 0xbdb7ab, false);
+      facePiece(B.props, f, ua, ub, TUNNEL_H, TUNNEL_H + 4, 0, 4, 4, 0xbdb7ab, false);
+      signQuad(B.signs, L, TUNNEL_H + 1.2, zp + nz * 0.05, 0, nz, 9, 'מנהרת הרכס');
     }
-    for (const b of city.extra.buildings) cell(b.x, b.z).buildings.push(b);
-    for (const p of city.extra.props) {
-      const q = { ...p };
-      if (p.kind === 'tree' || p.kind === 'palm') q.y = p.x > 1000 ? 0.02 : 0;
-      if (['tower', 'plane', 'lifeguard'].includes(p.kind)) q.y = 0;
-      if (p.kind === 'platformRoof') q.y = 0.5;
-      cell(p.x, p.z).props.push(q);
+  }
+}
+
+// ---------------------------------------------------------------------------- full-detail cell
+function buildCellNear(cd, B, bulbs) {
+  const { ox, oz } = cd;
+  const y = CURB_H;
+  // ground
+  if (cd.urban) {
+    const x0 = ox + ROAD_HALF, z0 = oz + ROAD_HALF, x1 = ox + P - ROAD_HALF, z1 = oz + P - ROAD_HALF, s = SIDEWALK;
+    B.tiles.floor(x0, z0, x1, z0 + s, y, 0xffffff, 3);
+    B.tiles.floor(x0, z1 - s, x1, z1, y, 0xffffff, 3);
+    B.tiles.floor(x0, z0 + s, x0 + s, z1 - s, y, 0xffffff, 3);
+    B.tiles.floor(x1 - s, z0 + s, x1, z1 - s, y, 0xffffff, 3);
+    const ix0 = x0 + s, iz0 = z0 + s, ix1 = x1 - s, iz1 = z1 - s;
+    if (cd.ground === 'grass') B.grass.floor(ix0, iz0, ix1, iz1, y, 0xffffff, 8);
+    else if (cd.ground === 'plaza') B.plaza.floor(ix0, iz0, ix1, iz1, y, 0xffffff, 6);
+    else B.lot.floor(ix0, iz0, ix1, iz1, y, 0xd0d0d0, 8);
+    for (const p of cd.paths) B.plaza.floor(p.x - p.w / 2, p.z - p.d / 2, p.x + p.w / 2, p.z + p.d / 2, y + 0.01, 0xe8dcc8, 4);
+    B.tiles.walls((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0, 0, y, 0xb9b5ad, 1, 1);
+    // ground under the road edges of this cell's south/east sides is drawn by neighbours' roads
+  } else if (cd.beach) {
+    const west = cd.beach.west;
+    const X = (x) => (west ? x : 3000 - x);
+    // split along z at road crossings (arterial bridges every 500m)
+    const zr = [];
+    const cut = (a, b) => zr.push([a, b]);
+    let za = oz, zb = oz + P;
+    if (((oz % 500) + 500) % 500 === 0) za = oz + ROAD_HALF;
+    if ((((oz + P) % 500) + 500) % 500 === 0) zb = oz + P - ROAD_HALF;
+    cut(za, zb);
+    for (const [a, b] of zr) {
+      const px0 = Math.min(X(1007), X(1022)), px1 = Math.max(X(1007), X(1022));
+      B.tiles.floor(px0, a, px1, b, y, 0xf0e6d6, 3);
+      B.tiles.walls((px0 + px1) / 2, (a + b) / 2, px1 - px0, b - a, 0, y, 0xffffff, 1, 1);
     }
-    this.radius = 420;
-    this.budget = 2;
+    // sand profile strips (full cell length; roads are drawn above where they cross)
+    const xsW = [1022, 1040, 1060, 1090, 1100];
+    for (let i = 0; i < xsW.length - 1; i++) {
+      const xa = X(xsW[i]), xb = X(xsW[i + 1]);
+      const lo = Math.min(xa, xb), hi = Math.max(xa, xb);
+      const yl = baseHeight(lo + 0.01, oz + 50), yh = baseHeight(hi - 0.01, oz + 50);
+      for (const [a, b] of zr) B.sand.quad([lo, yl, b], [hi, yh, b], [hi, yh, a], [lo, yl, a], [lo / 6, -b / 6, hi / 6, -b / 6, hi / 6, -a / 6, lo / 6, -a / 6]);
+      if (zr[0][0] > oz) B.sand.quad([lo, yl - 0.05, zr[0][0]], [hi, yh - 0.05, zr[0][0]], [hi, yh - 0.05, oz], [lo, yl - 0.05, oz], [0, 0, 1, 0, 1, 1, 0, 1]);
+      if (zr[0][1] < oz + P) B.sand.quad([lo, yl - 0.05, oz + P], [hi, yh - 0.05, oz + P], [hi, yh - 0.05, zr[0][1]], [lo, yl - 0.05, zr[0][1]], [0, 0, 1, 0, 1, 1, 0, 1]);
+    }
+  } else if (cd.kind !== 'Q') {
+    (cd.ground === 'field' ? B.field : B.grass).floor(ox, oz, ox + P, oz + P, -0.02, 0xffffff, 8);
+    for (const a of cd.apron) (a.name === 'runway' ? B.road : B.lot).floor(a.rect[0], a.rect[1], a.rect[2], a.rect[3], a.name === 'runway' ? 0.012 : 0.006, 0xb5b5b5, a.name === 'runway' ? 14 : 8);
+  }
+  if (cd.water) B.water.floor(cd.water[0], cd.water[1], cd.water[2], cd.water[3], WATER_Y, 0xffffff, 30);
+
+  // rail
+  if (cd.rail) {
+    const r = cd.rail;
+    B.lot.floor(r.x0, RAIL.z - 3.5, r.x1, RAIL.z + 3.5, 0.03, 0x8a8178, 2);
+    for (const off of [-0.72, 0.72]) B.props.addGeometry(G.box, mat((r.x0 + r.x1) / 2, 0.1, RAIL.z + off, 0, r.x1 - r.x0, 0.12, 0.1), 0x777b80);
+    for (let x = r.x0 + 1; x < r.x1; x += 2) B.props.addGeometry(G.box, mat(x, 0.05, RAIL.z, 0, 0.25, 0.06, 2.4), 0x5a4636);
+    if (r.bufferW) B.props.addGeometry(G.boxB, mat(r.x0 + 1, 0, RAIL.z, 0, 1, 1.2, 2.6), 0xc0392b);
+    if (r.bufferE) B.props.addGeometry(G.boxB, mat(r.x1 - 1, 0, RAIL.z, 0, 1, 1.2, 2.6), 0xc0392b);
+    if (r.platform) {
+      const [x0, z0, x1, z1] = r.platform;
+      B.tiles.walls((x0 + x1) / 2, (z0 + z1) / 2, x1 - x0, z1 - z0, 0, 0.5, 0xffffff, 1, 1);
+      B.tiles.floor(x0, z0, x1, z1, 0.5, 0xffffff, 3);
+    }
   }
 
-  buildCell(c) {
-    const out = {}, pb = new GeoBuilder(), signs = new GeoBuilder();
-    for (const b of c.buildings) buildBuilding(b, out, pb, signs);
-    for (const p of c.props) addProp(pb, p);
+  // roads owned by this cell
+  for (const s of cd.segs) {
+    const d = s.dir, r = [-d[1], d[0]], h = ROAD_HALF;
+    const sx = s.ax + d[0] * h, sz = s.az + d[1] * h, ex = s.bx - d[0] * h, ez = s.bz - d[1] * h;
+    const p0 = [sx - r[0] * h, 0, sz - r[1] * h], p1 = [sx + r[0] * h, 0, sz + r[1] * h];
+    const p2 = [ex + r[0] * h, 0, ez + r[1] * h], p3 = [ex - r[0] * h, 0, ez - r[1] * h];
+    const v = (P - 2 * h) / 12;
+    const up = ((p1[0] - p0[0]) * (p3[2] - p0[2]) - (p1[2] - p0[2]) * (p3[0] - p0[0])) < 0;
+    if (up) B.road.quad(p0, p1, p2, p3, [0, 0, 1, 0, 1, v, 0, v]); else B.road.quad(p1, p0, p3, p2, [1, 0, 0, 0, 0, v, 1, v]);
+    for (const [nx, nz, sgn, has] of [[sx, sz, 1, s.crossA], [ex, ez, -1, s.crossB]]) {
+      if (!has) continue;
+      const c0x = nx + d[0] * sgn * 0.6, c0z = nz + d[1] * sgn * 0.6, c1x = nx + d[0] * sgn * 3.6, c1z = nz + d[1] * sgn * 3.6;
+      const q0 = [c0x - r[0] * h, 0.02, c0z - r[1] * h], q1 = [c0x + r[0] * h, 0.02, c0z + r[1] * h];
+      const q2 = [c1x + r[0] * h, 0.02, c1z + r[1] * h], q3 = [c1x - r[0] * h, 0.02, c1z - r[1] * h];
+      const upc = ((q1[0] - q0[0]) * (q3[2] - q0[2]) - (q1[2] - q0[2]) * (q3[0] - q0[0])) < 0;
+      if (upc) B.cross.quad(q0, q1, q2, q3, [0, 0, 1, 0, 1, 1, 0, 1]); else B.cross.quad(q1, q0, q3, q2, [1, 0, 0, 0, 0, 1, 1, 1]);
+    }
+    // road shoulders across open ground keep the road from floating visually
+    if (!cd.urban && !cd.bridge && cd.kind !== 'Q') {
+      const sh = 1.6;
+      for (const sg of [-1, 1]) {
+        const a = [sx + r[0] * sg * h, sz + r[1] * sg * h], b = [ex + r[0] * sg * h, ez + r[1] * sg * h];
+        const o = [r[0] * sg * sh, r[1] * sg * sh];
+        const g0 = [a[0], -0.005, a[1]], g1 = [a[0] + o[0], -0.005, a[1] + o[1]], g2 = [b[0] + o[0], -0.005, b[1] + o[1]], g3 = [b[0], -0.005, b[1]];
+        const u2 = ((g1[0] - g0[0]) * (g3[2] - g0[2]) - (g1[2] - g0[2]) * (g3[0] - g0[0])) < 0;
+        if (u2) B.lot.quad(g0, g1, g2, g3, [0, 0, 1, 0, 1, 1, 0, 1], 0x9a958a); else B.lot.quad(g1, g0, g3, g2, [0, 0, 1, 0, 1, 1, 0, 1], 0x9a958a);
+      }
+    }
+  }
+  if (cd.node) B.lot.floor(ox - ROAD_HALF, oz - ROAD_HALF, ox + ROAD_HALF, oz + ROAD_HALF, 0.001, 0xffffff, 8);
+
+  // bridge structure
+  if (cd.bridge) {
+    const { x0, x1, z } = cd.bridge;
+    const L = x1 - x0, cx = (x0 + x1) / 2;
+    B.props.addGeometry(G.boxB, mat(cx, -1.4, z, 0, L, 1.4, 19.4), 0xa7a39b);           // deck body
+    for (const s of [-1, 1]) {
+      B.tiles.floor(x0, s < 0 ? z - 9.5 : z + ROAD_HALF, x1, s < 0 ? z - ROAD_HALF : z + 9.5, 0.0, 0xd9d4ca, 3); // walkways
+      B.props.addGeometry(G.boxB, mat(cx, 0, z + s * 9.7, 0, L, 0.35, 0.4), 0xcfcac0);  // curb wall
+      B.props.addGeometry(G.box, mat(cx, 1.1, z + s * 9.7, 0, L, 0.08, 0.12), 0x6f777f); // handrail
+      for (let x = x0 + 2; x < x1; x += 2.5) B.props.addGeometry(G.box, mat(x, 0.7, z + s * 9.7, 0, 0.06, 0.8, 0.06), 0x6f777f);
+    }
+    for (let x = Math.ceil(x0 / 40) * 40; x < x1; x += 40) {
+      if (Math.min(x, 3000 - x) < 1050) continue;
+      B.props.addGeometry(G.boxB, mat(x, -5, z, 0, 3, 3.6, 14), 0x9c988f); // pillars into the sea bed
+    }
+  }
+
+  // street lamps
+  for (const l of cd.lamps) {
+    const m = mat(l.x, l.y, l.z, Math.atan2(l.dx, l.dz));
+    B.props.addGeometry(G.lampPole, m, 0x4a4f55); B.props.addGeometry(G.lampArm, m, 0x4a4f55); B.lamp.addGeometry(G.lampHead, m, 0xffffff);
+  }
+  // traffic lights
+  for (const s of cd.tl) {
+    const rot = Math.atan2(s.r[1], -s.r[0]);
+    const m = mat(s.x, s.y, s.z, rot).clone();
+    B.props.addGeometry(G.tlPole, m, 0x4a4f55); B.props.addGeometry(G.tlArm, m, 0x4a4f55); B.props.addGeometry(G.tlHead, m, 0x22262a);
+    bulbs.push({ spot: s, m });
+  }
+  // buildings, props, garage, ridge
+  for (const b of cd.buildings) buildBuilding(b, B.fac, B);
+  for (const p of cd.props) addProp(B.props, p);
+  if (cd.garage) buildGarage(cd.garage, B);
+  if (cd.ridge) buildRidge(cd, B);
+}
+
+// ---------------------------------------------------------------------------- low detail cell (far LOD)
+const FAR_GROUND = { grass: 0x6f9a4c, field: 0x9bb05a, urban: 0xa9a59c, water: 0x3d7fa6, sand: 0xdcc796, apron: 0x8e8e8a };
+function buildCellFar(cd, F) {
+  const { ox, oz } = cd;
+  let gcol = cd.urban ? FAR_GROUND.urban : cd.ground === 'field' ? FAR_GROUND.field : FAR_GROUND.grass;
+  if (cd.kind === 'Q') gcol = FAR_GROUND.water;
+  if (cd.beach) {
+    const west = cd.beach.west, X = (x) => (west ? x : 3000 - x);
+    F.floor(Math.min(X(1000), X(1060)), oz, Math.max(X(1000), X(1060)), oz + P, 0, FAR_GROUND.sand, 50);
+    F.floor(Math.min(X(1060), X(1100)), oz, Math.max(X(1060), X(1100)), oz + P, WATER_Y, FAR_GROUND.water, 50);
+  } else F.floor(ox, oz, ox + P, oz + P, cd.kind === 'Q' ? WATER_Y : -0.03, gcol, 50);
+  for (const s of cd.segs) {
+    const x0 = Math.min(s.ax, s.bx) - (s.dir[1] ? ROAD_HALF : 0), x1 = Math.max(s.ax, s.bx) + (s.dir[1] ? ROAD_HALF : 0);
+    const z0 = Math.min(s.az, s.bz) - (s.dir[0] ? ROAD_HALF : 0), z1 = Math.max(s.az, s.bz) + (s.dir[0] ? ROAD_HALF : 0);
+    F.floor(x0, z0, x1, z1, 0.02, 0x4a4c50, 50);
+  }
+  for (const b of cd.buildings) {
+    const top = CURB_H + b.h + (b.house ? Math.min(b.w, b.d) * 0.3 : 0);
+    F.walls(b.x, b.z, b.w, b.d, 0, top, b.color, 50, 50);
+    F.floor(b.x - b.w / 2, b.z - b.d / 2, b.x + b.w / 2, b.z + b.d / 2, top, b.house ? b.roofColor : 0x9a9a98, 50);
+  }
+  if (cd.garage) { const g = cd.garage; F.walls(g.x, g.z, g.w, g.d, 0, CURB_H + g.levelH * (g.levels - 1) + 1, 0xb8b4ac, 50, 50); }
+  let trees = 0;
+  for (const p of cd.props) if ((p.kind === 'tree' || p.kind === 'palm') && trees++ % 3 === 0) F.walls(p.x, p.z, 3.4, 3.4, 2, 6.5, 0x3f7a32, 50, 50);
+  if (cd.ridge) {
+    const r = cd.ridge;
+    const step = 20;
+    for (let x = r.x0; x < r.x1 - 0.01; x += step) for (let z = r.z0; z < r.z1 - 0.01; z += step) {
+      const xb = Math.min(r.x1, x + step), zb = Math.min(r.z1, z + step);
+      const ya = ridgeHeight(x, zb), yb = ridgeHeight(xb, zb), yc = ridgeHeight(xb, z), yd = ridgeHeight(x, z);
+      F.quad([x, ya, zb], [xb, yb, zb], [xb, yc, z], [x, yd, z], [0, 0, 1, 0, 1, 1, 0, 1], 0xa49a85);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------- manager
+export class ChunkManager {
+  constructor(scene, mats, statics, surfaces) {
+    this.scene = scene; this.mats = mats; this.statics = statics; this.surfaces = surfaces;
+    this.group = new THREE.Group(); this.group.name = 'chunks';
+    scene.add(this.group);
+    this.near = new Map();   // chunkKey -> { group, bulbs }
+    this.far = new Map();    // chunkKey -> mesh
+    this.phys = new Set();   // cell keys with colliders loaded
+    this.radius = 380;       // full detail radius
+    this.farRadius = 900;    // low detail radius
+    this.physRadius = 260;
+    this.budgetMs = 6;
+    this.benches = [];
+    this._benchDirty = true;
+    this.onCellsChanged = null;
+  }
+  get loaded() { return this.near; }
+
+  _chunkCells(cx, cz) {
+    const out = [];
+    for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) out.push(cellData(cx * 2 + i, cz * 2 + j));
+    return out;
+  }
+
+  _buildNear(cx, cz) {
+    const B = {};
+    for (const k of ['road', 'asphalt', 'cross', 'tiles', 'grass', 'field', 'sand', 'plaza', 'lot', 'curb', 'water', 'props', 'interior', 'rock', 'glass', 'signs', 'lamp']) B[k] = new GeoBuilder();
+    B.fac = {};
+    const bulbs = [];
+    for (const cd of this._chunkCells(cx, cz)) buildCellNear(cd, B, bulbs);
     const g = new THREE.Group();
-    const add = (builder, material, cast = true) => {
+    const add = (builder, material, cast, receive = true) => {
       if (!builder || builder.empty) return;
       const m = new THREE.Mesh(builder.build(), material);
-      m.castShadow = cast; m.receiveShadow = true;
+      m.castShadow = cast; m.receiveShadow = receive;
       m.matrixAutoUpdate = false; m.updateMatrix();
       g.add(m);
     };
-    for (const s of STYLES) add(out[s], this.mats['f_' + s]);
-    add(out.roof, this.mats.roof, false);
-    add(out.houseRoof, this.mats.houseRoof);
-    add(pb, this.mats.props);
-    add(signs, this.mats.signs, false);
+    const M = this.mats;
+    add(B.grass, M.grass, false); add(B.field, M.field, false); add(B.sand, M.sand, false); add(B.water, M.water, false);
+    add(B.road, M.road, false); add(B.asphalt, M.asphalt, false); add(B.cross, M.cross, false);
+    add(B.tiles, M.tiles, false); add(B.plaza, M.plaza, false); add(B.lot, M.lot, false); add(B.curb, M.curb, false);
+    for (const s of STYLES) add(B.fac[s], M['f_' + s], true);
+    add(B.fac.roof, M.roof, false); add(B.fac.houseRoof, M.houseRoof, true);
+    add(B.props, M.props, true); add(B.interior, M.interior, false); add(B.rock, M.rock, true);
+    add(B.glass, M.glass, false, false); add(B.signs, M.signs, false); add(B.lamp, M.lamp, false);
+    let bulbMesh = null;
+    if (bulbs.length) {
+      bulbMesh = new THREE.InstancedMesh(G.bulb, M.bulb, bulbs.length * 3);
+      const o = new THREE.Matrix4(), mm = new THREE.Matrix4(), dim = new THREE.Color(0x222222);
+      bulbs.forEach((b, i) => {
+        for (let k = 0; k < 3; k++) {
+          o.makeTranslation(5.6, 4.9 - k * 0.4, -0.18);
+          mm.copy(b.m).multiply(o);
+          bulbMesh.setMatrixAt(i * 3 + k, mm); bulbMesh.setColorAt(i * 3 + k, dim);
+        }
+      });
+      bulbMesh.instanceMatrix.needsUpdate = true;
+      g.add(bulbMesh);
+    }
     g.matrixAutoUpdate = false;
-    return g;
+    return { group: g, bulbs, bulbMesh, cache: [] };
   }
 
+  _buildFar(cx, cz) {
+    const F = new GeoBuilder();
+    for (const cd of this._chunkCells(cx, cz)) buildCellFar(cd, F);
+    const m = new THREE.Mesh(F.build(), this.mats.far);
+    m.matrixAutoUpdate = false; m.updateMatrix();
+    return m;
+  }
+
+  _dispose(obj) { obj.traverse((o) => { if (o.geometry && !(o.isInstancedMesh && o.geometry === G.bulb)) o.geometry.dispose(); if (o.isInstancedMesh) o.dispose(); }); }
+
+  // Physics for 100m cells near the player
+  _updatePhysics(px, pz) {
+    const R = this.physRadius, U = R + 90;
+    const i0 = Math.floor((px - R) / P), i1 = Math.floor((px + R) / P), j0 = Math.floor((pz - R) / P), j1 = Math.floor((pz + R) / P);
+    let changed = false;
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+      const k = i + ',' + j;
+      if (this.phys.has(k)) continue;
+      const cx = i * P + 50, cz = j * P + 50;
+      if ((cx - px) ** 2 + (cz - pz) ** 2 > (R + 71) ** 2) continue;
+      const cd = cellData(i, j);
+      this.statics.addGroup(k, cd.colliders);
+      for (const s of cd.surfaces) this.surfaces.addSurface(s, k);
+      this.phys.add(k); changed = true;
+    }
+    for (const k of [...this.phys]) {
+      const [i, j] = k.split(',').map(Number);
+      const cx = i * P + 50, cz = j * P + 50;
+      if ((cx - px) ** 2 + (cz - pz) ** 2 > (U + 71) ** 2) {
+        this.statics.removeGroup(k); this.surfaces.removeGroup(k); this.phys.delete(k); changed = true;
+      }
+    }
+    if (changed) {
+      this.benches = [];
+      for (const k of this.phys) { const [i, j] = k.split(',').map(Number); this.benches.push(...cellData(i, j).benches); }
+      this.onCellsChanged?.([...this.phys].map((k) => k.split(',').map(Number)));
+    }
+  }
+
+  isPhysicsReady(x, z) { return this.phys.has(Math.floor(x / P) + ',' + Math.floor(z / P)); }
+
   update(px, pz, force = false) {
-    const R = this.radius, R2 = R * R, U2 = (R + 120) ** 2;
-    const need = [];
-    for (const c of this.cells.values()) {
-      const cx = c.ix * P + 50, cz = c.iz * P + 50;
-      const d2 = (cx - px) ** 2 + (cz - pz) ** 2;
-      if (this.loaded.has(c.key)) {
-        if (d2 > U2) {
-          const g = this.loaded.get(c.key);
-          g.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
-          this.group.remove(g); this.loaded.delete(c.key);
-        }
-      } else if (d2 < R2) need.push([d2, c]);
+    this._updatePhysics(px, pz);
+    const t0 = performance.now();
+    const R = this.radius, FR = this.farRadius;
+    const c0x = Math.floor((px - FR) / CH), c1x = Math.floor((px + FR) / CH), c0z = Math.floor((pz - FR) / CH), c1z = Math.floor((pz + FR) / CH);
+    const wantNear = [], wantFar = [];
+    const seen = new Set();
+    for (let cx = c0x; cx <= c1x; cx++) for (let cz = c0z; cz <= c1z; cz++) {
+      const k = cx + ',' + cz;
+      seen.add(k);
+      const mx = cx * CH + CH / 2, mz = cz * CH + CH / 2;
+      // distance from player to the chunk square
+      const dx = Math.max(0, Math.abs(px - mx) - CH / 2), dz = Math.max(0, Math.abs(pz - mz) - CH / 2);
+      const d = Math.hypot(dx, dz);
+      if (d < R) { if (!this.near.has(k)) wantNear.push([d, cx, cz, k]); }
+      else if (d > R + 60 && this.near.has(k)) { const n = this.near.get(k); this._dispose(n.group); this.group.remove(n.group); this.near.delete(k); }
+      if (d < FR) { if (!this.far.has(k)) wantFar.push([d, cx, cz, k]); }
+      else if (d > FR + 100 && this.far.has(k)) { const f = this.far.get(k); this._dispose(f); this.group.remove(f); this.far.delete(k); }
     }
-    need.sort((a, b) => a[0] - b[0]);
-    const n = force ? need.length : Math.min(this.budget, need.length);
-    for (let i = 0; i < n; i++) {
-      const c = need[i][1];
-      const g = this.buildCell(c);
-      this.group.add(g); this.loaded.set(c.key, g);
+    for (const [k, n] of this.near) if (!seen.has(k)) { this._dispose(n.group); this.group.remove(n.group); this.near.delete(k); }
+    for (const [k, f] of this.far) if (!seen.has(k)) { this._dispose(f); this.group.remove(f); this.far.delete(k); }
+    wantNear.sort((a, b) => a[0] - b[0]);
+    wantFar.sort((a, b) => a[0] - b[0]);
+    let pending = wantNear.length + wantFar.length;
+    for (const [, cx, cz, k] of wantNear) {
+      if (!force && performance.now() - t0 > this.budgetMs) break;
+      const n = this._buildNear(cx, cz);
+      this.group.add(n.group); this.near.set(k, n); pending--;
     }
-    return need.length - n;
+    for (const [, cx, cz, k] of wantFar) {
+      if (!force && performance.now() - t0 > this.budgetMs) break;
+      if (force && wantFar.length > 40 && performance.now() - t0 > 400) break;
+      const m = this._buildFar(cx, cz);
+      this.group.add(m); this.far.set(k, m); pending--;
+    }
+    // far mesh is hidden where the detailed chunk is present
+    for (const [k, f] of this.far) f.visible = !this.near.has(k);
+    return pending;
+  }
+
+  // recolor traffic-light bulbs
+  updateLights(time, lightState) {
+    const cols = this._cols ||= { r: new THREE.Color(0xff2a1a), y: new THREE.Color(0xffc21a), g: new THREE.Color(0x2aff5a), off: new THREE.Color(0x1d1d1d) };
+    for (const n of this.near.values()) {
+      if (!n.bulbMesh) continue;
+      let changed = false;
+      n.bulbs.forEach((b, i) => {
+        const st = lightState(b.spot.node, b.spot.axis, time);
+        if (n.cache[i] === st) return;
+        n.cache[i] = st; changed = true;
+        n.bulbMesh.setColorAt(i * 3, st === 'r' ? cols.r : cols.off);
+        n.bulbMesh.setColorAt(i * 3 + 1, st === 'y' ? cols.y : cols.off);
+        n.bulbMesh.setColorAt(i * 3 + 2, st === 'g' ? cols.g : cols.off);
+      });
+      if (changed) n.bulbMesh.instanceColor.needsUpdate = true;
+    }
   }
 }
+
+export { nodeNbrs };

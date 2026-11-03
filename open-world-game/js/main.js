@@ -1,8 +1,11 @@
 // Azura City — open world game bootstrap and main loop.
 import * as THREE from 'three';
-import { generateCity, districtAt, groundHeight } from './world/layout.js';
+import * as WG from './world/worldGen.js';
+const { districtAt } = WG;
+import { heightAt, surfaces } from './world/terrain.js';
+import { Pedestrians } from './npc/pedestrians.js';
 import { setAnisotropy } from './world/textures.js';
-import { makeMaterials, buildStaticWorld, registerCityColliders } from './world/worldBuilder.js';
+import { makeMaterials } from './world/worldBuilder.js';
 import { ChunkManager } from './world/chunkManager.js';
 import { Environment } from './world/sky.js';
 import { StaticWorld } from './physics/collision.js';
@@ -47,35 +50,30 @@ class Game {
 
   async load() {
     const step = async (pct, text) => { $('loadBar').style.width = pct + '%'; $('loadText').textContent = text; await new Promise((r) => setTimeout(r, 0)); };
-    await step(5, 'מתכנן את העיר...');
-    this.city = generateCity();
+    await step(5, 'מתכנן את העולם...');
     this.graph = new RoadGraph();
     this.statics = new StaticWorld();
-    await step(25, 'סולל כבישים ומדרכות...');
     this.mats = makeMaterials();
     this.env = new Environment(this.scene, this.renderer);
-    this.world = buildStaticWorld(this.scene, this.city, this.graph, this.statics, this.mats);
-    registerCityColliders(this.city, this.statics);
-    await step(50, 'בונה שכונות...');
-    this.chunks = new ChunkManager(this.scene, this.city, this.mats);
-    this.benches = [];
-    const addBench = (p) => { if (p.kind === 'bench') this.benches.push(p); };
-    for (const b of this.city.blocks) b.props.forEach(addBench);
-    this.city.extra.props.forEach(addBench);
-    await step(65, 'מחנה רכבים...');
-    this.vehicles = new VehicleManager(this.scene, this.city, this.statics);
+    await step(25, 'סולל כבישים ומדרכות...');
+    this.chunks = new ChunkManager(this.scene, this.mats, this.statics, surfaces);
+    this.physCells = [];
+    this.chunks.onCellsChanged = (cells) => { this.physCells = cells; this.vehicles?.syncCells(cells); };
+    await step(45, 'מחנה רכבים...');
+    this.vehicles = new VehicleManager(this.scene, this.statics);
     this.traffic = new Traffic(this.scene, this.graph, this.statics);
+    this.peds = new Pedestrians(this.scene);
     this.player = new Player(this.scene, defaultAppearance());
     this.rig = new CameraRig(this.camera, this.statics);
     this.input = new Input(this.canvas);
-    this.minimap = new MiniMap(this.city, this.graph, $('minimap'), $('fullMap'));
+    this.minimap = new MiniMap($('minimap'), $('fullMap'));
     this.creator = new Creator((app) => this.player.model.setAppearance(app));
     this.applySettings(this.settings);
     bindSettings(this.settings, (s) => { this.applySettings(s); saveSettings(s); });
-    await step(80, 'מכין את המרכז...');
-    this.menuFocus = new THREE.Vector3(500, 0, 500);
-    this.chunks.update(500, 500, true);
-    this.vehicles.update(0, 500, 500, []);
+    await step(60, 'בונה שכונות...');
+    this.chunks.update(520, 520, true);
+    this.vehicles.syncCells(this.physCells);
+    this.vehicles.update(0, 520, 520, []);
     // compile shaders up-front to avoid stutter on first view
     this.renderer.compile(this.scene, this.camera);
     await step(100, 'מוכן!');
@@ -90,9 +88,14 @@ class Game {
     this.renderer.setPixelRatio(pr);
     this.renderer.shadowMap.enabled = q !== 'low';
     this.env?.setQuality(q);
-    if (this.chunks) this.chunks.radius = q === 'low' ? 280 : q === 'medium' ? 380 : 500;
+    if (this.chunks) {
+      this.chunks.radius = q === 'low' ? 260 : q === 'medium' ? 360 : 480;
+      this.chunks.farRadius = q === 'low' ? 650 : q === 'medium' ? 950 : 1400;
+      this.env?.setFogFar(this.chunks.farRadius);
+    }
     this.baseRadius = this.chunks?.radius;
-    if (this.camera) this.camera.far = q === 'low' ? 900 : 2500;
+    if (this.camera) this.camera.far = (this.chunks?.farRadius || 1000) + 600;
+    this.peds?.setDensity(q === 'low' ? 14 : q === 'medium' ? 24 : 34);
     this.camera?.updateProjectionMatrix();
     this.traffic?.setDensity(s.traffic);
     if (this.rig) { this.rig.sensitivity = s.sensitivity; this.rig.invertY = s.invertY; }
@@ -185,13 +188,15 @@ class Game {
     this.player.model.setAppearance(s.appearance || defaultAppearance());
     this.creator.app = { ...this.player.model.app };
     const p = s.player;
-    this.player.setPosition(p.x, p.z, p.facing);
+    this.chunks.update(p.x, p.z, true);
+    this.player.setPosition(p.x, p.z, p.facing, p.y);
     this.player.state = 'foot';
     this.playTime = s.playTime || 0;
     if (s.vehicle) {
       const vd = s.vehicle;
-      const v = new Vehicle(vd.type, vd.color, vd.x, vd.z, vd.heading);
-      if (vd.y) v.y = Math.max(vd.y, groundHeight(vd.x, vd.z));
+      this.chunks.update(vd.x, vd.z, true);
+      const v = new Vehicle(vd.type, vd.color, vd.x, vd.z, vd.heading, vd.y);
+      if (vd.y !== undefined) v.y = vd.y;
       v.damage = 0; if (vd.damage) v.addDamage(vd.damage, 0, 0);
       this.scene.add(v.object);
       this.vehicles.adopt(v);
@@ -215,6 +220,13 @@ class Game {
     this.input.endFrame();
   }
 
+  // Teleport helper (used by automated tests / debugging); loads the area first so you never fall through the world.
+  teleport(x, z, facing = 0, y = 1000) {
+    this.chunks.update(x, z, true);
+    this.player.setPosition(x, z, facing, y);
+    this.rig.yaw = facing; this.rig.first = true;
+  }
+
   pause() { if (this.state === 'menu') return; this.state = 'paused'; showScreen('pause'); this.audio.mute(true); }
   resume() { this.state = 'playing'; showScreen(null); this.audio.mute(false); this.input.endFrame(); this.clock.getDelta(); }
   openMap() {
@@ -232,7 +244,7 @@ class Game {
       const v = p.state === 'driving' || p.state === 'entering' || p.state === 'exiting' ? p.vehicle : null;
       data = {
         appearance: p.model.app,
-        player: { x: v ? v.x : p.x, z: v ? v.z : p.z, facing: p.facing },
+        player: { x: v ? v.x : p.x, z: v ? v.z : p.z, y: v ? v.y : p.y, facing: p.facing },
         vehicle: v ? { type: v.typeKey, color: v.color, x: v.x, z: v.z, y: v.y, heading: v.heading, damage: v.damage } : null,
         playTime: this.playTime || 0,
       };
@@ -265,8 +277,11 @@ class Game {
     this.camera.lookAt(cx, 30, cz);
     this.chunks.update(cx, cz);
     this.env.update(new THREE.Vector3(cx, 0, cz));
-    this.traffic.update(dt, this.time, cx, cz, [...this.vehicles.all(), ...this.traffic.cars], []);
-    this.vehicles.update(dt, cx, cz, [...this.vehicles.all(), ...this.traffic.cars]);
+    const all = [...this.vehicles.all(), ...this.traffic.cars];
+    for (const veh of all) veh.setFar(true);
+    this.traffic.update(dt, this.time, cx, cz, all, this.peds.obstacles());
+    this.vehicles.update(dt, cx, cz, all, (x, z) => this.chunks.isPhysicsReady(x, z));
+    this.peds.update(dt, this.time, { px: cx, pz: cz, player: this.player, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches });
   }
 
   _creatorFrame(dt) {
@@ -295,8 +310,9 @@ class Game {
     if (input.wasPressed('camera')) this.rig.toggleMode();
 
     const all = [...this.vehicles.all(), ...this.traffic.cars];
+    const pedObs = this.peds.obstacles();
     const world = {
-      statics: this.statics, vehicles: all, benches: this.benches,
+      statics: this.statics, vehicles: all, benches: this.chunks.benches, peds: pedObs,
       onVehicleUsed: (v) => this.vehicles.markUsed(v),
     };
     p.update(dt, input, this.rig.yaw, world);
@@ -305,23 +321,26 @@ class Game {
     if (v) v.horn = input.isHeld('horn');
 
     const focusX = v ? v.x : p.x, focusZ = v ? v.z : p.z;
-    const obstacles = p.state === 'foot' || p.state === 'sitting' ? [{ x: p.x, z: p.z, r: 0.5 }] : [];
+    const obstacles = p.state === 'foot' || p.state === 'sitting' ? [{ x: p.x, z: p.z, r: 0.5 }, ...pedObs] : pedObs;
     this.traffic.update(dt, this.time, focusX, focusZ, all, obstacles);
-    this.vehicles.update(dt, focusX, focusZ, all);
+    this.vehicles.update(dt, focusX, focusZ, all, (x, z) => this.chunks.isPhysicsReady(x, z));
+    this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches });
     this.rig.update(dt, input, p);
     const pending = this.chunks.update(focusX, focusZ);
     this.env.update(new THREE.Vector3(focusX, v ? v.y : p.y, focusZ));
-    this.world.sea.material.map.offset.x = (this.time * 0.004) % 1;
+    this.mats.water.map.offset.x = (this.time * 0.01) % 1;
     this.audio.update(v, p.controls?.throttle || 0, input.isHeld('horn'));
 
     // adaptive detail: shrink the streaming radius if the device struggles
     this._perfT = (this._perfT || 0) + dt;
     if (this._perfT > 2) {
       this._perfT = 0;
-      if (this.fpsAvg < 26 && this.chunks.radius > 220) this.chunks.radius -= 40;
+      if (this.fpsAvg < 26 && this.chunks.radius > 200) this.chunks.radius -= 40;
       else if (this.fpsAvg > 50 && this.chunks.radius < this.baseRadius) this.chunks.radius += 20;
     }
 
+    const cam = this.camera.position;
+    for (const veh of all) veh.setFar(veh !== v && (veh.x - cam.x) ** 2 + (veh.z - cam.z) ** 2 > 45 * 45);
     this._hud(dt, v, pending);
     this.saveTimer += dt;
     if (this.saveTimer > 20) { this.saveTimer = 0; this.save(); }
@@ -372,34 +391,21 @@ class Game {
         const el = $('district'); el.textContent = d; el.classList.add('show');
         clearTimeout(this._dTO); this._dTO = setTimeout(() => el.classList.remove('show'), 3000);
       }
-      if (this.settings.showFps) $('fps').textContent = `${Math.round(this.fpsAvg)} FPS · ${this.traffic.cars.length} רכבים בתנועה · ${this.chunks.loaded.size} אזורים${pending ? ' · טוען...' : ''}`;
+      if (this.settings.showFps) $('fps').textContent = `${Math.round(this.fpsAvg)} FPS · ${this.traffic.cars.length} רכבים · ${this.peds.peds.length} אנשים · ${this.chunks.near.size}/${this.chunks.far.size} אזורים${pending ? ' · טוען...' : ''} · (${Math.round(p.x)}, ${Math.round(p.z)})`;
     }
   }
 
-  // Traffic light bulbs — recolored only when a phase changes
   _lights() {
     this._lightT = (this._lightT || 0) - 1;
     if (this._lightT > 0) return;
     this._lightT = 10;
-    const { tlSpots, bulbs } = this.world;
-    const cols = { r: new THREE.Color(0xff2a1a), y: new THREE.Color(0xffc21a), g: new THREE.Color(0x2aff5a) };
-    const off = new THREE.Color(0x1d1d1d);
-    let changed = false;
-    this._tlCache ||= new Array(tlSpots.length).fill('');
-    tlSpots.forEach((s, i) => {
-      const st = lightState(s.node, s.axis, this.time);
-      if (this._tlCache[i] === st) return;
-      this._tlCache[i] = st; changed = true;
-      bulbs.setColorAt(i * 3, st === 'r' ? cols.r : off);
-      bulbs.setColorAt(i * 3 + 1, st === 'y' ? cols.y : off);
-      bulbs.setColorAt(i * 3 + 2, st === 'g' ? cols.g : off);
-    });
-    if (changed) bulbs.instanceColor.needsUpdate = true;
+    this.chunks.updateLights(this.time, lightState);
   }
 }
 
 const game = new Game();
 window.__game = game; // handy for debugging and automated tests
+window.__wg = WG;
 game.load().catch((e) => {
   console.error(e);
   $('loadText').textContent = 'שגיאה בטעינה: ' + e.message;

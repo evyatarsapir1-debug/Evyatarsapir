@@ -1,7 +1,7 @@
 // 2.5D collision: oriented boxes and circles on the ground plane, each with a vertical extent [y0, y1].
 // Static colliders live in a spatial hash; dynamic bodies (vehicles, player) are tested by their owners.
 
-const CELL = 16;
+const CELL = 20;
 
 export function makeBox(x, z, hw, hd, rot = 0, y0 = 0, y1 = 3, tag = 'static') {
   const c = Math.cos(rot), s = Math.sin(rot);
@@ -23,19 +23,36 @@ function boxBounds(b) {
 }
 
 export class StaticWorld {
-  constructor() { this.cells = new Map(); this.all = []; this._stamp = 1; }
+  constructor() { this.cells = new Map(); this.groups = new Map(); this._stamp = 1; }
   key(ix, iz) { return ix * 100003 + iz; }
-  add(col) {
-    this.all.push(col);
+  add(col, group = '_') {
     const [x0, z0, x1, z1] = boxBounds(col);
+    col._cells = [];
     for (let ix = Math.floor(x0 / CELL); ix <= Math.floor(x1 / CELL); ix++)
       for (let iz = Math.floor(z0 / CELL); iz <= Math.floor(z1 / CELL); iz++) {
         const k = this.key(ix, iz);
         let arr = this.cells.get(k);
         if (!arr) { arr = []; this.cells.set(k, arr); }
-        arr.push(col);
+        arr.push(col); col._cells.push(k);
       }
+    let g = this.groups.get(group);
+    if (!g) { g = []; this.groups.set(group, g); }
+    g.push(col);
     return col;
+  }
+  addGroup(group, cols) { for (const c of cols) this.add(c, group); }
+  hasGroup(group) { return this.groups.has(group); }
+  removeGroup(group) {
+    const g = this.groups.get(group);
+    if (!g) return;
+    for (const col of g) for (const k of col._cells) {
+      const arr = this.cells.get(k);
+      if (!arr) continue;
+      const i = arr.indexOf(col);
+      if (i >= 0) arr.splice(i, 1);
+      if (!arr.length) this.cells.delete(k);
+    }
+    this.groups.delete(group);
   }
   query(x0, z0, x1, z1, out = []) {
     out.length = 0;
@@ -47,6 +64,41 @@ export class StaticWorld {
         for (const c of arr) if (c.stamp !== stamp) { c.stamp = stamp; out.push(c); }
       }
     return out;
+  }
+}
+
+// Walkable/drivable surfaces above the terrain: floors, stairs, ramps, bridge decks, parking levels.
+// A surface is an axis-aligned rectangle with height y0 at its start and y1 at its end along 'axis'
+// (axis 'x' or 'z'; equal heights = flat floor).
+export function makeSurface(x0, z0, x1, z1, y0, y1 = y0, axis = 'x') {
+  return { type: 'surface', x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1),
+    ya: y0, yb: y1, axis, fromMin: axis === 'x' ? x0 <= x1 : z0 <= z1, stamp: 0 };
+}
+export function surfaceY(s, x, z) {
+  if (s.ya === s.yb) return s.ya;
+  let t = s.axis === 'x' ? (x - s.x0) / (s.x1 - s.x0) : (z - s.z0) / (s.z1 - s.z0);
+  if (!s.fromMin) t = 1 - t;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return s.ya + (s.yb - s.ya) * t;
+}
+export class SurfaceWorld extends StaticWorld {
+  addSurface(s, group) {
+    // reuse the box hashing by giving the surface an equivalent bounding box
+    s.x = (s.x0 + s.x1) / 2; s.z = (s.z0 + s.z1) / 2; s.hw = (s.x1 - s.x0) / 2; s.hd = (s.z1 - s.z0) / 2; s.c = 1; s.s = 0;
+    s.type = 'box'; s.isSurface = true;
+    return this.add(s, group);
+  }
+  // highest surface under (x,z) that is not above yRef + step
+  heightAt(x, z, yRef, step, base) {
+    let best = base;
+    const arr = this.cells.get(this.key(Math.floor(x / CELL), Math.floor(z / CELL)));
+    if (!arr) return best;
+    for (const s of arr) {
+      if (x < s.x0 || x > s.x1 || z < s.z0 || z > s.z1) continue;
+      const h = surfaceY(s, x, z);
+      if (h > best && h <= yRef + step) best = h;
+    }
+    return best;
   }
 }
 

@@ -195,6 +195,13 @@ export class CharacterModel {
         target.armL = -1.05 + st; target.armR = -1.05 - st; target.elbowL = -0.55; target.elbowR = -0.55;
         target.legL = -1.25; target.legR = -1.25; target.kneeL = 1.1; target.kneeR = 1.1;
       } else { target.armL = -0.35; target.armR = -0.35; target.elbowL = -0.9; target.elbowR = -0.9; }
+    } else if (mode === 'swim') {
+      const ph2 = performance.now() * 0.004;
+      target.spine = 1.15; hipsY = 0.95;
+      target.armL = -2.6 + Math.sin(ph2) * 1.4; target.armR = -2.6 - Math.sin(ph2) * 1.4;
+      target.elbowL = -0.3; target.elbowR = -0.3; target.armSide = 0.3;
+      target.legL = Math.sin(ph2 * 2) * 0.3; target.legR = -Math.sin(ph2 * 2) * 0.3;
+      target.kneeL = 0.2; target.kneeR = 0.2;
     } else if (mode === 'ride') { // bicycle / motorcycle
       const pedal = s.pedal ? Math.sin(ph * 1.2) : 0;
       target.legL = -0.95 + pedal * 0.35; target.legR = -0.95 - pedal * 0.35;

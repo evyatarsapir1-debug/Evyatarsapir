@@ -2,7 +2,7 @@
 // first-person driver view, and wall avoidance so the camera never ends up inside a building.
 import * as THREE from 'three';
 import { segmentVsBox } from '../physics/collision.js';
-import { groundHeight } from '../world/layout.js';
+import { heightAt } from '../world/terrain.js';
 import { clamp, damp, dampAngle } from '../core/mathx.js';
 
 const _q = [];
@@ -82,7 +82,7 @@ export class CameraRig {
     let t = 1;
     this.statics.query(Math.min(T.x, ex) - 1, Math.min(T.z, ez) - 1, Math.max(T.x, ex) + 1, Math.max(T.z, ez) + 1, _q);
     for (const c of _q) {
-      if (c.tag === 'bound' || c.tag === 'sea' || c.tag === 'water') continue;
+      if (c.tag === 'water') continue;
       if (c.type === 'circle' && c.r < 0.5) continue; // ignore thin poles
       const h = segmentVsBox(T.x, T.y, T.z, ex, ey, ez, c, 0.25);
       if (h < t) t = h;
@@ -90,7 +90,7 @@ export class CameraRig {
     const want = Math.max(1.0, dist * t - 0.2);
     this.curDist = want < this.curDist ? want : damp(this.curDist, want, 4, dt);
     let px = T.x + dirX * this.curDist, py = T.y + dirY * this.curDist, pz = T.z + dirZ * this.curDist;
-    py = Math.max(py, groundHeight(px, pz) + 0.3);
+    py = Math.max(py, heightAt(px, pz, py) + 0.3);
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt * 2.5);
       const s = this.shake * 0.25;

@@ -55,8 +55,13 @@ export class Environment {
       this.sun.shadow.mapSize.set(size, size);
       if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
     }
-    const far = q === 'low' ? 300 : q === 'medium' ? 430 : 560;
-    this.scene.fog.far = far; this.scene.fog.near = far * 0.3;
+  }
+
+  // fog ends where the low-detail world ends, so the horizon fades into real geometry (no backdrop images)
+  setFogFar(far) {
+    this.scene.fog.far = far * 0.97;
+    this.scene.fog.near = far * 0.25;
+    this.sky.scale.setScalar((far + 300) / 1800);
   }
 
   update(focus) {

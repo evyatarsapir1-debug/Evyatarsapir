@@ -1,6 +1,8 @@
 // Procedural vehicle models. Each model faces +Z, origin on the ground at the vehicle center.
 // Returns references to animated parts: wheels (spin/steer), driver door (opens), rotors, damage panels.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GeoBuilder } from '../world/geoBuilder.js';
 
 const shared = {
   tire: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 }),
@@ -15,6 +17,8 @@ const shared = {
   red: new THREE.MeshStandardMaterial({ color: 0xff2020, emissive: 0x880000 }),
   blue: new THREE.MeshStandardMaterial({ color: 0x2050ff, emissive: 0x001088 }),
   white: new THREE.MeshStandardMaterial({ color: 0xffffff }),
+  wheel: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.35 }),
+  lod: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.35 }),
 };
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 
@@ -23,14 +27,60 @@ function m(geo, mat, parent, x, y, z, cast = true) {
   o.position.set(x, y, z); o.castShadow = cast; parent.add(o); return o;
 }
 
+const _rz = new THREE.Matrix4().makeRotationZ(Math.PI / 2);
+const wheelCache = new Map();
+function wheelGeo(r, w) {
+  const k = r.toFixed(2) + '_' + w.toFixed(2);
+  if (wheelCache.has(k)) return wheelCache.get(k);
+  const b = new GeoBuilder();
+  b.addGeometry(new THREE.CylinderGeometry(r, r, w, 16), _rz, 0x1a1a1a);
+  b.addGeometry(new THREE.CylinderGeometry(r * 0.6, r * 0.6, w + 0.02, 8), _rz, 0xbfc5ca);
+  const g = b.build();
+  wheelCache.set(k, g);
+  return g;
+}
 function wheel(parent, x, y, z, r, w, front) {
   const pivot = new THREE.Group(); pivot.position.set(x, y, z); parent.add(pivot);
   const spin = new THREE.Group(); pivot.add(spin);
-  const tire = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 16), shared.tire);
-  tire.rotation.z = Math.PI / 2; tire.castShadow = true; spin.add(tire);
-  const rim = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r * 0.6, w + 0.02, 8), shared.rim);
-  rim.rotation.z = Math.PI / 2; spin.add(rim);
+  const mesh = new THREE.Mesh(wheelGeo(r, w), shared.wheel);
+  mesh.castShadow = true; spin.add(mesh);
   return { pivot, spin, front };
+}
+
+// Merge the static meshes of the body by material (fewer draw calls) and build a one-mesh LOD for distance.
+function optimize(parts) {
+  const body = parts.body;
+  const keep = new Set([...Object.values(parts.panels), parts.sirenR, parts.sirenB].filter(Boolean));
+  const groups = new Map();
+  for (const o of [...body.children]) {
+    if (!o.isMesh || keep.has(o)) continue;
+    if (!groups.has(o.material)) groups.set(o.material, []);
+    groups.get(o.material).push(o);
+  }
+  for (const [mat, list] of groups) {
+    if (list.length < 2) continue;
+    const geos = list.map((o) => { o.updateMatrix(); return o.geometry.index ? o.geometry.clone().applyMatrix4(o.matrix) : o.geometry.clone().applyMatrix4(o.matrix); });
+    const merged = mergeGeometries(geos.map((g) => (g.index ? g : g)), false);
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.castShadow = list.some((o) => o.castShadow);
+    for (const o of list) { body.remove(o); o.geometry.dispose(); }
+    geos.forEach((g) => g.dispose());
+    body.add(mesh);
+    if (mat === shared.head) parts.lights = [mesh];
+  }
+  // LOD: everything in one vertex-colored mesh
+  const lb = new GeoBuilder();
+  parts.root.updateMatrixWorld(true);
+  parts.root.traverse((o) => {
+    if (!o.isMesh) return;
+    const c = o.material === shared.wheel ? 0x202020 : o.material.color ? o.material.color.getHex() : 0x888888;
+    lb.addGeometry(o.geometry, o.matrixWorld, c);
+  });
+  const lod = new THREE.Mesh(lb.build(), shared.lod);
+  lod.castShadow = true; lod.visible = false;
+  parts.root.add(lod);
+  parts.lod = lod;
 }
 
 export function buildVehicleModel(type, color) {
@@ -169,5 +219,6 @@ export function buildVehicleModel(type, color) {
     parts.wheelR = 0;
   }
   g.traverse((o) => { if (o.isMesh) o.receiveShadow = false; });
+  optimize(parts);
   return parts;
 }

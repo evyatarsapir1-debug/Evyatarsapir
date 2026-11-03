@@ -50,8 +50,6 @@ export class Traffic {
     this.rng = new RNG(4242);
     this.target = 22;
     this.spawnTimer = 0;
-    this.edgesDirected = [];
-    for (const [a, b] of graph.edges) { this.edgesDirected.push([a, b], [b, a]); }
   }
 
   setDensity(n) { this.target = n; }
@@ -64,7 +62,9 @@ export class Traffic {
 
   _spawn(px, pz, allVehicles) {
     for (let tries = 0; tries < 12; tries++) {
-      const [a, b] = this.rng.pick(this.edgesDirected);
+      const seg = this.graph.randomSegmentNear(px, pz, 90, 230, this.rng);
+      if (!seg) continue;
+      const [a, b] = seg;
       const path = linePath(a, b);
       const s = this.rng.float(5, path.len - 5);
       const [x, z] = pathPoint(path, s);
@@ -75,7 +75,9 @@ export class Traffic {
       const T = VEHICLE_TYPES[key];
       const v = new Vehicle(key, this.rng.pick(T.colors), x, z, Math.atan2(path.dx, path.dz));
       v.driver = 'ai';
-      v.ai = { path, s, next: this._chooseNext(a, b), wait: 0, cruise: Math.min(T.maxSpeed * 0.8, this.rng.float(10, 14)) * (key === 'bus' || key === 'truck' ? 0.75 : 1) };
+      const fast = !a.urban && !b.urban;
+      v.ai = { path, s, next: this._chooseNext(a, b), wait: 0, cruise: Math.min(T.maxSpeed * 0.8, this.rng.float(10, 14) * (fast ? 1.6 : 1)) * (key === 'bus' || key === 'truck' ? 0.75 : 1) };
+      v.ai.baseCruise = v.ai.cruise / (fast ? 1.6 : 1);
       v.speed = v.ai.cruise * 0.6;
       this.scene.add(v.object);
       this.cars.push(v);
@@ -185,6 +187,8 @@ export class Traffic {
         const a = ai.turnVia, b = ai.next;
         ai.path = linePath(a, b);
         ai.next = this._chooseNext(a, b);
+        const fast = !a.urban && !b.urban;
+        ai.cruise = Math.min(T.maxSpeed * 0.8, ai.baseCruise * (fast ? 1.6 : 1));
       }
       ai.s = over;
     }
@@ -200,6 +204,7 @@ export class Traffic {
     const steerAngle = wrapAngle(desired - v.heading);
     v.steer = clamp(-steerAngle * 2, -0.6, 0.6);
     v.vx = Math.sin(v.heading) * v.speed; v.vz = Math.cos(v.heading) * v.speed;
+    v.y = 0; v.pitch = 0;
     v.wheelSpin += (v.speed / (v.parts.wheelR || 0.35)) * dt;
     v.sync(dt);
   }

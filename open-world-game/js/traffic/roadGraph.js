@@ -1,60 +1,46 @@
-// Road network graph: intersections (nodes) and road segments (edges). Every road is connected.
-import { P, N, ROAD_HALF, LANE_OFFSET } from '../world/layout.js';
+// Endless road network graph, generated lazily from the world generator's road lattice.
+import { P, ROAD_HALF, LANE_OFFSET } from '../world/layout.js';
+import { nodeNbrs, hasLightsAt, isUrban } from '../world/worldGen.js';
 
 export class RoadGraph {
-  constructor() {
-    this.nodes = new Map(); // key -> {key, gx, gz, x, z, nbrs: [key]}
-    for (let gx = 0; gx <= N; gx++) for (let gz = 0; gz <= N; gz++) this.addNode(gx, gz);
-    for (let gx = 0; gx <= N; gx++) for (let gz = 0; gz <= N; gz++) {
-      if (gx < N) this.link(gx, gz, gx + 1, gz);
-      if (gz < N) this.link(gx, gz, gx, gz + 1);
-    }
-    // airport access road heading west from (0,5)
-    for (let gx = -1; gx >= -3; gx--) { this.addNode(gx, 5); this.link(gx + 1, 5, gx, 5); }
-    this.edges = [];
-    for (const n of this.nodes.values()) for (const k of n.nbrs) if (n.key < k) this.edges.push([n, this.nodes.get(k)]);
-  }
+  constructor() { this.nodes = new Map(); }
   static key(gx, gz) { return gx + ',' + gz; }
-  addNode(gx, gz) {
-    const key = RoadGraph.key(gx, gz);
-    if (!this.nodes.has(key)) this.nodes.set(key, { key, gx, gz, x: gx * P, z: gz * P, nbrs: [] });
+  node(gx, gz) {
+    const key = gx + ',' + gz;
+    let n = this.nodes.get(key);
+    if (n) return n;
+    const nb = nodeNbrs(gx, gz);
+    n = { key, gx, gz, x: gx * P, z: gz * P, nbrs: nb.map(([a, b]) => a + ',' + b), lights: hasLightsAt(gx, gz, nb.length),
+      urban: isUrban(gx - 1, gz - 1) || isUrban(gx, gz - 1) || isUrban(gx - 1, gz) || isUrban(gx, gz) };
+    this.nodes.set(key, n);
+    if (this.nodes.size > 20000) this.nodes.delete(this.nodes.keys().next().value);
+    return n;
   }
-  link(ax, az, bx, bz) {
-    const a = this.nodes.get(RoadGraph.key(ax, az)), b = this.nodes.get(RoadGraph.key(bx, bz));
-    a.nbrs.push(b.key); b.nbrs.push(a.key);
+  get(key) {
+    const n = this.nodes.get(key);
+    if (n) return n;
+    const [gx, gz] = key.split(',').map(Number);
+    return this.node(gx, gz);
   }
-  get(key) { return this.nodes.get(key); }
-  nearestNode(x, z) {
-    let best = null, bd = Infinity;
-    for (const n of this.nodes.values()) {
-      const d = (n.x - x) ** 2 + (n.z - z) ** 2;
-      if (d < bd) { bd = d; best = n; }
+  // random directed road segment whose lane lies within [rMin, rMax] of (x,z)
+  randomSegmentNear(x, z, rMin, rMax, rng) {
+    for (let t = 0; t < 30; t++) {
+      const a = rng.float(0, Math.PI * 2), d = rng.float(rMin, rMax);
+      const gx = Math.round((x + Math.cos(a) * d) / P), gz = Math.round((z + Math.sin(a) * d) / P);
+      const n = this.node(gx, gz);
+      if (!n.nbrs.length) continue;
+      const b = this.get(rng.pick(n.nbrs));
+      return rng.chance(0.5) ? [n, b] : [b, n];
     }
-    return best;
-  }
-  // Closest point on any lane: returns {from, to, t}
-  nearestEdge(x, z) {
-    let best = null, bd = Infinity;
-    for (const [a, b] of this.edges) {
-      const dx = b.x - a.x, dz = b.z - a.z, L2 = dx * dx + dz * dz;
-      const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / L2));
-      const px = a.x + dx * t, pz = a.z + dz * t;
-      const d = (px - x) ** 2 + (pz - z) ** 2;
-      if (d < bd) { bd = d; best = { a, b, t, dist: Math.sqrt(d) }; }
-    }
-    return best;
+    return null;
   }
 }
 
-// direction unit vector from node a to node b
 export function dirOf(a, b) {
   const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz);
   return [dx / L, dz / L];
 }
-// right-hand side vector of a travel direction (x east, z south)
 export function rightOf(d) { return [-d[1], d[0]]; }
-
-// Lane entry / exit points for a directed segment a->b (stops before the intersection boxes)
 export function laneStart(a, b, back = ROAD_HALF) {
   const d = dirOf(a, b), r = rightOf(d);
   return [a.x + d[0] * back + r[0] * LANE_OFFSET, a.z + d[1] * back + r[1] * LANE_OFFSET];
@@ -68,9 +54,7 @@ export function laneEnd(a, b, back = ROAD_HALF) {
 export function lightState(node, axis, t) {
   const off = ((node.gx * 7 + node.gz * 3) % 26 + 26) % 26;
   const c = (t + off) % 26;
-  if (axis === 'z') { // traffic moving along z (north/south)
-    if (c < 10) return 'g'; if (c < 12.5) return 'y'; return 'r';
-  }
+  if (axis === 'z') { if (c < 10) return 'g'; if (c < 12.5) return 'y'; return 'r'; }
   if (c < 13) return 'r'; if (c < 23) return 'g'; if (c < 25.5) return 'y'; return 'r';
 }
-export function hasLights(node) { return node.nbrs.length >= 3; }
+export function hasLights(node) { return node.lights; }

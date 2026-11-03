@@ -2,7 +2,7 @@
 // and a full enter/exit vehicle sequence (walk to door -> open -> sit -> close).
 import * as THREE from 'three';
 import { CharacterModel } from '../character/characterModel.js';
-import { groundHeight } from '../world/layout.js';
+import { heightAt, WATER_Y } from '../world/terrain.js';
 import { circleVs, verticalOverlap } from '../physics/collision.js';
 import { clamp, damp, dampAngle } from '../core/mathx.js';
 
@@ -32,8 +32,8 @@ export class Player {
     this.message = null;
   }
 
-  setPosition(x, z, facing = 0) {
-    this.x = x; this.z = z; this.y = groundHeight(x, z); this.facing = facing;
+  setPosition(x, z, facing = 0, y = null) {
+    this.x = x; this.z = z; this.y = heightAt(x, z, y ?? 1000); this.facing = facing;
     this.vx = this.vz = this.vy = 0;
     this._sync();
   }
@@ -63,17 +63,21 @@ export class Player {
     let dx = fx * my + rx * mx, dz = fz * my + rz * mx;
     const dl = Math.hypot(dx, dz);
     if (dl > 0) { dx /= dl; dz /= dl; }
-    const target = mag * (running ? RUN : WALK);
+    const target = mag * (this.swimming ? 1.6 : running ? RUN : WALK);
     const lam = this.grounded ? 10 : 2;
     this.vx = damp(this.vx, dx * target, lam, dt);
     this.vz = damp(this.vz, dz * target, lam, dt);
     if (mag > 0.1) this.facing = dampAngle(this.facing, Math.atan2(dx, dz), 12, dt);
 
-    if (this.grounded && input.wasPressed('jump')) { this.vy = JUMP_V; this.grounded = false; }
+    if (this.grounded && !this.swimming && input.wasPressed('jump')) { this.vy = JUMP_V; this.grounded = false; }
     this.vy -= GRAVITY * dt;
     this.x += this.vx * dt; this.z += this.vz * dt; this.y += this.vy * dt;
     this._collide(world);
-    const g = groundHeight(this.x, this.z);
+    let g = heightAt(this.x, this.z, this.y);
+    // deep water: swim at the surface
+    const floatY = WATER_Y - 1.25;
+    this.swimming = g < floatY - 0.05;
+    if (this.swimming) g = floatY;
     if (this.y <= g) { this.y = g; this.vy = 0; this.grounded = true; }
     else if (this.y - g > 0.05 && this.vy <= 0 && this.grounded && this.y - g < 0.6) { this.y = g; this.vy = 0; }
     else if (this.y > g + 0.05) this.grounded = false;
@@ -88,7 +92,7 @@ export class Player {
       this.prompt = { key: 'interact', text: 'שב על הספסל' };
       if (input.wasPressed('interact')) this._sitOn(this.nearBench);
     }
-    this.model.animate(dt, { speed: Math.hypot(this.vx, this.vz), grounded: this.grounded, vy: this.vy, mode: 'foot' });
+    this.model.animate(dt, { speed: Math.hypot(this.vx, this.vz), grounded: this.grounded, vy: this.vy, mode: this.swimming ? 'swim' : 'foot' });
     this._sync();
   }
 
@@ -96,9 +100,14 @@ export class Player {
     for (let iter = 0; iter < 2; iter++) {
       world.statics.query(this.x - 2, this.z - 2, this.x + 2, this.z + 2, _q);
       for (const c of _q) {
-        if (!verticalOverlap(this.y + 0.2, this.y + HEIGHT, c)) continue;
+        if (c.tag === 'slab') continue;
+        if (!verticalOverlap(this.y + 0.25, this.y + HEIGHT, c)) continue;
         const r = circleVs(this.x, this.z, RADIUS, c);
         if (r.hit) this._push(r);
+      }
+      if (world.peds) for (const o of world.peds) {
+        const dx = this.x - o.x, dz = this.z - o.z, d = Math.hypot(dx, dz), m = RADIUS + 0.3;
+        if (d < m && d > 1e-4) this._push({ nx: dx / d, nz: dz / d, depth: m - d });
       }
       for (const v of world.vehicles) {
         if (v === this.ignoreVehicle) continue;
@@ -124,7 +133,8 @@ export class Player {
     let best = null, bd = 2.8;
     for (const v of vehicles) {
       if (v.driver === 'ai' || v.driver === 'player') continue;
-      if (v.isHeli && v.y > groundHeight(v.x, v.z) + 0.5) continue;
+      if (v.isHeli && v.y > Math.max(heightAt(v.x, v.z, v.y + 0.3), v.roofY ?? -100) + 0.5) continue;
+      if (Math.abs(v.y - this.y) > 1.6) continue;
       const dp = v.doorPoint();
       const d = Math.min(Math.hypot(dp.x - this.x, dp.z - this.z), Math.hypot(v.x - this.x, v.z - this.z) - Math.max(v.T.W, v.T.L) / 2 + 0.6);
       if (d < bd) { bd = d; best = v; }
@@ -134,7 +144,7 @@ export class Player {
   _findBench(benches) {
     let best = null, bd = 1.8;
     for (const b of benches) {
-      if (Math.abs(b.x - this.x) > 3 || Math.abs(b.z - this.z) > 3) continue;
+      if (Math.abs(b.x - this.x) > 3 || Math.abs(b.z - this.z) > 3 || Math.abs((b.y ?? this.y) - this.y) > 1) continue;
       const d = Math.hypot(b.x - this.x, b.z - this.z);
       if (d < bd) { bd = d; best = b; }
     }
@@ -147,7 +157,7 @@ export class Player {
     const r = b.rot || 0;
     // the backrest is at local +z, so the sitter faces local -z
     const sx = b.x - Math.sin(r) * 0.08, sz = b.z - Math.cos(r) * 0.08;
-    this.seq = { t: 0, fromX: this.x, fromZ: this.z, fromF: this.facing, toX: sx, toZ: sz, toF: r + Math.PI };
+    this.seq = { t: 0, fromX: this.x, fromZ: this.z, fromF: this.facing, toX: sx, toZ: sz, toF: r + Math.PI, benchY: b.y };
     this.vx = this.vz = 0;
   }
   _sitting(dt, input) {
@@ -156,7 +166,7 @@ export class Player {
     this.x = s.fromX + (s.toX - s.fromX) * s.t;
     this.z = s.fromZ + (s.toZ - s.fromZ) * s.t;
     this.facing = dampAngle(this.facing, s.toF, 10, dt);
-    this.y = groundHeight(this.x, this.z) + 0.02;
+    this.y = (s.benchY ?? heightAt(this.x, this.z, this.y)) + 0.02;
     this.prompt = { key: 'interact', text: 'קום' };
     this.model.animate(dt, { speed: 0, grounded: true, mode: s.t > 0.4 ? 'sit' : 'foot' });
     if (s.t >= 1 && (input.wasPressed('interact') || input.wasPressed('jump') || Math.hypot(input.moveX, input.moveY) > 0.5)) {
@@ -194,7 +204,7 @@ export class Player {
         s.phase = v.isTwoWheel ? 'sit' : 'open'; s.t = 0;
         s.fromX = this.x; s.fromZ = this.z; s.fromY = this.y;
       }
-      this.y = groundHeight(this.x, this.z);
+      this.y = heightAt(this.x, this.z, this.y + 0.3);
     } else if (s.phase === 'open') {
       v.doorTarget = 1;
       this.facing = dampAngle(this.facing, v.heading + Math.PI / 2 * 0 - Math.PI / 2, 10, dt);
@@ -239,7 +249,7 @@ export class Player {
     v.update(dt, ctl, world.statics, world.vehicles);
     this.x = v.x; this.z = v.z; this.y = v.y;
     this.model.animate(dt, { speed: Math.abs(v.speed), mode: v.parts.seatMode, steer: v.steer / (v.T.steerMax || 1), pedal: v.T.kind === 'bike' && Math.abs(v.speed) > 0.3 });
-    const landed = !v.isHeli || v.y < groundHeight(v.x, v.z) + 0.4;
+    const landed = !v.isHeli || v.y < Math.max(heightAt(v.x, v.z, v.y + 0.3), v.roofY ?? -100) + 0.4;
     if (landed && Math.abs(v.speed) < 3) this.prompt = { key: 'vehicle', text: 'צא מהרכב' };
     if (input.wasPressed('vehicle')) {
       if (!landed) this.message = 'יש לנחות לפני היציאה מהמסוק';
@@ -267,8 +277,9 @@ export class Player {
   }
   _free(x, z, world, ignore) {
     world.statics.query(x - 1, z - 1, x + 1, z + 1, _q);
-    const y = groundHeight(x, z);
-    for (const c of _q) if (verticalOverlap(y + 0.2, y + HEIGHT, c) && circleVs(x, z, RADIUS, c).hit) return false;
+    const y = heightAt(x, z, this.vehicle ? this.vehicle.y + 0.6 : this.y);
+    if (y < WATER_Y - 1.2 && !(this.vehicle && this.vehicle.inWater)) return false;
+    for (const c of _q) if (c.tag !== 'slab' && verticalOverlap(y + 0.25, y + HEIGHT, c) && circleVs(x, z, RADIUS, c).hit) return false;
     for (const v of world.vehicles) if (v !== ignore && Math.abs(v.x - x) < 8 && Math.abs(v.z - z) < 8 && circleVs(x, z, RADIUS, v.collider).hit) return false;
     return true;
   }
@@ -295,7 +306,7 @@ export class Player {
         s.fromX = w.x; s.fromY = w.y; s.fromZ = w.z; this.facing = v.heading;
       }
       const k = Math.min(1, s.t / 0.5);
-      const gy = groundHeight(s.spot.x, s.spot.z);
+      const gy = Math.max(heightAt(s.spot.x, s.spot.z, s.fromY + 0.6), v.roofY ?? -100);
       this.x = s.fromX + (s.spot.x - s.fromX) * k;
       this.z = s.fromZ + (s.spot.z - s.fromZ) * k;
       this.y = s.fromY + (gy - s.fromY) * k;

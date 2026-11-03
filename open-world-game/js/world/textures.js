@@ -184,10 +184,10 @@ export function getHouseRoof() {
 }
 
 // Sign atlas: 4 columns x 8 rows, each 256x64
-export const SIGN_COLS = 4, SIGN_ROWS = 8;
+export const SIGN_COLS = 4, SIGN_ROWS = 12;
 export function getSignAtlas() {
   return cache.signs ||= (() => {
-    const [c, g] = canvas(1024, 512);
+    const [c, g] = canvas(1024, 768);
     const colors = ['#1f4e79', '#7b241c', '#145a32', '#4a235a', '#7e5109', '#1b2631', '#943126', '#0e6251'];
     ALL_SIGNS.forEach((name, i) => {
       const cx = (i % SIGN_COLS) * 256, cy = Math.floor(i / SIGN_COLS) * 64;
@@ -207,6 +207,23 @@ export function signUV(name) {
   return [u0, v1 - 1 / SIGN_ROWS, u0 + 1 / SIGN_COLS, v1];
 }
 
+export function getField() {
+  return cache.field ||= (() => {
+    const [c, g] = canvas(256, 256);
+    noise(g, 256, 256, '#8faa4a', 26, 8000, 2, 18);
+    for (let x = 0; x < 256; x += 16) { g.fillStyle = 'rgba(70,90,30,0.45)'; g.fillRect(x, 0, 6, 256); g.fillStyle = 'rgba(200,190,90,0.25)'; g.fillRect(x + 8, 0, 4, 256); }
+    return tex(c);
+  })();
+}
+export function getRock() {
+  return cache.rock ||= (() => {
+    const [c, g] = canvas(256, 256);
+    noise(g, 256, 256, '#8a8173', 40, 14000, 3, 19);
+    g.fillStyle = 'rgba(60,80,40,0.25)';
+    const r = new RNG(9); for (let i = 0; i < 300; i++) g.fillRect(r.float(0, 256), r.float(0, 256), r.float(4, 14), r.float(2, 6));
+    return tex(c);
+  })();
+}
 export function getWaterNormalish() {
   return cache.water ||= (() => {
     const [c, g] = canvas(256, 256);

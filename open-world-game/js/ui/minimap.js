@@ -1,83 +1,126 @@
-// Minimap (rotates with the camera) and full city map, both drawn from a pre-rendered top-down image.
-import { P, N, ROAD_HALF, BEACH, AIRPORT, RAIL, WORLD_BOUNDS } from '../world/layout.js';
+// Minimap (rotates with the camera) and a large city map. Both are drawn from the same generated world data:
+// each 100m cell is painted once into a small cached tile, so the maps work everywhere in the endless world.
+import { P, ROAD_HALF, CURB_H } from '../world/layout.js';
+import { cellData, cellKind, RIDGE } from '../world/worldGen.js';
 
-const S = 0.5; // pixels per meter in the base image
-const TYPE_COLORS = { D: '#b9b2a6', S: '#d9cdb5', C: '#cbbfa8', A: '#c4cfb6', H: '#b9d39a', I: '#a9a39a', P: '#7fbf63', G: '#d0c3a8', M: '#b0a89c', T: '#c9c0b0', B: '#e0d2b0' };
+const TS = 50; // tile pixels per 100m cell (0.5 px / m)
+const S = TS / P;
+const KIND_COLORS = { D: '#b9b2a6', S: '#d9cdb5', C: '#cbbfa8', A: '#c4cfb6', H: '#b9d39a', I: '#a9a39a', P: '#7fbf63', G: '#d0c3a8', M: '#b0a89c', T: '#c9c0b0', B: '#e0d2b0', L: '#cbbfa8', K: '#b8b4ac',
+  F: '#a8bf6a', W: '#5f8f45', O: '#8fb873', h: '#a8bf6a', X: '#a5ad95', Q: '#4f9dc9' };
 
 export class MiniMap {
-  constructor(city, graph, canvas, fullCanvas) {
+  constructor(canvas, fullCanvas) {
     this.canvas = canvas; this.ctx = canvas.getContext('2d');
     this.full = fullCanvas;
-    const W = WORLD_BOUNDS;
-    this.ox = W.minX - 20; this.oz = W.minZ - 20;
-    const w = Math.ceil((W.maxX - W.minX + 40) * S), h = Math.ceil((W.maxZ - W.minZ + 40) * S);
-    const img = document.createElement('canvas'); img.width = w; img.height = h;
-    const g = img.getContext('2d');
-    const X = (x) => (x - this.ox) * S, Z = (z) => (z - this.oz) * S;
-    g.fillStyle = '#8fb873'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#e8d6a6'; g.fillRect(X(BEACH.promenadeX1), 0, w, h);
-    g.fillStyle = '#4f9dc9'; g.fillRect(X(BEACH.sandX1), 0, w, h);
-    g.fillStyle = '#efe4d2'; g.fillRect(X(BEACH.promenadeX0), 0, (BEACH.promenadeX1 - BEACH.promenadeX0) * S, h);
-    g.fillStyle = '#b4b4b0'; g.fillRect(X(AIRPORT.x0), Z(AIRPORT.z0 + 140), (-20 - AIRPORT.x0) * S, (AIRPORT.z1 - AIRPORT.z0 - 140) * S);
-    g.fillStyle = '#55585c'; g.fillRect(X(AIRPORT.x0 + 20), Z(350), (-120 - AIRPORT.x0 - 20) * S, 50 * S);
-    g.fillStyle = '#8a8178'; g.fillRect(0, Z(RAIL.z - 3.5), w, 7 * S);
-    for (const blk of city.blocks) {
-      g.fillStyle = TYPE_COLORS[blk.type] || '#ccc';
-      g.fillRect(X(blk.ox + ROAD_HALF), Z(blk.oz + ROAD_HALF), (P - 2 * ROAD_HALF) * S, (P - 2 * ROAD_HALF) * S);
+    this.tiles = new Map();
+  }
+
+  tile(ix, iz) {
+    const key = ix + ',' + iz;
+    let t = this.tiles.get(key);
+    if (t) return t;
+    const c = document.createElement('canvas'); c.width = TS; c.height = TS;
+    const g = c.getContext('2d');
+    const cd = cellData(ix, iz);
+    const X = (x) => (x - cd.ox) * S, Z = (z) => (z - cd.oz) * S;
+    g.fillStyle = KIND_COLORS[cd.kind] || '#8fb873'; g.fillRect(0, 0, TS, TS);
+    if (cd.beach) {
+      const west = cd.beach.west, xs = west ? [1007, 1022, 1070] : [1993, 1978, 1930];
+      g.fillStyle = '#efe4d2'; g.fillRect(X(Math.min(xs[0], xs[1])), 0, 15 * S, TS);
+      g.fillStyle = '#e8d6a6'; g.fillRect(X(Math.min(xs[1], xs[2])), 0, 48 * S, TS);
+      g.fillStyle = '#4f9dc9'; g.fillRect(west ? X(1070) : 0, 0, 30 * S, TS);
+      if (west) { g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, 7 * S, TS); }
+    }
+    for (const a of cd.apron) { g.fillStyle = a.name === 'runway' ? '#55585c' : '#b4b4b0'; g.fillRect(X(a.rect[0]), Z(a.rect[1]), (a.rect[2] - a.rect[0]) * S, (a.rect[3] - a.rect[1]) * S); }
+    if (cd.rail) { g.fillStyle = '#8a8178'; g.fillRect(X(cd.rail.x0), Z(1042.5), (cd.rail.x1 - cd.rail.x0) * S, 7 * S); }
+    if (cd.ridge) {
+      g.fillStyle = '#9b8f78';
+      g.fillRect(X(cd.ridge.x0), Z(Math.max(cd.ridge.z0, RIDGE.z0)), (cd.ridge.x1 - cd.ridge.x0) * S, (Math.min(cd.ridge.z1, RIDGE.z1) - Math.max(cd.ridge.z0, RIDGE.z0)) * S);
     }
     g.fillStyle = '#8d8478';
-    const drawB = (b) => g.fillRect(X(b.x - b.w / 2), Z(b.z - b.d / 2), b.w * S, b.d * S);
-    for (const blk of city.blocks) blk.buildings.forEach(drawB);
-    city.extra.buildings.forEach(drawB);
-    g.strokeStyle = '#ffffff'; g.lineWidth = ROAD_HALF * 2 * S; g.lineCap = 'square';
-    for (const [a, b] of graph.edges) { g.beginPath(); g.moveTo(X(a.x), Z(a.z)); g.lineTo(X(b.x), Z(b.z)); g.stroke(); }
-    this.img = img; this.X = X; this.Z = Z;
+    for (const b of cd.buildings) g.fillRect(X(b.x - b.w / 2), Z(b.z - b.d / 2), b.w * S, b.d * S);
+    if (cd.garage) { const q = cd.garage; g.fillStyle = '#9c978d'; g.fillRect(X(q.x - q.w / 2), Z(q.z - q.d / 2), q.w * S, q.d * S); }
+    g.fillStyle = cd.bridge ? '#d8d2c4' : '#ffffff';
+    const w = ROAD_HALF * 2 * S;
+    if (cd.roadH) g.fillRect(0, -w / 2, TS, w);
+    if (cd.roadV) g.fillRect(-w / 2, 0, w, TS);
+    if (cd.node) g.fillRect(-w / 2, -w / 2, w, w);
+    this.tiles.set(key, c);
+    if (this.tiles.size > 3000) this.tiles.delete(this.tiles.keys().next().value);
+    return c;
+  }
+
+  // draw cells covering a world rect onto ctx (already transformed so that 1 unit = 1 base pixel, origin at world (ox, oz))
+  _drawArea(g, x0, z0, x1, z1, ox, oz) {
+    for (let ix = Math.floor(x0 / P); ix <= Math.floor(x1 / P); ix++)
+      for (let iz = Math.floor(z0 / P); iz <= Math.floor(z1 / P); iz++) {
+        // roads of a cell's south/east edges are drawn by neighbours; draw in an order that keeps them on top
+        g.drawImage(this.tile(ix, iz), (ix * P - ox) * S, (iz * P - oz) * S);
+      }
+    // second pass: re-draw the road strips that overlap neighbouring tiles
+    g.fillStyle = '#ffffff';
+    const w = ROAD_HALF * 2 * S;
+    for (let ix = Math.floor(x0 / P); ix <= Math.floor(x1 / P); ix++)
+      for (let iz = Math.floor(z0 / P); iz <= Math.floor(z1 / P); iz++) {
+        const cd = cellData(ix, iz);
+        const bx = (ix * P - ox) * S, bz = (iz * P - oz) * S;
+        g.fillStyle = cd.bridge ? '#d8d2c4' : '#ffffff';
+        if (cd.roadH) g.fillRect(bx, bz - w / 2, TS, w);
+        if (cd.roadV) g.fillRect(bx - w / 2, bz, w, TS);
+        if (cd.node) g.fillRect(bx - w / 2, bz - w / 2, w, w);
+      }
   }
 
   draw(px, pz, facing, camYaw, markers = []) {
     const c = this.canvas, g = this.ctx, w = c.width, h = c.height;
-    const zoom = 1.6; // canvas px per base px
+    const zoom = 1.6;
+    const R = (w / 2) / zoom / S * 1.45; // world radius visible (corners included)
     g.save();
     g.clearRect(0, 0, w, h);
     g.beginPath(); g.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2); g.clip();
-    g.fillStyle = '#4f9dc9'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#8fb873'; g.fillRect(0, 0, w, h);
     g.translate(w / 2, h / 2);
     g.rotate(Math.PI + camYaw);
     g.scale(zoom, zoom);
-    g.drawImage(this.img, -this.X(px), -this.Z(pz));
+    this._drawArea(g, px - R, pz - R, px + R, pz + R, px, pz);
     for (const m of markers) {
-      g.fillStyle = m.color; g.beginPath(); g.arc(this.X(m.x) - this.X(px), this.Z(m.z) - this.Z(pz), 3 / zoom * 2, 0, Math.PI * 2); g.fill();
+      g.fillStyle = m.color; g.beginPath(); g.arc((m.x - px) * S, (m.z - pz) * S, 3, 0, Math.PI * 2); g.fill();
     }
-    // player arrow
     g.rotate(-facing + Math.PI);
-    g.fillStyle = '#ff3b30'; g.strokeStyle = '#fff'; g.lineWidth = 1 / zoom * 1.5;
-    g.beginPath(); g.moveTo(0, -6 / zoom * 1.5); g.lineTo(4 / zoom * 1.5, 5 / zoom * 1.5); g.lineTo(0, 2.5 / zoom * 1.5); g.lineTo(-4 / zoom * 1.5, 5 / zoom * 1.5); g.closePath(); g.fill(); g.stroke();
+    const k = 1.5 / zoom;
+    g.fillStyle = '#ff3b30'; g.strokeStyle = '#fff'; g.lineWidth = k;
+    g.beginPath(); g.moveTo(0, -6 * k); g.lineTo(4 * k, 5 * k); g.lineTo(0, 2.5 * k); g.lineTo(-4 * k, 5 * k); g.closePath(); g.fill(); g.stroke();
     g.restore();
-    // north indicator
     g.save(); g.translate(w / 2, h / 2); g.rotate(Math.PI + camYaw);
     g.fillStyle = '#fff'; g.font = 'bold 13px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.translate(0, -(h / 2 - 12)); g.rotate(-(Math.PI + camYaw)); g.fillText('צ', 0, 0);
     g.restore();
   }
 
-  drawFull(px, pz, facing) {
+  drawFull(px, pz, facing, radius = 1600) {
     const c = this.full, g = c.getContext('2d');
     const rect = c.getBoundingClientRect();
     c.width = rect.width * devicePixelRatio; c.height = rect.height * devicePixelRatio;
-    const s = Math.min(c.width / this.img.width, c.height / this.img.height);
-    const ox = (c.width - this.img.width * s) / 2, oy = (c.height - this.img.height * s) / 2;
-    g.fillStyle = '#4f9dc9'; g.fillRect(0, 0, c.width, c.height);
-    g.drawImage(this.img, ox, oy, this.img.width * s, this.img.height * s);
-    const x = ox + this.X(px) * s, y = oy + this.Z(pz) * s;
+    const aspect = c.width / c.height;
+    const rz = radius, rx = radius * aspect;
+    const scale = c.height / (2 * rz * S);
+    g.fillStyle = '#8fb873'; g.fillRect(0, 0, c.width, c.height);
+    g.save();
+    g.scale(scale, scale);
+    this._drawArea(g, px - rx, pz - rz, px + rx, pz + rz, px - rx, pz - rz);
+    g.restore();
+    const x = c.width / 2, y = c.height / 2;
     g.save(); g.translate(x, y); g.rotate(-facing + Math.PI);
     g.fillStyle = '#ff3b30'; g.strokeStyle = '#fff'; g.lineWidth = 2 * devicePixelRatio;
     const k = 7 * devicePixelRatio;
     g.beginPath(); g.moveTo(0, -k * 1.4); g.lineTo(k, k); g.lineTo(0, k * 0.4); g.lineTo(-k, k); g.closePath(); g.fill(); g.stroke();
     g.restore();
-    // labels
-    g.fillStyle = '#1b1b1b'; g.font = `bold ${12 * devicePixelRatio}px sans-serif`; g.textAlign = 'center';
-    const label = (t, wx, wz) => g.fillText(t, ox + this.X(wx) * s, oy + this.Z(wz) * s);
-    label('מרכז העיר', 500, 380); label('שכונת הגפנים', 150, 60); label('אזור התעשייה', 150, 860);
-    label('נמל התעופה', -350, 470); label('חוף אזורה', 1060, 500); label('התחנה המרכזית', 500, 1030);
+    g.fillStyle = '#1b1b1b'; g.font = `bold ${13 * devicePixelRatio}px sans-serif`; g.textAlign = 'center';
+    const label = (t, wx, wz) => {
+      const sx = (wx - (px - rx)) * S * scale, sy = (wz - (pz - rz)) * S * scale;
+      if (sx > 0 && sy > 0 && sx < c.width && sy < c.height) { g.strokeStyle = '#fff'; g.lineWidth = 3; g.strokeText(t, sx, sy); g.fillText(t, sx, sy); }
+    };
+    label('אזורה סיטי', 500, 470); label('נמל התעופה', -350, 470); label('מפרץ אזורה', 1500, 250);
+    label('מרינה מזרח', 2500, 500); label('גבעת הרימון', 500, 1500); label('רכס הנשרים', 500, -700);
   }
 }

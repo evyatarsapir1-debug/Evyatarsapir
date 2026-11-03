@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { VEHICLE_TYPES } from './vehicleTypes.js';
 import { buildVehicleModel } from './vehicleModels.js';
 import { makeBox, updateBox, obbVs, verticalOverlap } from '../physics/collision.js';
-import { groundHeight } from '../world/layout.js';
+import { heightAt, WATER_Y } from '../world/terrain.js';
 import { clamp, damp } from '../core/mathx.js';
 
 let nextId = 1;
@@ -12,7 +12,7 @@ const tmpColor = new THREE.Color();
 const DAMAGE_TINT = new THREE.Color(0x5a4a3a);
 
 export class Vehicle {
-  constructor(typeKey, color, x, z, heading) {
+  constructor(typeKey, color, x, z, heading, y = null) {
     this.id = nextId++;
     this.typeKey = typeKey;
     this.T = VEHICLE_TYPES[typeKey];
@@ -20,7 +20,7 @@ export class Vehicle {
     this.parts = buildVehicleModel(this.T, this.color);
     this.object = this.parts.root;
     this.object.userData.vehicle = this;
-    this.x = x; this.z = z; this.y = groundHeight(x, z); this.heading = heading;
+    this.x = x; this.z = z; this.y = y ?? heightAt(x, z); this.heading = heading;
     this.vx = 0; this.vz = 0; this.vy = 0;
     this.speed = 0;         // forward speed (m/s)
     this.steer = 0;
@@ -63,7 +63,7 @@ export class Vehicle {
     const rx = -fz, rz = fx; // right vector of the vehicle (facing +z, right is -x)
     let vf = this.vx * fx + this.vz * fz;
     let vs = this.vx * rx + this.vz * rz;
-    const thr = ctl.throttle || 0;
+    const thr = this.inWater ? 0 : ctl.throttle || 0;
     const steerIn = ctl.steer || 0;
     const sf = 1 / (1 + Math.abs(vf) * (this.isTwoWheel ? 0.03 : 0.05));
     this.steer = damp(this.steer, steerIn * T.steerMax * sf, 8, dt);
@@ -97,9 +97,17 @@ export class Vehicle {
 
     // ground following: average height under front & rear axle
     const hb = T.wheelbase / 2;
-    const gF = groundHeight(this.x + nfx * hb, this.z + nfz * hb), gR = groundHeight(this.x - nfx * hb, this.z - nfz * hb);
-    const gy = Math.max(gF, gR, groundHeight(this.x, this.z));
-    this.y = damp(this.y, gy, 18, dt);
+    const yr = this.y + 0.25;
+    const gF = heightAt(this.x + nfx * hb, this.z + nfz * hb, yr), gR = heightAt(this.x - nfx * hb, this.z - nfz * hb, yr);
+    let gy = Math.max(gF, gR, heightAt(this.x, this.z, yr));
+    // deep water: the vehicle floats low and the engine floods
+    this.inWater = gy < WATER_Y - 0.5;
+    if (this.inWater) {
+      gy = WATER_Y - 0.8;
+      this.vx *= Math.exp(-2.5 * dt); this.vz *= Math.exp(-2.5 * dt);
+    }
+    if (gy < this.y - 0.05) { this.vy -= 18 * dt; this.y = Math.max(gy, this.y + this.vy * dt); }
+    else { this.vy = 0; this.y = damp(this.y, gy, 18, dt); }
     this.pitch = damp(this.pitch, Math.atan2(gR - gF, T.wheelbase), 10, dt);
     this.roll = damp(this.roll, this.isTwoWheel ? clamp(-yaw * Math.abs(vf) * 0.06, -0.6, 0.6) : clamp(yaw * vf * 0.006, -0.06, 0.06), 6, dt);
 
@@ -112,7 +120,7 @@ export class Vehicle {
     const T = this.T;
     const engine = this.driver ? 1 : 0;
     this.rotorSpeed = damp(this.rotorSpeed, engine, 0.8, dt);
-    const ground = groundHeight(this.x, this.z);
+    const ground = Math.max(heightAt(this.x, this.z, this.y + 0.3), this.roofY || -100);
     const powered = this.rotorSpeed > 0.85;
     const lift = ctl.lift || 0;
     let targetVy = powered ? lift * 7 : -4;
@@ -151,10 +159,18 @@ export class Vehicle {
       const R = Math.max(this.T.L, this.T.W) / 2 + 1;
       statics.query(this.x - R, this.z - R, this.x + R, this.z + R, _q);
       let any = false;
+      this.roofY = -100;
       for (const s of _q) {
+        if (s.tag === 'slab') continue;
         if (!verticalOverlap(c.y0, c.y1, s)) continue;
         const r = obbVs(c, s);
         if (!r.hit) continue;
+        // helicopters can settle on top of buildings and rocks
+        if (this.isHeli && this.y > s.y1 - 1.6 && s.y1 < 400) {
+          this.roofY = Math.max(this.roofY, s.y1);
+          if (this.y < s.y1) { this.y = s.y1; this.vy = Math.max(0, this.vy); }
+          continue;
+        }
         any = true;
         this._resolve(r.nx, r.nz, r.depth, 1);
       }
@@ -220,6 +236,15 @@ export class Vehicle {
     for (const l of this.parts.lights) l.visible = true;
     const P = this.parts.panels;
     for (const k of ['front', 'rear']) if (P[k] && P[k].userData.z0 !== undefined) { P[k].position.z = P[k].userData.z0; P[k].rotation.y = 0; }
+  }
+
+  // distance level of detail: one merged mesh far away, full animated rig up close
+  setFar(far) {
+    if (this._far === far) return;
+    this._far = far;
+    this.parts.body.visible = !far;
+    for (const w of this.parts.wheels) w.pivot.visible = !far;
+    this.parts.lod.visible = far;
   }
 
   setColor(hex) { this.color = hex; this.parts.baseColor.set(hex); this.parts.paint.color.set(hex); }

@@ -1,0 +1,459 @@
+// Infinite, deterministic world generator.
+// The world is an endless grid of 100m cells grouped into 1km regions:
+//   region (0,0)  = Azura City (hand-designed map)      region (1,*) = the bay (beaches, water, bridges)
+//   region (-1,0) = airport                              region (0,-1) = countryside with a rock ridge + tunnels
+//   every other region = a generated town or open countryside.
+// Roads form one continuous lattice: towns have a road every 100m, the countryside has arterial roads every 500m,
+// arterials cross the bay on bridges and the ridge through tunnels — no road ever ends at the edge of the map.
+import { RNG, hash2 } from '../core/rng.js';
+import { P, ROAD_HALF, PARK_OFFSET, CURB_H, generateBlock, blockType, markInteriors, faceVector, DISTRICT_NAMES, RAIL } from './layout.js';
+import { makeBox, makeCircle, makeSurface } from '../physics/collision.js';
+import { interiorSpec, garageSpec } from './interiors.js';
+
+export const WATER_Y = -1.0;
+export const RIDGE = { x0: -60, x1: 1060, z0: -760, z1: -640, h: 42 };
+export const TUNNEL_H = 8, TUNNEL_HALF = 9.5;
+const URBAN = new Set('DSCAHPGMTBLKI'.split(''));
+const TOWN_NAMES = ['נווה ים', 'כפר אלונים', 'רמת השקד', 'עין הדקל', 'קריית הגפן', 'נאות הברוש', 'גבעת הכלנית', 'כרם התאנה'];
+const COUNTRY_NAMES = ['עמק השקדים', 'שדות הזהב', 'יער האלונים', 'מישור הרוח', 'גבעות הכלנית', 'נחל הצפצפות'];
+const mod = (a, n) => ((a % n) + n) % n;
+
+// --------------------------------------------------------------------------- regions & cell kinds
+const regionCache = new Map();
+export function regionInfo(rx, rz) {
+  const key = rx + ',' + rz;
+  let r = regionCache.get(key);
+  if (r) return r;
+  const rng = new RNG(hash2(rx, rz, 21));
+  let type;
+  if (rx === 0 && rz === 0) type = 'azura';
+  else if (rx === 1) type = 'bay';
+  else if (rx === -1 && rz === 0) type = 'airport';
+  else if ((rx === 0 || rx === -1) && rz === -1) type = 'country';
+  else if ((rx === 0 && rz === 1) || (rx === 2 && rz === 0)) type = 'town';
+  else type = rng.float() < 0.45 ? 'town' : 'country';
+  r = { rx, rz, type, rng };
+  if (type === 'town') {
+    r.cx = rx * 10 + 5 + rng.float(-0.6, 0.6);
+    r.cz = rz * 10 + 5 + rng.float(-0.6, 0.6);
+    r.R = rng.float(2.3, 3.5);
+    r.name = rx === 2 && rz === 0 ? 'מרינה מזרח' : rx === 0 && rz === 1 ? 'גבעת הרימון' : TOWN_NAMES[hash2(rx, rz, 5) % TOWN_NAMES.length];
+    r.mall = [Math.floor(r.cx) + 1, Math.floor(r.cz)];
+    r.garage = [Math.floor(r.cx) - 1, Math.floor(r.cz)];
+  }
+  r.countryName = COUNTRY_NAMES[hash2(rx, rz, 6) % COUNTRY_NAMES.length];
+  regionCache.set(key, r);
+  return r;
+}
+
+const kindCache = new Map();
+export function cellKind(ix, iz) {
+  const key = ix * 1000003 + iz;
+  let k = kindCache.get(key);
+  if (k) return k;
+  const rx = Math.floor(ix / 10), rz = Math.floor(iz / 10), lx = mod(ix, 10), lz = mod(iz, 10);
+  const reg = regionInfo(rx, rz);
+  const h = hash2(ix, iz, 31) % 100;
+  const country = () => (h < 38 ? 'F' : h < 62 ? 'W' : h < 90 ? 'O' : 'h');
+  switch (reg.type) {
+    case 'azura': k = blockType(ix, iz); break;
+    case 'bay': k = lx === 0 ? 'Y' : lx === 9 ? 'Z' : 'Q'; break;
+    case 'airport': k = 'X'; break;
+    case 'town': {
+      const d = Math.hypot(ix + 0.5 - reg.cx, iz + 0.5 - reg.cz);
+      if (d > reg.R || lx < 1 || lx > 8 || lz < 1 || lz > 8) { k = country(); break; }
+      if (ix === reg.mall[0] && iz === reg.mall[1]) { k = 'L'; break; }
+      if (ix === reg.garage[0] && iz === reg.garage[1]) { k = 'K'; break; }
+      if (d < 1.2) k = h < 60 ? 'C' : h < 80 ? 'A' : 'S';
+      else if (d < 2.2) k = h < 35 ? 'C' : h < 65 ? 'A' : h < 78 ? 'P' : h < 88 ? 'G' : 'M';
+      else k = h < 55 ? 'H' : h < 80 ? 'A' : h < 90 ? 'P' : 'I';
+      break;
+    }
+    default: k = country();
+  }
+  kindCache.set(key, k);
+  return k;
+}
+export function isUrban(ix, iz) { return URBAN.has(cellKind(ix, iz)); }
+const isWaterCell = (ix, iz) => cellKind(ix, iz) === 'Q';
+
+// --------------------------------------------------------------------------- road lattice
+// segH(gx,gz): road along z = gz*100 from x = gx*100 to (gx+1)*100
+export function segH(gx, gz) {
+  if (isUrban(gx, gz - 1) || isUrban(gx, gz)) return true;
+  if (mod(gz, 5) === 0) {
+    // arterial; skip through the ridge (there are tunnels on the vertical arterials instead)
+    const z = gz * P;
+    if (z > RIDGE.z0 - 10 && z < RIDGE.z1 + 10 && gx * P + P > RIDGE.x0 && gx * P < RIDGE.x1) return false;
+    return true;
+  }
+  return false;
+}
+// segV(gx,gz): road along x = gx*100 from z = gz*100 to (gz+1)*100
+export function segV(gx, gz) {
+  if (isWaterCell(gx - 1, gz) && isWaterCell(gx, gz)) return false;
+  if (isWaterCell(gx - 1, gz) || isWaterCell(gx, gz)) return false; // no roads along the water's edge inside the bay
+  if (isUrban(gx - 1, gz) || isUrban(gx, gz)) return true;
+  if (mod(gx, 5) === 0) {
+    if (gx === -5 && gz >= 0 && gz <= 9) return false; // runway area of the airport
+    return true;
+  }
+  return false;
+}
+export function nodeNbrs(gx, gz) {
+  const n = [];
+  if (segH(gx, gz)) n.push([gx + 1, gz]);
+  if (segH(gx - 1, gz)) n.push([gx - 1, gz]);
+  if (segV(gx, gz)) n.push([gx, gz + 1]);
+  if (segV(gx, gz - 1)) n.push([gx, gz - 1]);
+  return n;
+}
+export function hasLightsAt(gx, gz, nbrCount) {
+  const n = nbrCount ?? nodeNbrs(gx, gz).length;
+  if (n < 3) return false;
+  if (n === 4) return true;
+  return isUrban(gx - 1, gz - 1) || isUrban(gx, gz - 1) || isUrban(gx - 1, gz) || isUrban(gx, gz);
+}
+export function isBridgeLine(gx, gz) { return mod(gz, 5) === 0 && gx >= 10 && gx <= 19; }
+
+// --------------------------------------------------------------------------- terrain height
+function bayHeight(x) {
+  const xx = Math.min(x, 3000 - x);  // the east shore mirrors the west shore
+  if (xx < 1007) return 0;
+  if (xx <= 1022) return CURB_H;
+  if (xx <= 1040) return 0.02;
+  if (xx <= 1090) return 0.02 - 1.52 * (xx - 1040) / 50;
+  if (xx <= 1110) return -1.5 - 2.5 * (xx - 1090) / 20;
+  return -4;
+}
+export function baseHeight(x, z) {
+  if (x >= 1000 && x < 2000) {
+    const xx = Math.min(x, 3000 - x);
+    if (xx >= 1007 && xx <= 1022) {
+      const lz = mod(z, 500);
+      if (lz < ROAD_HALF || lz > 500 - ROAD_HALF) return 0; // road crossing the promenade
+    }
+    return bayHeight(x);
+  }
+  const ix = Math.floor(x / P), iz = Math.floor(z / P);
+  if (isUrban(ix, iz)) {
+    const lx = x - ix * P, lz = z - iz * P;
+    if (lx > ROAD_HALF && lx < P - ROAD_HALF && lz > ROAD_HALF && lz < P - ROAD_HALF) return CURB_H;
+  }
+  return 0;
+}
+
+// --------------------------------------------------------------------------- districts
+export function districtAt(x, z) {
+  const ix = Math.floor(x / P), iz = Math.floor(z / P);
+  const rx = Math.floor(ix / 10), rz = Math.floor(iz / 10);
+  const reg = regionInfo(rx, rz);
+  if (z > RIDGE.z0 - 40 && z < RIDGE.z1 + 40 && x > RIDGE.x0 && x < RIDGE.x1) return Math.abs(x - Math.round(x / 500) * 500) < 12 ? 'מנהרת הרכס' : 'רכס הנשרים';
+  if (reg.type === 'bay') {
+    const xx = Math.min(x, 3000 - x);
+    if (xx < 1095) return x < 1500 ? 'חוף אזורה' : 'חוף מרינה';
+    return mod(z, 500) < 12 || mod(z, 500) > 488 ? 'גשר המפרץ' : 'מפרץ אזורה';
+  }
+  if (reg.type === 'airport') return 'נמל התעופה אזורה';
+  if (reg.type === 'azura') {
+    if (z > 1003 && x > 380 && x < 620) return 'התחנה המרכזית';
+    return DISTRICT_NAMES[cellKind(ix, iz)] || 'אזורה סיטי';
+  }
+  if (iz === 10 && x > 380 && x < 620) return 'התחנה המרכזית';
+  if (reg.type === 'town' && isUrban(ix, iz)) return reg.name;
+  return reg.countryName;
+}
+
+// --------------------------------------------------------------------------- airport content
+const AIRPORT_ITEMS = (() => {
+  const b = [
+    { x: -300, z: 552, w: 120, d: 40, h: 18, style: 'glass', color: 0xd0dbe3, face: 'n', sign: 'נמל התעופה אזורה', airport: true },
+    { x: -470, z: 600, w: 70, d: 50, h: 20, style: 'industrial', color: 0xb8c0c5, face: 'n', hangar: true },
+  ];
+  const p = [
+    { kind: 'tower', x: -400, z: 528, h: 34, y: 0 },
+    { kind: 'helipad', x: -200, z: 560 },
+    { kind: 'plane', x: -560, z: 548, rot: Math.PI / 2, y: 0 },
+    { kind: 'plane', x: -620, z: 600, rot: Math.PI / 2 + 0.3, y: 0 },
+  ];
+  const parking = [];
+  for (let k = 0; k < 14; k++) parking.push({ x: -352 + k * 3.4, z: 517, rot: 0 });
+  return { b, p, parking };
+})();
+export const AIRPORT_AREAS = { apron: [-660, 440, -20, 720], runway: [-640, 350, -120, 400] };
+
+const FEATURED = [
+  { x: -200, z: 560, rot: 0, type: 'heli' },
+  { x: -230, z: 602, rot: Math.PI / 2, type: 'heli' },
+  { x: 560, z: 994.4, rot: -Math.PI / 2, type: 'bus' },
+  { x: 150, z: 994.4, rot: -Math.PI / 2, type: 'truck' },
+  { x: 1012, z: 300, rot: 0, type: 'bicycle' }, { x: 1012, z: 302, rot: 0, type: 'bicycle' },
+  { x: 1012, z: 640, rot: 0, type: 'moto' },
+  { x: 505.6, z: 450, rot: Math.PI, type: 'sports' },
+  { x: 505.6, z: 538, rot: Math.PI, type: 'sedan' },
+  { x: 494.4, z: 560, rot: 0, type: 'luxury' },
+];
+
+// --------------------------------------------------------------------------- cell data
+const dataCache = new Map();
+export function cellData(ix, iz) {
+  const key = ix + ',' + iz;
+  let d = dataCache.get(key);
+  if (d) { dataCache.delete(key); dataCache.set(key, d); return d; }
+  d = generateCell(ix, iz);
+  dataCache.set(key, d);
+  if (dataCache.size > 2500) dataCache.delete(dataCache.keys().next().value);
+  return d;
+}
+export function peekCell(ix, iz) { return dataCache.get(ix + ',' + iz); }
+
+function inRect(x, z, r, pad = 0) { return x > r[0] - pad && x < r[2] + pad && z > r[1] - pad && z < r[3] + pad; }
+
+function generateCell(ix, iz) {
+  const kind = cellKind(ix, iz);
+  const urban = URBAN.has(kind);
+  const ox = ix * P, oz = iz * P;
+  const rng = new RNG(hash2(ix, iz, 77));
+  let blk;
+  if (urban) blk = generateBlock(ix, iz, kind);
+  else blk = { bx: ix, bz: iz, type: kind, ox, oz, buildings: [], props: [], parking: [], ground: 'grass', paths: [] };
+  const d = {
+    key: ix + ',' + iz, ix, iz, ox, oz, kind, urban, region: regionInfo(Math.floor(ix / 10), Math.floor(iz / 10)),
+    buildings: blk.buildings, props: blk.props, parking: blk.parking, paths: blk.paths, ground: blk.ground, garage: blk.garage || null,
+    keepOut: [], water: null, beach: null, bridge: null, ridge: null, rail: null, apron: [], lamps: [], tl: [],
+    colliders: [], surfaces: [], peds: urban,
+  };
+  const B = d.buildings, PR = d.props;
+
+  // special areas that cross cells
+  const cellRect = [ox, oz, ox + P, oz + P];
+  if (oz < RIDGE.z1 && oz + P > RIDGE.z0 && ox < RIDGE.x1 && ox + P > RIDGE.x0) {
+    d.ridge = { x0: Math.max(ox, RIDGE.x0), x1: Math.min(ox + P, RIDGE.x1), z0: Math.max(oz, RIDGE.z0), z1: Math.min(oz + P, RIDGE.z1) };
+    d.keepOut.push([RIDGE.x0 - 8, RIDGE.z0 - 8, RIDGE.x1 + 8, RIDGE.z1 + 8]);
+  }
+  if (iz === 10 && ox < 1022 && ox + P > -1000) {
+    d.rail = { x0: Math.max(ox, -1000), x1: Math.min(ox + P, 1022), bufferW: ox <= -1000, bufferE: ox + P >= 1022 };
+    d.keepOut.push([ox - 1, RAIL.z - 6, ox + P + 1, RAIL.z + 6]);
+    if (ox < RAIL.platformX1 && ox + P > RAIL.platformX0) {
+      const x0 = Math.max(ox, RAIL.platformX0), x1 = Math.min(ox + P, RAIL.platformX1);
+      d.rail.platform = [x0, RAIL.platformZ0, x1, RAIL.platformZ1];
+      d.surfaces.push(makeSurface(x0, RAIL.platformZ0, x1, RAIL.platformZ1, 0.5));
+      d.keepOut.push([x0 - 2, RAIL.platformZ0 - 2, x1 + 2, RAIL.platformZ1]);
+      const cx = (RAIL.platformX0 + RAIL.platformX1) / 2;
+      if (cx >= ox && cx < ox + P) PR.push({ kind: 'platformRoof', x: cx, z: (RAIL.platformZ0 + RAIL.platformZ1) / 2, w: 160, d: 14, y: 0.5 });
+    }
+  }
+
+  // ------------------------------------------------ non-urban content
+  if (kind === 'X') {
+    for (const b of AIRPORT_ITEMS.b) if (b.x >= ox && b.x < ox + P && b.z >= oz && b.z < oz + P) B.push({ ...b });
+    for (const p of AIRPORT_ITEMS.p) if (p.x >= ox && p.x < ox + P && p.z >= oz && p.z < oz + P) PR.push({ ...p });
+    for (const s of AIRPORT_ITEMS.parking) if (s.x >= ox && s.x < ox + P && s.z >= oz && s.z < oz + P) d.parking.push({ ...s });
+    for (const [name, r] of Object.entries(AIRPORT_AREAS)) {
+      const x0 = Math.max(ox, r[0]), z0 = Math.max(oz, r[1]), x1 = Math.min(ox + P, r[2]), z1 = Math.min(oz + P, r[3]);
+      if (x1 > x0 && z1 > z0) d.apron.push({ name, rect: [x0, z0, x1, z1] });
+    }
+    markInteriors(B, rng);
+    if (!d.apron.length) addTrees(d, rng, rng.int(2, 8));
+  } else if (kind === 'Y' || kind === 'Z') {
+    const west = kind === 'Y';
+    const X = (x) => (west ? x : 3000 - x);
+    d.beach = { west };
+    d.water = west ? [1060, oz, 1100, oz + P] : [1900, oz, 1940, oz + P];
+    const nearRoad = (z) => mod(z, 500) < 14 || mod(z, 500) > 486;
+    for (const z of [oz + 16, oz + 48, oz + 80]) {
+      if (nearRoad(z)) continue;
+      PR.push({ kind: 'palm', x: X(1024), z, s: 1, y: 0.02 });
+      if (rng.chance(0.6)) PR.push({ kind: 'bench', x: X(1018), z: z + 14, rot: west ? -Math.PI / 2 : Math.PI / 2 });
+    }
+    if (mod(iz, 3) === 0 && !nearRoad(oz + 50)) PR.push({ kind: 'lifeguard', x: X(1058), z: oz + 50, y: 0 });
+    if (rng.chance(0.5) && !nearRoad(oz + 30)) PR.push({ kind: 'umbrella', x: X(1032 + rng.float(0, 10)), z: oz + 30, color: rng.pick([0xe74c3c, 0x2e86c1, 0xf1c40f]), y: 0.02 });
+  } else if (kind === 'Q') {
+    d.water = [ox, oz, ox + P, oz + P];
+  } else if (!urban) {
+    // countryside
+    if (kind === 'F') { d.ground = 'field'; addTreeLine(d, rng); if (rng.chance(0.6)) for (let k = 0; k < rng.int(3, 8); k++) addProp(d, { kind: 'hay', x: ox + rng.float(20, 80), z: oz + rng.float(20, 80), rot: rng.float(0, 3) }); }
+    else if (kind === 'W') addTrees(d, rng, rng.int(45, 70));
+    else if (kind === 'O') { addTrees(d, rng, rng.int(6, 14)); for (let k = 0; k < rng.int(1, 4); k++) addProp(d, { kind: 'rock', x: ox + rng.float(15, 85), z: oz + rng.float(15, 85), s: rng.float(0.8, 2.2), rot: rng.float(0, 6) }); }
+    else if (kind === 'h') {
+      if (!d.ridge && !d.rail) {
+        B.push({ x: ox + 34, z: oz + 30, w: 12, d: 10, h: 6, style: 'plaster', color: 0xf0e2c8, face: 'n', house: true, roofColor: 0x8a3f30, interior: 'house' });
+        B.push({ x: ox + 68, z: oz + 62, w: 18, d: 24, h: 9, style: 'industrial', color: 0xa8432f, face: 'w', sign: 'חוות השקד' });
+        d.parking.push({ x: ox + 46, z: oz + 26, rot: 0, type: rng.pick(['suv', 'truck', 'hatch']) });
+        for (let k = 0; k < 5; k++) addProp(d, { kind: 'hay', x: ox + 50 + rng.float(-6, 30), z: oz + 80 + rng.float(-4, 6), rot: rng.float(0, 3) });
+      }
+      addTrees(d, rng, 6);
+      d.ground = 'field';
+    }
+  }
+  for (const f of FEATURED) if (f.x >= ox && f.x < ox + P && f.z >= oz && f.z < oz + P) d.parking.push({ ...f, fixed: true });
+
+  // ------------------------------------------------ bridges over the bay (owned by the cell south of the line)
+  if (isBridgeLine(ix, iz)) {
+    const x0 = Math.max(ox, 1022), x1 = Math.min(ox + P, 1978);
+    if (x1 > x0) {
+      d.bridge = { x0, x1, z: oz };
+      d.surfaces.push(makeSurface(x0, oz - 9.5, x1, oz + 9.5, 0));
+      const rx0 = Math.max(x0, 1026), rx1 = Math.min(x1, 1974);
+      if (rx1 > rx0) for (const s of [-1, 1]) d.colliders.push(makeBox((rx0 + rx1) / 2, oz + s * 9.7, (rx1 - rx0) / 2, 0.2, 0, -0.5, 1.15));
+    }
+  }
+
+  // ------------------------------------------------ roads owned by this cell (north + west edge, NW node)
+  d.roadH = segH(ix, iz);
+  d.roadV = segV(ix, iz);
+  const nn = nodeNbrs(ix, iz);
+  d.node = nn.length ? { gx: ix, gz: iz, x: ox, z: oz, nbrs: nn, lights: hasLightsAt(ix, iz, nn.length) } : null;
+  const urbanSide = (sx, sz) => isUrban(sx, sz);
+  const segs = [];
+  if (d.roadH) segs.push({ ax: ox, az: oz, bx: ox + P, bz: oz, dir: [1, 0], sideA: [ix, iz - 1], sideB: [ix, iz], endNodes: [[ix, iz], [ix + 1, iz]] });
+  if (d.roadV) segs.push({ ax: ox, az: oz, bx: ox, bz: oz + P, dir: [0, 1], sideA: [ix, iz], sideB: [ix - 1, iz], endNodes: [[ix, iz], [ix, iz + 1]] });
+  d.segs = segs;
+  for (const s of segs) {
+    const r = [-s.dir[1], s.dir[0]]; // right of travel along +dir
+    const bridge = s.dir[0] === 1 && isBridgeLine(ix, iz);
+    const urbanA = urbanSide(...s.sideA), urbanB = urbanSide(...s.sideB);
+    s.crossA = nodeNbrs(...s.endNodes[0]).length >= 3;
+    s.crossB = nodeNbrs(...s.endNodes[1]).length >= 3;
+    // street lamps
+    if (urbanA || urbanB || bridge) {
+      for (const [t, side] of [[0.25, 1], [0.75, -1]]) {
+        const x = s.ax + (s.bx - s.ax) * t + r[0] * side * (ROAD_HALF + 1), z = s.az + (s.bz - s.az) * t + r[1] * side * (ROAD_HALF + 1);
+        if (!bridge && Math.min(x, 3000 - x) > 1030 && x > 1000 && x < 2000) continue;
+        const lamp = { x, z, dx: -r[0] * side, dz: -r[1] * side, y: bridge ? 0 : Math.max(0, baseHeight(x, z)) };
+        d.lamps.push(lamp);
+        d.colliders.push(makeCircle(x, z, 0.2, 0, 7));
+      }
+    }
+    // curb parking on urban sides
+    for (const [side, isU] of [[1, urbanA], [-1, urbanB]]) {
+      if (!isU || bridge || !rng.chance(0.38)) continue;
+      const t = rng.float(22, 78);
+      const x = s.ax + s.dir[0] * t + r[0] * side * PARK_OFFSET * (s.dir[0] === 1 ? -1 : -1);
+      const z = s.az + s.dir[1] * t + r[1] * side * PARK_OFFSET * (s.dir[0] === 1 ? -1 : -1);
+      // cars park in the direction of the adjacent lane (right-hand traffic)
+      const off = [x - (s.ax + s.dir[0] * t), z - (s.az + s.dir[1] * t)];
+      // travel direction whose right side is 'off'
+      const heading = Math.atan2(off[1], -off[0]) ;
+      d.parking.push({ x, z, rot: heading, curb: true });
+    }
+  }
+  // traffic lights at the owned node
+  if (d.node && d.node.lights) {
+    for (const [gx, gz] of d.node.nbrs) {
+      const fx = gx * P, fz = gz * P;
+      const L = Math.hypot(ox - fx, oz - fz), dd = [(ox - fx) / L, (oz - fz) / L], r = [-dd[1], dd[0]];
+      const x = ox - dd[0] * (ROAD_HALF + 1.2) + r[0] * (ROAD_HALF + 1.0);
+      const z = oz - dd[1] * (ROAD_HALF + 1.2) + r[1] * (ROAD_HALF + 1.0);
+      d.tl.push({ node: d.node, axis: Math.abs(dd[1]) > 0.5 ? 'z' : 'x', x, z, d: dd, r, y: Math.max(0, baseHeight(x, z)) });
+      d.colliders.push(makeCircle(x, z, 0.2, 0, 5));
+    }
+  }
+
+  // ------------------------------------------------ colliders + surfaces for buildings/props
+  for (const b of B) {
+    b.door = b.door || (() => { const [fx, fz] = faceVector(b.face); const half = (fx !== 0 ? b.w : b.d) / 2; return { x: b.x + fx * (half + 0.3), z: b.z + fz * (half + 0.3), face: b.face }; })();
+    if (b.interior) {
+      const spec = interiorSpec(b);
+      d.colliders.push(...spec.colliders);
+      d.surfaces.push(...spec.surfaces);
+    } else {
+      const h = b.house ? b.h + Math.min(b.w, b.d) * 0.35 : b.h;
+      d.colliders.push(makeBox(b.x, b.z, b.w / 2, b.d / 2, 0, 0, h + CURB_H));
+    }
+  }
+  if (d.garage) { const g = garageSpec(d.garage); d.colliders.push(...g.colliders); d.surfaces.push(...g.surfaces); d.parking.push(...g.parking); }
+  for (const p of PR) propColliders(p, d.colliders);
+  if (d.ridge) ridgeColliders(d);
+  d.benches = PR.filter((p) => p.kind === 'bench').map((p) => ({ ...p, y: p.y ?? (urban ? CURB_H : Math.max(0, baseHeight(p.x, p.z))) }));
+  return d;
+}
+
+function blocked(d, x, z, pad = 0) { return d.keepOut.some((r) => inRect(x, z, r, pad)); }
+function addProp(d, p) { if (!blocked(d, p.x, p.z, 3)) d.props.push(p); }
+function addTrees(d, rng, n) {
+  for (let k = 0, tries = 0; k < n && tries < n * 4; tries++) {
+    const x = d.ox + rng.float(12, 88), z = d.oz + rng.float(12, 88);
+    if (blocked(d, x, z, 4)) continue;
+    d.props.push({ kind: 'tree', x, z, s: rng.float(0.8, 1.6), y: 0 });
+    k++;
+  }
+}
+function addTreeLine(d, rng) {
+  const side = rng.int(0, 3);
+  for (let t = 14; t < 88; t += rng.float(7, 11)) {
+    const x = side < 2 ? d.ox + t : d.ox + (side === 2 ? 13 : 87);
+    const z = side < 2 ? d.oz + (side === 0 ? 13 : 87) : d.oz + t;
+    if (!blocked(d, x, z, 4)) d.props.push({ kind: 'tree', x, z, s: rng.float(0.9, 1.3), y: 0 });
+  }
+}
+
+export function propColliders(p, out) {
+  switch (p.kind) {
+    case 'tree': case 'palm': out.push(makeCircle(p.x, p.z, 0.3 * (p.s || 1), 0, 6)); break;
+    case 'bench': out.push(makeBox(p.x, p.z, 0.85, 0.3, p.rot || 0, 0, 0.9)); break;
+    case 'bin': out.push(makeCircle(p.x, p.z, 0.3, 0, 1)); break;
+    case 'container': out.push(makeBox(p.x, p.z, 3.0, 1.2, p.rot || 0, 0, 2.6)); break;
+    case 'chimney': out.push(makeCircle(p.x, p.z, 1.6, 0, p.h)); break;
+    case 'pump': out.push(makeBox(p.x, p.z, 0.5, 0.35, 0, 0, 1.8)); break;
+    case 'canopy':
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) out.push(makeCircle(p.x + sx * (p.w / 2 - 1), p.z + sz * (p.d / 2 - 1), 0.3, 0, 5));
+      out.push(makeBox(p.x, p.z, p.w / 2, p.d / 2, 0, 5, 5.6));
+      break;
+    case 'pond': out.push(makeCircle(p.x, p.z, p.r - 0.5, 0, 0.6, 'water')); break;
+    case 'fountain': out.push(makeCircle(p.x, p.z, 4.2, 0, 1.0)); out.push(makeCircle(p.x, p.z, 0.8, 0, 4.0)); break;
+    case 'tower': out.push(makeCircle(p.x, p.z, 3, 0, p.h + 4)); break;
+    case 'plane': out.push(makeBox(p.x, p.z, 1.6, 13, p.rot, 0, 5)); out.push(makeBox(p.x, p.z, 14, 1.4, p.rot, 1.5, 3)); break;
+    case 'lifeguard': out.push(makeBox(p.x, p.z, 1.4, 1.4, 0, -1, 4.5)); break;
+    case 'platformRoof': for (let k = -3; k <= 3; k++) out.push(makeCircle(p.x + k * (p.w / 7), p.z, 0.25, 0, 5)); break;
+    case 'hay': out.push(makeCircle(p.x, p.z, 0.9, 0, 1.6)); break;
+    case 'rock': out.push(makeCircle(p.x, p.z, 1.1 * (p.s || 1), 0, 1.4 * (p.s || 1))); break;
+    case 'umbrella': out.push(makeCircle(p.x, p.z, 0.15, 0, 2.4)); break;
+  }
+}
+
+// Ridge: solid rock except tunnel bores at the arterial roads (x = multiples of 500)
+export function ridgeHeight(x, z) {
+  const ef = Math.min(1, Math.min(z - RIDGE.z0, RIDGE.z1 - z) / 4);
+  if (ef <= 0) return 0;
+  const end = Math.min(1, (x - RIDGE.x0) / 70, (RIDGE.x1 - x) / 70);
+  if (end <= 0) return 0;
+  const n = Math.sin(x * 0.031) * 0.12 + Math.sin(x * 0.0113 + z * 0.05) * 0.1 + Math.sin(z * 0.09) * 0.06;
+  const mid = 1 - Math.pow((z - (RIDGE.z0 + RIDGE.z1) / 2) / ((RIDGE.z1 - RIDGE.z0) / 2), 2) * 0.35;
+  const e = end * end * (3 - 2 * end), f = ef * ef * (3 - 2 * ef);
+  return RIDGE.h * f * e * mid * (0.85 + n);
+}
+export function tunnelLines(x0, x1) {
+  const out = [];
+  for (let L = Math.ceil(x0 / 500) * 500; L <= x1; L += 500) out.push(L);
+  return out;
+}
+function ridgeColliders(d) {
+  const r = d.ridge;
+  const gaps = tunnelLines(r.x0 - TUNNEL_HALF, r.x1 + TUNNEL_HALF).filter((L) => L >= RIDGE.x0 && L <= RIDGE.x1);
+  // solid spans between tunnels
+  let x = r.x0;
+  const spans = [];
+  for (const L of gaps) {
+    if (L - TUNNEL_HALF - 0.6 > x) spans.push([x, Math.min(r.x1, L - TUNNEL_HALF - 0.6)]);
+    x = Math.max(x, L + TUNNEL_HALF + 0.6);
+  }
+  if (x < r.x1) spans.push([x, r.x1]);
+  const zi0 = Math.max(r.z0, RIDGE.z0 + 1.5), zi1 = Math.min(r.z1, RIDGE.z1 - 1.5);
+  for (const [a, b] of spans) {
+    if (b - a < 0.5) continue;
+    let hmax = 0;
+    for (let s = 0; s <= 6; s++) for (let t = 0; t <= 6; t++) hmax = Math.max(hmax, ridgeHeight(a + (b - a) * s / 6, zi0 + (zi1 - zi0) * t / 6));
+    if (hmax < 0.5) continue;
+    d.colliders.push(makeBox((a + b) / 2, (zi0 + zi1) / 2, (b - a) / 2, (zi1 - zi0) / 2, 0, -1, hmax, 'rock'));
+  }
+  for (const L of gaps) {
+    if (L < r.x0 - TUNNEL_HALF || L > r.x1 + TUNNEL_HALF) continue;
+    // tunnel walls and the rock above the bore
+    for (const s of [-1, 1]) d.colliders.push(makeBox(L + s * (TUNNEL_HALF + 0.3), (r.z0 + r.z1) / 2, 0.3, (r.z1 - r.z0) / 2, 0, 0, TUNNEL_H + 0.5, 'tunnel'));
+    d.colliders.push(makeBox(L, (zi0 + zi1) / 2, TUNNEL_HALF + 0.6, (zi1 - zi0) / 2, 0, TUNNEL_H, RIDGE.h, 'rock'));
+  }
+}
+
+// convenience used by the vehicle manager / spawn logic
+export { faceVector };
