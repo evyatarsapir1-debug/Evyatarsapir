@@ -508,6 +508,8 @@ class Game {
   drawFullMap() {
     const p = this.playerPos();
     this.minimap.fullRoute = this.gps.route?.points || null;
+    this.minimap.fullDest = this.gps.dest || null;
+    $('mapClear').classList.toggle('show', !!this.gps.dest);
     this.minimap.drawFull(p.x, p.z, p.facing, this.fullView);
   }
   _bindFullMap() {
@@ -530,10 +532,24 @@ class Game {
         pinch = d;
       }
     });
-    const up = (e) => { pts.delete(e.pointerId); pinch = 0; };
+    let downAt = null;
+    c.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
+    const up = (e) => {
+      // a tap (not a drag) marks a GPS destination there
+      if (pts.size === 1 && downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 8) {
+        const r = c.getBoundingClientRect(), k = devicePixelRatio / this.minimap.fullScale;
+        const x = this.fullView.x + (e.clientX - r.left - r.width / 2) * k, z = this.fullView.z + (e.clientY - r.top - r.height / 2) * k;
+        this.gps.set({ x, z, name: 'נקודה במפה', radius: 15 }, this.playerPos());
+        this.drawFullMap();
+      }
+      pts.delete(e.pointerId); pinch = 0; downAt = null;
+    };
     c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
     c.addEventListener('wheel', (e) => { e.preventDefault(); zoom(e.deltaY > 0 ? 1.2 : 0.83); }, { passive: false });
     $('mapIn').onclick = () => zoom(0.7); $('mapOut').onclick = () => zoom(1.4);
+    $('mapClear').onclick = () => { this.gps.clear(); this.drawFullMap(); this.toast('הסימון בוטל', 1.5); };
+    $('gpsCancel').onclick = (e) => { e.stopPropagation(); this.gps.clear(); this.toast('הניווט בוטל', 1.5); };
+    $('gpsCancel').addEventListener('pointerdown', (e) => e.stopPropagation());
     $('mapMe').onclick = () => { const p = this.playerPos(); this.fullView.x = p.x; this.fullView.z = p.z; this.drawFullMap(); };
   }
 
@@ -826,7 +842,7 @@ class Game {
       const gh = $('gpsHud');
       if (this.gps.dest) {
         const M = this.missions;
-        gh.textContent = `${this.gps.dest.name || 'יעד'} · ${(this.gps.remaining(v ? v.x : p.x, v ? v.z : p.z) / 1000).toFixed(2)} ק״מ${M.timer !== null ? ` · ${Math.ceil(M.timer)} שנ׳` : ''}`;
+        gh.firstChild.textContent = `${this.gps.dest.name || 'יעד'} · ${(this.gps.remaining(v ? v.x : p.x, v ? v.z : p.z) / 1000).toFixed(2)} ק״מ${M.timer !== null ? ` · ${Math.ceil(M.timer)} שנ׳` : ''}`;
         gh.classList.add('show');
       } else gh.classList.remove('show');
     }

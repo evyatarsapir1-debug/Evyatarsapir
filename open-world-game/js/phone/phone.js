@@ -88,7 +88,7 @@ export class Phone {
         const places = g.places();
         s.innerHTML = head('מפה ו־GPS') + `<canvas class="pmap" width="560" height="560"></canvas>
           <div class="pmapbar"><button type="button" class="pbtn" data-act="me">אני</button><button type="button" class="pbtn" data-act="zin">+</button><button type="button" class="pbtn" data-act="zout">−</button>
-          ${g.gps.dest ? `<button type="button" class="pbtn warn" data-act="clear">בטל מסלול</button>` : ''}</div>
+          ${g.gps.dest ? `<button type="button" class="pbtn warn" data-act="clear">✕ בטל סימון</button>` : ''}</div>
           <div class="pinfo">${g.gps.dest ? `יעד: <b>${esc(g.gps.dest.name || 'נקודה במפה')}</b> · ${(g.gps.remaining(g.playerPos().x, g.playerPos().z) / 1000).toFixed(2)} ק״מ` : 'הקש על המפה כדי לבחור יעד, או בחר מהרשימה'}</div>
           <div class="plist">${places.map((p, i) => `<button type="button" class="prow" data-place="${i}"><b>${esc(p.name)}</b><small>${(Math.hypot(p.x - g.playerPos().x, p.z - g.playerPos().z) / 1000).toFixed(1)} ק״מ</small></button>`).join('')}</div>`;
         const pos = g.playerPos();

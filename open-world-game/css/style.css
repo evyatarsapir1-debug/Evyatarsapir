@@ -124,8 +124,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 /* phone */
 #phoneBtn { position: absolute; top: max(112px, calc(env(safe-area-inset-top) + 100px)); right: 12px; width: 44px; height: 44px; border-radius: 50%; border: none; background: #0007; pointer-events: auto; padding: 9px; }
 #phoneBadge { position: absolute; top: -2px; left: -2px; min-width: 18px; height: 18px; border-radius: 9px; background: #ff3b30; color: #fff; font-size: 11px; font-style: normal; font-weight: 800; display: none; align-items: center; justify-content: center; padding: 0 4px; }
-#gpsHud { position: absolute; top: max(172px, calc(env(safe-area-inset-top) + 160px)); left: 12px; width: 150px; text-align: center; font-size: 12px; font-weight: 700; background: #3b1d5acc; border-radius: 10px; padding: 4px 6px; display: none; }
-#gpsHud.show { display: block; }
+#gpsHud { position: absolute; top: max(244px, calc(env(safe-area-inset-top) + 232px)); left: 12px; max-width: 220px; font-size: 12px; font-weight: 700; background: #3b1d5acc; border-radius: 10px; padding: 3px 4px 3px 8px; display: none; align-items: center; gap: 6px; }
+#gpsHud.show { display: flex; }
+#gpsHud .gtxt { flex: 1; text-align: center; }
+#gpsCancel { pointer-events: auto; flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid #fff9; background: #c0392bcc; color: #fff; font: inherit; font-size: 13px; font-weight: 800; padding: 0; cursor: pointer; }
 #objective { position: absolute; top: max(64px, calc(env(safe-area-inset-top) + 52px)); left: 50%; transform: translateX(-50%); max-width: min(520px, 70vw); text-align: center; font-size: 14px; font-weight: 700;
   background: #0009; border-right: 3px solid #ff9f0a; border-radius: 8px; padding: 5px 12px; display: none; }
 #objective.show { display: block; }
@@ -252,6 +254,21 @@ body.touch #weaponHud { bottom: 70px; }
 #fullMap { touch-action: none; cursor: grab; }
 .mapzoom { position: absolute; top: 14px; right: 14px; display: flex; gap: 8px; }
 .mapzoom .mbtn { min-width: 0; width: 46px; padding: 8px 0; text-align: center; font-size: 22px; }
+.mapzoom #mapClear { width: auto; padding: 8px 12px; font-size: 14px; background: #c0392bdd; display: none; }
+.mapzoom #mapClear.show { display: block; }
+.maphint { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); background: #000a; padding: 5px 12px; border-radius: 10px; font-size: 13px; pointer-events: none; }
+/* phone always stands upright (portrait), even on a landscape screen */
+@media (min-width: 561px) { #phone { height: min(580px, calc(100vh - 24px)); width: min(300px, calc((100vh - 24px) * 0.56)); } }
+@media (max-height: 480px) {
+  .pgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 2px; }
+  .papp { min-width: 0; font-size: 9.5px; }
+  .pico { width: 40px; height: 40px; border-radius: 11px; }
+  .pico svg { width: 22px; height: 22px; }
+  .pscreen { padding: 8px 6px; }
+  .pwidget { margin-bottom: 8px; }
+  .pclock { font-size: 34px !important; }
+  #gpsHud { top: max(196px, calc(env(safe-area-inset-top) + 196px)); }
+}
 
 /* fight system: status bar + speech bubble above people (no gore, just a clear meter) */
 #npcLayer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }

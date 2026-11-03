@@ -147,6 +147,13 @@ export class MiniMap {
       g.strokeStyle = '#b35cff'; g.lineWidth = 5 * devicePixelRatio; g.lineJoin = 'round'; g.beginPath();
       this.fullRoute.forEach(([x, z], i) => { const [a, b] = W2(x, z); i ? g.lineTo(a, b) : g.moveTo(a, b); }); g.stroke();
     }
+    if (this.fullDest) {
+      // destination pin
+      const [a, b] = W2(this.fullDest.x, this.fullDest.z), k2 = devicePixelRatio;
+      g.fillStyle = '#b35cff'; g.strokeStyle = '#fff'; g.lineWidth = 3 * k2;
+      g.beginPath(); g.moveTo(a, b); g.lineTo(a - 9 * k2, b - 16 * k2); g.arc(a, b - 20 * k2, 10 * k2, Math.PI * 0.8, Math.PI * 2.2); g.closePath(); g.fill(); g.stroke();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(a, b - 20 * k2, 4 * k2, 0, Math.PI * 2); g.fill();
+    }
     const [x, y] = W2(px, pz);
     g.save(); g.translate(x, y); g.rotate(-facing + Math.PI);
     g.fillStyle = '#ff3b30'; g.strokeStyle = '#fff'; g.lineWidth = 2 * devicePixelRatio;
