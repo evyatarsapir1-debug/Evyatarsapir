@@ -206,8 +206,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1620; col
   grid-auto-rows: min-content; align-items: end; justify-items: center; }
 .tbtns.show { display: grid; }
 .tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "act act act" "fire light cyc" "jump run ."; }
-.tbtns.drive { grid-template-columns: 70px 70px 50px; grid-template-areas: "act act act" ". cam horn" "gas brake hb"; }
-.tbtns.heli { grid-template-columns: 70px 70px 50px; grid-template-areas: "act act act" ". . cam" "gas brake ."; }
+.tbtns.drive { grid-template-columns: 58px 58px 48px; grid-template-areas: "act act act" ". cam horn" "gas brake hb"; }
+.tbtns.heli { grid-template-columns: 58px 58px 48px; grid-template-areas: "act act act" ". . cam" "gas brake ."; }
 .tbtn { pointer-events: auto; width: 56px; height: 56px; border-radius: 50%; border: 1.5px solid #ffffff4d; background: #00000038; color: #ffffffe6;
   font: inherit; font-weight: 800; font-size: 12px; touch-action: none; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); text-shadow: 0 1px 3px #000a; }
 .tbtn.down { background: #ff8a3d80; border-color: #fff; }
@@ -216,8 +216,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1620; col
 .tbtn.accent { background: #ff8a3d99; border-color: #ffffffaa; }
 .tbtn.ctx { display: none; }
 .tbtn.ctx.show { display: block; }
-.tbtn.wide { width: auto; min-width: 120px; height: 44px; padding: 0 16px; border-radius: 22px; font-size: 14px; justify-self: end; }
-.tbtn.pedal { width: 66px; height: 84px; border-radius: 16px; font-size: 14px; }
+.tbtn.wide { width: auto; min-width: 92px; height: 34px; padding: 0 12px; border-radius: 17px; font-size: 12px; justify-self: end; }
+.tbtn.pedal { width: 54px; height: 66px; border-radius: 14px; font-size: 12px; }
 .tbtn.gas { background: #2e8b5752; border-color: #8dffb880; }
 .tbtn.brake { background: #b03a2e52; border-color: #ff9a8d80; }
 .tbtn.fire { background: #c0392b66; }
