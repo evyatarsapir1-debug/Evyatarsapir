@@ -115,7 +115,7 @@ export class Player {
       this.prompt = { key: 'interact', text: this.nearSeat.kind === 'sleep' ? 'לישון' : 'לשבת', seat: this.nearSeat.label };
       if (input.wasPressed('interact')) this.useSeat(this.nearSeat);
     }
-    this.model.animate(dt, { speed: this.parachute ? 0 : Math.hypot(this.vx, this.vz), grounded: this.grounded || this.parachute, vy: this.vy, mode: this.swimming ? 'swim' : 'foot', aim: this.armed ? (this.firing > 0 ? 2 : 1) : 0, chute: this.parachute });
+    this.model.animate(dt, { speed: this.parachute ? 0 : Math.hypot(this.vx, this.vz), grounded: this.grounded || this.parachute, vy: this.vy, mode: this.swimming ? 'swim' : 'foot', aim: this.armed ? (this.firing > 0 ? 2 : 1) : 0, chute: this.parachute, punch: this.punchT > 0 ? (this.punchSide ? 2 : 1) : 0 });
     if (this.canopy) this.canopy.visible = !!this.parachute;
     this._sync();
   }

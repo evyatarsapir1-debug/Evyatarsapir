@@ -102,19 +102,28 @@ export class MiniMap {
     g.restore();
   }
 
-  drawFull(px, pz, facing, radius = 1600) {
+  // view = { x, z, r }: centre and half-height (metres) of the visible area
+  drawFull(px, pz, facing, view) {
     const c = this.full, g = c.getContext('2d');
     const rect = c.getBoundingClientRect();
-    c.width = rect.width * devicePixelRatio; c.height = rect.height * devicePixelRatio;
+    const W = Math.round(rect.width * devicePixelRatio), H = Math.round(rect.height * devicePixelRatio);
+    if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+    const cx = view.x, cz = view.z;
     const aspect = c.width / c.height;
-    const rz = radius, rx = radius * aspect;
+    const rz = view.r, rx = view.r * aspect;
     const scale = c.height / (2 * rz * S);
+    this.fullScale = c.height / (2 * rz); // canvas px per metre
     g.fillStyle = '#8fb873'; g.fillRect(0, 0, c.width, c.height);
     g.save();
     g.scale(scale, scale);
-    this._drawArea(g, px - rx, pz - rz, px + rx, pz + rz, px - rx, pz - rz);
+    this._drawArea(g, cx - rx, cz - rz, cx + rx, cz + rz, cx - rx, cz - rz);
     g.restore();
-    const x = c.width / 2, y = c.height / 2;
+    const W2 = (wx, wz) => [c.width / 2 + (wx - cx) * this.fullScale, c.height / 2 + (wz - cz) * this.fullScale];
+    if (this.fullRoute) {
+      g.strokeStyle = '#b35cff'; g.lineWidth = 5 * devicePixelRatio; g.lineJoin = 'round'; g.beginPath();
+      this.fullRoute.forEach(([x, z], i) => { const [a, b] = W2(x, z); i ? g.lineTo(a, b) : g.moveTo(a, b); }); g.stroke();
+    }
+    const [x, y] = W2(px, pz);
     g.save(); g.translate(x, y); g.rotate(-facing + Math.PI);
     g.fillStyle = '#ff3b30'; g.strokeStyle = '#fff'; g.lineWidth = 2 * devicePixelRatio;
     const k = 7 * devicePixelRatio;
@@ -122,7 +131,7 @@ export class MiniMap {
     g.restore();
     g.fillStyle = '#1b1b1b'; g.font = `bold ${13 * devicePixelRatio}px sans-serif`; g.textAlign = 'center';
     const label = (t, wx, wz) => {
-      const sx = (wx - (px - rx)) * S * scale, sy = (wz - (pz - rz)) * S * scale;
+      const [sx, sy] = W2(wx, wz);
       if (sx > 0 && sy > 0 && sx < c.width && sy < c.height) { g.strokeStyle = '#fff'; g.lineWidth = 3; g.strokeText(t, sx, sy); g.fillText(t, sx, sy); }
     };
     label('אזורה סיטי', 500, 470); label('נמל התעופה', -350, 470); label('מפרץ אזורה', 1500, 250);

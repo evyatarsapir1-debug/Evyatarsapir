@@ -208,25 +208,36 @@ export class Phone {
 
   // ------------------------------------------------------------------ map
   _mapEvents(cv) {
-    let drag = null, moved = 0;
+    const pts = new Map();
+    let moved = 0, pinch = 0;
     const toWorld = (ev) => {
       const r = cv.getBoundingClientRect(), v = this.mapView;
       const px = (ev.clientX - r.left) / r.width * cv.width, pz = (ev.clientY - r.top) / r.height * cv.height;
       return { x: v.x + (px - cv.width / 2) / (v.scale * 2), z: v.z + (pz - cv.height / 2) / (v.scale * 2) };
     };
-    cv.onpointerdown = (e) => { drag = { x: e.clientX, y: e.clientY }; moved = 0; cv.setPointerCapture(e.pointerId); e.stopPropagation(); };
+    cv.onpointerdown = (e) => { e.stopPropagation(); cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); if (pts.size === 1) moved = 0; pinch = 0; };
     cv.onpointermove = (e) => {
-      if (!drag) return;
-      const r = cv.getBoundingClientRect(), k = cv.width / r.width / (this.mapView.scale * 2);
-      this.mapView.x -= (e.clientX - drag.x) * k; this.mapView.z -= (e.clientY - drag.y) * k;
-      moved += Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y);
-      drag = { x: e.clientX, y: e.clientY };
+      if (!pts.has(e.pointerId)) return;
+      const prev = pts.get(e.pointerId);
+      pts.set(e.pointerId, [e.clientX, e.clientY]);
+      const r = cv.getBoundingClientRect();
+      if (pts.size === 1) {
+        const k = cv.width / r.width / (this.mapView.scale * 2);
+        this.mapView.x -= (e.clientX - prev[0]) * k; this.mapView.z -= (e.clientY - prev[1]) * k;
+        moved += Math.abs(e.clientX - prev[0]) + Math.abs(e.clientY - prev[1]);
+      } else {
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        if (pinch) this.mapView.scale = Math.max(0.15, Math.min(2, this.mapView.scale * d / pinch));
+        pinch = d; moved = 99;
+      }
       this._drawMap();
     };
     cv.onpointerup = (e) => {
-      if (drag && moved < 8) { const w = toWorld(e); this._go({ x: w.x, z: w.z, name: 'נקודה במפה', radius: 15 }); }
-      drag = null;
+      if (pts.size === 1 && moved < 8) { const w = toWorld(e); this._go({ x: w.x, z: w.z, name: 'נקודה במפה', radius: 15 }); }
+      pts.delete(e.pointerId); pinch = 0;
     };
+    cv.onpointercancel = (e) => { pts.delete(e.pointerId); pinch = 0; };
     cv.onwheel = (e) => { e.preventDefault(); this.mapView.scale = Math.max(0.15, Math.min(2, this.mapView.scale * (e.deltaY < 0 ? 1.2 : 0.83))); this._drawMap(); };
   }
   _drawMap() {

@@ -167,6 +167,7 @@ class Game {
     $('pMenu').onclick = () => { this.save(); this.toMenu(); };
     $('mapClose').onclick = () => this.resume();
     $('bagClose').onclick = () => this.closeBag();
+    this._bindFullMap();
     $('prompt').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); const k = $('prompt').dataset.key; if (k) this.input.pressed.add(k); });
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.state === 'playing') { this.save(); this.pause(); } });
   }
@@ -465,7 +466,40 @@ class Game {
   resume() { this.state = 'playing'; showScreen(null); this.audio.mute(false); this.input.endFrame(); this.clock.getDelta(); }
   openMap() {
     this.state = 'map'; showScreen('mapScreen');
-    requestAnimationFrame(() => this.minimap.drawFull(this.player.x, this.player.z, this.player.state === 'driving' ? this.player.vehicle.heading : this.player.facing));
+    const p = this.playerPos();
+    this.fullView = { x: p.x, z: p.z, r: 900 };
+    requestAnimationFrame(() => this.drawFullMap());
+  }
+  drawFullMap() {
+    const p = this.playerPos();
+    this.minimap.fullRoute = this.gps.route?.points || null;
+    this.minimap.drawFull(p.x, p.z, p.facing, this.fullView);
+  }
+  _bindFullMap() {
+    const c = $('fullMap'), pts = new Map();
+    let pinch = 0;
+    const zoom = (k) => { this.fullView.r = Math.max(120, Math.min(1500, this.fullView.r * k)); this.drawFullMap(); };
+    c.addEventListener('pointerdown', (e) => { c.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); pinch = 0; });
+    c.addEventListener('pointermove', (e) => {
+      if (!pts.has(e.pointerId)) return;
+      const prev = pts.get(e.pointerId);
+      pts.set(e.pointerId, [e.clientX, e.clientY]);
+      if (pts.size === 1) {
+        const k = devicePixelRatio / this.minimap.fullScale;
+        this.fullView.x -= (e.clientX - prev[0]) * k; this.fullView.z -= (e.clientY - prev[1]) * k;
+        this.drawFullMap();
+      } else if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        if (pinch) zoom(pinch / d);
+        pinch = d;
+      }
+    });
+    const up = (e) => { pts.delete(e.pointerId); pinch = 0; };
+    c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
+    c.addEventListener('wheel', (e) => { e.preventDefault(); zoom(e.deltaY > 0 ? 1.2 : 0.83); }, { passive: false });
+    $('mapIn').onclick = () => zoom(0.7); $('mapOut').onclick = () => zoom(1.4);
+    $('mapMe').onclick = () => { const p = this.playerPos(); this.fullView.x = p.x; this.fullView.z = p.z; this.drawFullMap(); };
   }
 
   save(appearanceOnly = false) {
@@ -581,7 +615,7 @@ class Game {
     if (input.wasPressed('phone')) this.phone.toggle();
     if (input.wasPressed('cycle')) this.cycleWeapon();
     if (input.wasPressed('light')) { if (this.econ.items.flashlight) this.econ.flashlightOn = !this.econ.flashlightOn; else this.toast('אין לך פנס — אפשר לקנות בחנות ציוד', 2); }
-    input.fireByMouse = !!this.econ.equipped && p.state === 'foot';
+    input.fireByMouse = p.state !== 'foot' ? false : this.econ.equipped ? 'hold' : 'tap';
 
     const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service];
     const pedObs = this.peds.obstacles();
@@ -713,7 +747,8 @@ class Game {
       $('tExit').classList.toggle('show', !!v && !v.isHeli && p.prompt?.key === 'vehicle');
       $('tExitHeli').classList.toggle('show', !!v && v.isHeli && p.prompt?.key === 'vehicle');
       $('runBtn').classList.toggle('on', p.sprint);
-      $('tFire').classList.toggle('show', !!this.econ.equipped && mode === 'foot');
+      $('tFire').classList.toggle('show', mode === 'foot' && p.state === 'foot');
+      const fl = this.econ.equipped ? 'ירי' : 'אגרוף'; if ($('tFire').textContent !== fl) $('tFire').textContent = fl;
       $('tLight').classList.toggle('show', !!this.econ.items.flashlight);
       $('joyHint').style.display = this.input.joy.id === null && !v && this.playTime < 30 ? 'block' : 'none';
     }

@@ -39,8 +39,10 @@ export class Input {
 
     const c = this.canvas;
     let mouseDown = false, lx = 0, ly = 0;
-    c.addEventListener('mousedown', (e) => { mouseDown = true; lx = e.clientX; ly = e.clientY; if (e.button === 0 && this.fireByMouse) { this.pressed.add('fire'); this.mouseFire = true; } });
-    addEventListener('mouseup', () => { mouseDown = false; this.mouseFire = false; });
+    let downX = 0, downY = 0;
+    c.addEventListener('mousedown', (e) => { mouseDown = true; lx = downX = e.clientX; ly = downY = e.clientY; if (e.button === 0 && this.fireByMouse === 'hold') { this.pressed.add('fire'); this.mouseFire = true; } });
+    // unarmed: a short click (not a camera drag) throws a punch
+    addEventListener('mouseup', (e) => { if (mouseDown && this.fireByMouse === 'tap' && e.button === 0 && Math.hypot(e.clientX - downX, e.clientY - downY) < 6) this.pressed.add('fire'); mouseDown = false; this.mouseFire = false; });
     addEventListener('mousemove', (e) => {
       if (document.pointerLockElement === c) { this.lookDX += e.movementX; this.lookDY += e.movementY; return; }
       if (!mouseDown) return;

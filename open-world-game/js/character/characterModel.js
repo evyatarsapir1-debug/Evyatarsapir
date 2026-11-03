@@ -187,6 +187,12 @@ export class CharacterModel {
       }
       if (s.doorReach) { target.armR = -1.2; target.elbowR = -0.2; }
       if (s.aim) { target.armR = s.aim > 1 ? -1.5 : -0.5; target.elbowR = s.aim > 1 ? -0.05 : -0.6; if (s.aim > 1) { target.armL = -1.3; target.elbowL = -0.5; } }
+      if (s.punch) {
+        // jab: one arm shoots forward, the other guards
+        const R = s.punch === 1;
+        target[R ? 'armR' : 'armL'] = -1.6; target[R ? 'elbowR' : 'elbowL'] = -0.05;
+        target[R ? 'armL' : 'armR'] = -0.9; target[R ? 'elbowL' : 'elbowR'] = -1.8; target.spine = 0.15;
+      }
       if (s.chute) { target.armL = target.armR = -2.8; target.elbowL = target.elbowR = -0.2; target.legL = -0.2; target.legR = 0.1; }
     } else if (mode === 'sit' || mode === 'drive' || mode === 'passenger') {
       target.legL = -1.45; target.legR = -1.45; target.kneeL = 1.4; target.kneeR = 1.4;

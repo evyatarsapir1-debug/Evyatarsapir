@@ -185,7 +185,9 @@ export function interiorSpec(b) {
     const top = y0 + b.h;
     spec.door = { face: b.face, w: 1.2, h: 2.2 };
     shellColliders(b, top, spec.door, C);
-    spec.doors = [{ hinge: F.pt(-0.6, -0.15), dir: [-F.fz, F.fx], w: 1.2, y: y0, color: 0x5a3b26, front: true }];
+    const dcol = colFromRect(F.rect(-0.6, 0.6, -0.25, -0.05), y0, y0 + 2.15, 'door');
+    C.push(dcol);
+    spec.doors = [{ hinge: F.pt(-0.6, -0.15), dir: [-F.fz, F.fx], w: 1.2, y: y0, color: 0x5a3b26, front: true, col: dcol }];
     C.push(makeBox(b.x, b.z, b.w / 2 + 0.5, b.d / 2 + 0.5, 0, top, top + Math.min(b.w, b.d) * 0.35, 'roof'));
     spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1: y0 + H1, wall: 0xf3e9d8, floor: 0xb38a5c, ceil: 0xfafafa, door: spec.door, b });
     // ground floor: living room, kitchen, dining
@@ -471,15 +473,17 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
     for (const g of [...gaps].sort((p, q) => p.a - q.a)) {
       if (g.a - g.w / 2 > a) wallBox(a, g.a - g.w / 2, dc - WT / 2, dc + WT / 2, ya, yb, color);
       wallBox(g.a - g.w / 2, g.a + g.w / 2, dc - WT / 2, dc + WT / 2, ya + 2.25, yb, color);
-      // a real swinging apartment door in the opening
-      spec.doors.push({ hinge: F.pt(g.a - g.w / 2, dc), dir: [-F.fz, F.fx], w: g.w, y: ya, color: 0x6b4a2f });
+      // a real apartment door in the opening: closed (solid) until you open it
+      const col = colFromRect(F.rect(g.a - g.w / 2, g.a + g.w / 2, dc - 0.06, dc + 0.06), ya, ya + 2.15, 'door');
+      C.push(col);
+      spec.doors.push({ hinge: F.pt(g.a - g.w / 2, dc), dir: [-F.fz, F.fx], w: g.w, y: ya, color: 0x6b4a2f, col });
       a = g.a + g.w / 2;
     }
     if (a1 > a) wallBox(a, a1, dc - WT / 2, dc + WT / 2, ya, yb, color);
   };
   const wallD = (d0, d1, ac, ya, yb, color) => wallBox(ac - WT / 2, ac + WT / 2, d0, d1, ya, yb, color);
   // units along the lateral axis
-  const nU = Math.max(2, Math.round(L / 7.5));
+  const nU = Math.max(1, Math.round(L / 10));
   const uw = L / nU;
   const units = [];
   for (let i = 0; i < nU; i++) units.push([-hl + i * uw, -hl + (i + 1) * uw]);
@@ -539,7 +543,6 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
       const { lm } = furnishUnit(u0, u1, D, cd1, y, k * 7 + i, office);
       backGaps.push({ a: lm, w: 1.0 });
       if (i > 0) wallD(cd1, D, u0, y, yb, wallC);
-      wallD(cd1 + 1.4, D, (u0 + u1) / 2, y, yb, wallC); // living / bedroom partition
     });
     wallA(-hl, sa0, cd1, y, yb, backGaps, wallC);
     if (k === 0) {
@@ -555,7 +558,6 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
         const { lm } = furnishUnit(u0, u1, 0, cd0, y, k * 5 + i, office);
         frontGaps.push({ a: lm, w: 1.0 });
         if (i > 0) wallD(0, cd0, u0, y, yb, wallC);
-        wallD(0, cd0 - 1.4, (u0 + u1) / 2, y, yb, wallC);
       });
       wallA(-hl, sa0, cd0, y, yb, frontGaps, wallC);
     }

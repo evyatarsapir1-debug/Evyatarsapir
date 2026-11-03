@@ -286,12 +286,11 @@ export class InteriorManager {
       if (D) {
         let changed = false;
         S.doors.forEach((d, i) => {
-          const cx = d.hinge[0] + d.dir[0] * d.w / 2, cz = d.hinge[1] + d.dir[1] * d.w / 2;
-          const near = Math.abs(player.y - d.y) < 1.6 && Math.hypot(px - cx, pz - cz) < 2.2;
-          const tgt = near ? 1 : 0;
+          const tgt = d.isOpen ? 1 : 0;
           if (D.open[i] === tgt) return;
-          const o = D.open[i] < 0 ? tgt : D.open[i] + Math.sign(tgt - D.open[i]) * Math.min(Math.abs(tgt - D.open[i]), dt * 3);
+          const o = D.open[i] < 0 ? tgt : D.open[i] + Math.sign(tgt - D.open[i]) * Math.min(Math.abs(tgt - D.open[i]), dt * 2.5);
           D.open[i] = o; changed = true;
+          if (d.col) d.col.off = o > 0.4;
           _dq.setFromAxisAngle(_up, Math.atan2(-d.dir[1], d.dir[0]) - o * Math.PI / 2);
           D.mesh.setMatrixAt(i, _dm.compose(_dp.set(d.hinge[0], d.y + 0.01, d.hinge[1]), _dq, _ds.set(d.w - 0.04, 1, 1)));
         });
@@ -331,6 +330,16 @@ export class InteriorManager {
   // contextual action near an elevator landing: { text, action }
   promptFor(player) {
     if (player.state !== 'foot') return null;
+    // doors: open / close with a button
+    let bestDoor = null, bd = 1.7;
+    const fx = Math.sin(player.facing), fz = Math.cos(player.facing);
+    for (const L of this.loaded.values()) for (const d of L.spec.doors || []) {
+      if (Math.abs(player.y - d.y) > 1.2) continue;
+      const cx = d.hinge[0] + d.dir[0] * d.w / 2, cz = d.hinge[1] + d.dir[1] * d.w / 2;
+      const dist = Math.hypot(player.x - cx, player.z - cz) - 0.3 * ((cx - player.x) * fx + (cz - player.z) * fz > 0 ? 1 : 0);
+      if (dist < bd) { bd = dist; bestDoor = d; }
+    }
+    const doorPrompt = bestDoor ? { text: bestDoor.isOpen ? 'סגור דלת' : 'פתח דלת', action: () => { bestDoor.isOpen = !bestDoor.isOpen; } } : null;
     for (const L of this.loaded.values()) {
       const el = L.elevator;
       if (!el) continue;
@@ -342,7 +351,7 @@ export class InteriorManager {
       if (here) continue;
       return { text: el.target === k || (el.floor === k && el.doorWant) ? 'המעלית בדרך...' : 'הזמן מעלית', action: () => el.go(k) };
     }
-    return null;
+    return doorPrompt;
   }
 
   _panel(el) {
