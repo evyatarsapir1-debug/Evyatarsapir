@@ -7,9 +7,9 @@ import { heightAt } from '../world/terrain.js';
 import { fmt } from './economy.js';
 
 const MOVES = {
-  jabR: { dur: 0.42, hitAt: 0.15, reach: 1.35, dmg: 1, name: 'אגרוף ימני' },
-  jabL: { dur: 0.42, hitAt: 0.15, reach: 1.35, dmg: 1, name: 'אגרוף שמאלי' },
-  kick: { dur: 0.66, hitAt: 0.28, reach: 1.7, dmg: 2, name: 'בעיטה' },
+  jabR: { dur: 0.42, hitAt: 0.15, reach: 1.6, dmg: 1, name: 'אגרוף ימני' },
+  jabL: { dur: 0.42, hitAt: 0.15, reach: 1.6, dmg: 1, name: 'אגרוף שמאלי' },
+  kick: { dur: 0.66, hitAt: 0.28, reach: 1.9, dmg: 2, name: 'בעיטה' },
 };
 const COMBO = ['jabR', 'jabL', 'kick'];
 const _v = new THREE.Vector3();
@@ -46,8 +46,14 @@ export class Combat {
     const A = player.attack;
     if (A) {
       A.t += dt;
+      // short lunge towards the target so a punch thrown from a step away still connects
+      if (A.tgt && !A.hit) {
+        const dx = A.tgt.x - player.x, dz = A.tgt.z - player.z, d = Math.hypot(dx, dz), want = d - A.m.reach * 0.7;
+        if (want > 0.02) { const st = Math.min(want, 5 * dt); player.x += dx / d * st; player.z += dz / d * st; }
+        player.facing = Math.atan2(dx, dz);
+      }
       if (!A.hit && A.t >= A.m.hitAt) { A.hit = true; this._strike(A, ctx); }
-      if (A.t >= A.m.dur) player.attack = null;
+      if (A.t >= A.m.dur) { player.attack = null; player.combatT = 3; }   // guard drops 3 s after the last strike
     }
     if (!player.attack && this.queued && unarmed) {
       this.queued = false;
@@ -56,10 +62,10 @@ export class Combat {
       this.combo = (this.combo + 1) % COMBO.length;
       this.lastAttack = now;
       player.attack = { type, m: MOVES[type], t: 0, hit: false };
-      player.combatT = 5;
-      // soft auto-aim at the closest person in front
-      const tgt = this._target(player, pedSys.peds, 2.6, 0.2);
-      if (tgt) player.facing = Math.atan2(tgt.x - player.x, tgt.z - player.z);
+      player.combatT = 3;
+      // auto-aim at the closest person in front (or right next to you)
+      const tgt = this._target(player, pedSys.peds, 3.2, -0.2) || this._target(player, pedSys.peds, 1.6, -1.1);
+      if (tgt) { player.facing = Math.atan2(tgt.x - player.x, tgt.z - player.z); player.attack.tgt = tgt; }
     }
     if (!unarmed) { this.queued = false; if (player.state !== 'foot') player.attack = null; }
     if (player.combatT > 0) player.combatT -= dt;
@@ -71,7 +77,7 @@ export class Combat {
     const fx = Math.sin(player.facing), fz = Math.cos(player.facing);
     let best = null, bd = reach;
     for (const p of peds) {
-      if (p.shopKey || p.car || p.state === 'inside' || p.state === 'down' || p.state === 'dazed' || p.state === 'pulled' || p.state === 'thrown') continue;
+      if (p.car || p.state === 'inside' || p.state === 'down' || p.state === 'dazed' || p.state === 'pulled' || p.state === 'thrown') continue;
       if (Math.abs(p.y - player.y) > 1) continue;
       const dx = p.x - player.x, dz = p.z - player.z, d = Math.hypot(dx, dz);
       if (d < bd && (dx * fx + dz * fz) / (d || 1) > cone) { bd = d; best = p; }
@@ -82,7 +88,7 @@ export class Combat {
   _strike(A, ctx) {
     const { player, pedSys, vehicles } = ctx;
     const m = A.m;
-    const p = this._target(player, pedSys.peds, m.reach, 0.35);
+    const p = A.tgt && Math.hypot(A.tgt.x - player.x, A.tgt.z - player.z) < m.reach + 0.3 && Math.abs(A.tgt.y - player.y) < 1 && A.tgt.state !== 'down' && A.tgt.state !== 'dazed' ? A.tgt : this._target(player, pedSys.peds, m.reach, 0.35);
     let hit = false;
     if (p) {
       const r = pedSys.hit(p, player, m.dmg, A.type === 'kick');
@@ -90,7 +96,7 @@ export class Combat {
         hit = true;
         if (r === 'down') this._drop(p);
         // bystanders react according to their personality
-        for (const o of pedSys.peds) if (o !== p && !o.shopKey && !o.car && Math.hypot(o.x - player.x, o.z - player.z) < 14) pedSys.react(o, player, false);
+        for (const o of pedSys.peds) if (o !== p && !o.car && Math.hypot(o.x - player.x, o.z - player.z) < 14) pedSys.react(o, player, false);
       }
     }
     // a strike that lands on a car leaves a small dent

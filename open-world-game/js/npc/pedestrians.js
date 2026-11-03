@@ -178,6 +178,7 @@ export class Pedestrians {
       if (this.peds.some((p) => p.shopKey === k)) continue;
       const p = this._add({ x: w.x, z: w.z, y: w.y, state: w.state, shopKey: k, pts: w.pts, seats: w.seats, suitcase: !!w.suitcase });
       p.yaw = w.yaw; p.phone = !!w.phone;
+      p.homeSpot = { x: w.x, z: w.z, y: w.y, yaw: w.yaw, state: w.state };
       if (w.state === 'wander') { p.wi = this.rng.int(0, w.pts.length - 1); p.timer = this.rng.float(0, 4); }
     }
   }
@@ -331,6 +332,12 @@ export class Pedestrians {
       case 'resident':
         pose = 'sit'; speed = 0;
         break;
+      case 'goHome': {
+        const h = p.homeSpot;
+        goal = [h.x, h.z]; speed = p.walkSpeed * 0.9;
+        if (Math.hypot(h.x - p.x, h.z - p.z) < 0.35 || p.timer < -25) { p.x = h.x; p.z = h.z; p.state = h.state; p.yaw = h.yaw; p.timer = this.rng.float(6, 12); goal = null; }
+        break;
+      }
       case 'wander': {
         // travellers in the terminal: walk to a spot, wait or sit for a while, move on
         goal = p.pts[p.wi]; speed = p.walkSpeed * 0.9;
@@ -400,11 +407,11 @@ export class Pedestrians {
         speed = 0; pose = 'sit'; p.x = p.bench.sx; p.z = p.bench.sz; p.yaw = dampAngle(p.yaw, (p.bench.rot || 0) + Math.PI, 8, dt);
         if (p.timer <= 0) { this._release(p); p.state = 'walk'; p.timer = this.rng.float(6, 12); p.bench = null; }
         break;
-      case 'dodge': goal = p.dodge; speed = 4.5; pose = 'run'; if (p.timer <= 0) { p.state = p.prevState === 'cross' ? 'cross' : p.pts ? 'wander' : 'walk'; p.timer = p.pts ? 0 : this.rng.float(3, 8); } break;
+      case 'dodge': goal = p.dodge; speed = 4.5; pose = 'run'; if (p.timer <= 0) { p.state = p.prevState === 'cross' ? 'cross' : this._calm(p); p.timer = p.pts ? 0 : this.rng.float(3, 8); } break;
       case 'fall':
         speed = 0; pose = 'fall';
         p.x += (p.vx || 0) * dt; p.z += (p.vz || 0) * dt; p.vx *= Math.exp(-4 * dt); p.vz *= Math.exp(-4 * dt);
-        if (p.timer <= 0) { if (p.afterFall === 'flee') { p.state = 'flee'; p.timer = 6; p.afterFall = null; } else { p.state = p.pts ? 'wander' : 'walk'; p.timer = p.pts ? 0 : 4; } }
+        if (p.timer <= 0) { if (p.afterFall === 'flee') { p.state = 'flee'; p.timer = 6; p.afterFall = null; } else { p.state = this._calm(p); p.timer = p.pts ? 0 : 4; } }
         break;
       // ------------------------------------------------ fight-system states
       case 'fight': {
@@ -429,10 +436,10 @@ export class Pedestrians {
       case 'evade': {
         // step back / sideways out of reach
         goal = p.evadeTo; speed = 3.4; pose = 'run';
-        if (p.timer <= 0 || Math.hypot(goal[0] - p.x, goal[1] - p.z) < 0.4) { p.state = p.pts ? 'wander' : 'walk'; p.timer = 3; }
+        if (p.timer <= 0 || Math.hypot(goal[0] - p.x, goal[1] - p.z) < 0.4) { p.state = this._calm(p); p.timer = 3; }
         break;
       }
-      case 'surprised': speed = 0; pose = 'surprised'; if (p.timer <= 0) { p.state = p.pts ? 'wander' : 'walk'; p.timer = 4; } break;
+      case 'surprised': speed = 0; pose = 'surprised'; if (p.timer <= 0) { p.state = this._calm(p); p.timer = 4; } break;
       case 'callHelp':
         speed = 0; pose = 'phone';
         if (p.timer <= 0) { p.state = 'flee'; p.timer = 6; }
@@ -447,14 +454,14 @@ export class Pedestrians {
       case 'dazed': {
         const [sx, sz] = p.fleeFrom, dx = p.x - sx, dz = p.z - sz, L = Math.hypot(dx, dz) || 1;
         goal = [p.x + dx / L * 10, p.z + dz / L * 10]; speed = 1.0; pose = 'walk';
-        if (p.timer <= 0) { p.state = p.pts ? 'wander' : 'walk'; p.timer = 6; p.hp = p.maxHp; p.defeated = false; }
+        if (p.timer <= 0) { p.state = this._calm(p); p.timer = 6; p.hp = p.maxHp; p.defeated = false; }
         break;
       }
       case 'flee': {
         const [sx, sz] = p.fleeFrom;
         const dx = p.x - sx, dz = p.z - sz, L = Math.hypot(dx, dz) || 1;
         goal = [p.x + dx / L * 10, p.z + dz / L * 10]; speed = 4.8; pose = 'run';
-        if (p.timer <= 0) { p.state = p.pts ? 'wander' : 'walk'; p.timer = p.pts ? 0 : 5; }
+        if (p.timer <= 0) { p.state = this._calm(p); p.timer = p.pts ? 0 : 5; }
         break;
       }
     }
@@ -504,7 +511,6 @@ export class Pedestrians {
   // something dangerous happened near this person (explosion, energy blast): duck / fall, then run away
   scare(p, src, hit) {
     if (p.state === 'driving' || p.state === 'pulled' || p.state === 'thrown') return;
-    if (p.state === 'shopkeeper' || p.state === 'resident') { p.pose = 'idle'; return; }
     p.seat = null; p.fixedY = null;
     this._release(p);
     if (hit && p.state !== 'fall') {
@@ -517,6 +523,12 @@ export class Pedestrians {
   }
 
   say(p, text, t = 2.2) { p.say = text; p.sayT = t; }
+
+  // state to return to after a scare/fight: travellers wander, people who live/work inside walk back to their spot
+  _calm(p) {
+    if (p.homeSpot && !p.pts) return 'goHome';
+    return p.pts ? 'wander' : 'walk';
+  }
 
   // a person got hit in a fist fight
   hit(p, src, dmg, kick) {
@@ -539,7 +551,9 @@ export class Pedestrians {
 
   // someone saw (or felt) a fight: every personality reacts differently
   react(p, src, wasHit = false) {
-    if (['fight', 'down', 'dazed', 'shopkeeper', 'resident', 'inside', 'driving', 'pulled', 'thrown'].includes(p.state)) return;
+    if (['fight', 'down', 'dazed', 'inside', 'driving', 'pulled', 'thrown'].includes(p.state)) return;
+    // people sitting at home or standing at work only react when they are hit or the fight is right next to them
+    if ((p.state === 'shopkeeper' || p.state === 'resident') && !wasHit && Math.hypot(p.x - src.x, p.z - src.z) > 4) return;
     if (!wasHit && p.reactedAt && performance.now() - p.reactedAt < 8000) return;
     p.reactedAt = performance.now();
     this._release(p); p.seat = null; p.fixedY = null;

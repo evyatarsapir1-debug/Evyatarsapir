@@ -8,6 +8,27 @@ const S = TS / P;
 const KIND_COLORS = { D: '#b9b2a6', S: '#d9cdb5', C: '#cbbfa8', A: '#c4cfb6', H: '#b9d39a', I: '#a9a39a', P: '#7fbf63', G: '#d0c3a8', M: '#b0a89c', T: '#c9c0b0', B: '#e0d2b0', L: '#cbbfa8', K: '#b8b4ac',
   F: '#a8bf6a', W: '#5f8f45', O: '#8fb873', h: '#a8bf6a', X: '#a5ad95', Q: '#4f9dc9' };
 
+// Landmark badges (icon in a coloured circle + name) drawn on any of the maps.
+export function drawLandmarks(g, list, toScreen, size, withNames = true, upright = null) {
+  g.save();
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (const L of list) {
+    const pt = toScreen(L.x, L.z);
+    if (!pt) continue;
+    const [x, y] = pt;
+    g.save(); g.translate(x, y); if (upright !== null) g.rotate(upright);
+    g.fillStyle = L.color; g.strokeStyle = '#fff'; g.lineWidth = size * 0.14;
+    g.beginPath(); g.arc(0, 0, size * 0.62, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.font = `${Math.round(size * 0.72)}px sans-serif`; g.fillStyle = '#fff'; g.fillText(L.icon, 0, size * 0.04);
+    if (withNames) {
+      g.font = `bold ${Math.round(size * 0.62)}px sans-serif`; g.lineWidth = size * 0.22; g.strokeStyle = '#ffffffee'; g.fillStyle = '#1b1b1b';
+      g.strokeText(L.short, 0, size * 1.25); g.fillText(L.short, 0, size * 1.25);
+    }
+    g.restore();
+  }
+  g.restore();
+}
+
 export class MiniMap {
   constructor(canvas, fullCanvas) {
     this.canvas = canvas; this.ctx = canvas.getContext('2d');
@@ -71,7 +92,7 @@ export class MiniMap {
       }
   }
 
-  draw(px, pz, facing, camYaw, markers = [], route = null) {
+  draw(px, pz, facing, camYaw, markers = [], route = null, landmarks = []) {
     const c = this.canvas, g = this.ctx, w = c.width, h = c.height;
     const zoom = 1.6;
     const R = (w / 2) / zoom / S * 1.45; // world radius visible (corners included)
@@ -91,6 +112,9 @@ export class MiniMap {
     for (const m of markers) {
       g.fillStyle = m.color; g.beginPath(); g.arc((m.x - px) * S, (m.z - pz) * S, 3, 0, Math.PI * 2); g.fill();
     }
+    // landmark icons (kept upright); names only when close
+    const far = R * 0.95;
+    drawLandmarks(g, landmarks.filter((L) => Math.abs(L.x - px) < far && Math.abs(L.z - pz) < far), (x, z) => [(x - px) * S, (z - pz) * S], 9 / zoom, false, -(Math.PI + camYaw));
     g.rotate(-facing + Math.PI);
     const k = 1.5 / zoom;
     g.fillStyle = '#ff3b30'; g.strokeStyle = '#fff'; g.lineWidth = k;
@@ -134,7 +158,8 @@ export class MiniMap {
       const [sx, sy] = W2(wx, wz);
       if (sx > 0 && sy > 0 && sx < c.width && sy < c.height) { g.strokeStyle = '#fff'; g.lineWidth = 3; g.strokeText(t, sx, sy); g.fillText(t, sx, sy); }
     };
-    label('אזורה סיטי', 500, 470); label('נמל התעופה', -350, 470); label('מפרץ אזורה', 1500, 250);
-    label('מרינה מזרח', 2500, 500); label('גבעת הרימון', 500, 1500); label('רכס הנשרים', 500, -700);
+    label('אזורה סיטי', 500, 470); label('מפרץ אזורה', 1500, 250);
+    label('גבעת הרימון', 500, 1500); label('רכס הנשרים', 500, -700);
+    drawLandmarks(g, this.landmarks || [], (x, z) => W2(x, z), 15 * devicePixelRatio, true);
   }
 }

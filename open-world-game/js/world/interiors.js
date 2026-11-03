@@ -130,8 +130,66 @@ function shellColliders(b, top, door, out) {
   }
 }
 
-const DOORS = { shop: [1.8, 2.6], house: [1.2, 2.2], hall: [3.0, 3.2], mall: [4, 3.4], apartment: [2.2, 2.7], tower: [2.2, 2.7], terminal: [8, 3.4], hangar: [46, 16], ctower: [1.8, 2.6] };
+const DOORS = { shop: [1.8, 2.6], house: [1.2, 2.2], hall: [3.0, 3.2], mall: [4, 3.4], apartment: [2.2, 2.7], tower: [2.2, 2.7], terminal: [8, 3.4], hangar: [46, 16], ctower: [1.8, 2.6], villa: [2.0, 2.5], library: [2.4, 2.8] };
 export function doorFor(b) { const d = DOORS[b.interior]; return d ? { face: b.face, w: d[0], h: d[1] } : null; }
+
+// The player's villa: an open, bright two-storey home. Ground floor: living room, dining, kitchen with island.
+// Upstairs: master bedroom with a walk-in wardrobe (change clothes here), guest room, study and a lounge.
+function villaSpec(b, F, spec, piece, lamp, furn, C, y0) {
+  const L = F.L, D = F.D, hl = L / 2;
+  const H1 = b.h / 2, y1 = y0 + H1, top = y0 + b.h;
+  spec.door = { face: b.face, w: 2.0, h: 2.5 };
+  shellColliders(b, top, spec.door, C);
+  const dcol = colFromRect(F.rect(-1.0, 1.0, -0.25, -0.05), y0, y0 + 2.45, 'door');
+  C.push(dcol);
+  spec.doors = [{ hinge: F.pt(-1.0, -0.15), dir: [-F.fz, F.fx], w: 2.0, y: y0, color: 0x3b2a1e, front: true, col: dcol }];
+  C.push(makeBox(b.x, b.z, b.w / 2 + 0.3, b.d / 2 + 0.3, 0, top, top + 0.4, 'roof'));
+  spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1, wall: 0xf7f4ee, floor: 0xd9d2c5, ceil: 0xffffff, door: spec.door, b });
+  // living room (left)
+  piece(F, spec, 'rug', -7, 6.2, y0, '+d', 0xb9a58a, false);
+  piece(F, spec, 'sofa', -7, 4.0, y0, '+d', 0xe9e4da);
+  piece(F, spec, 'sofa', -10.2, 6.4, y0, '+a', 0xe9e4da);
+  piece(F, spec, 'armchair', -3.8, 6.4, y0, '-a', 0x2f4f6f);
+  piece(F, spec, 'coffee', -7, 6.0, y0, '+d');
+  piece(F, spec, 'tv', -7, 8.6, y0, '-d');
+  piece(F, spec, 'plant', -hl + 0.45, 0.45, y0); piece(F, spec, 'plant', -1.6, 0.45, y0); piece(F, spec, 'plant', 1.6, 0.45, y0);
+  piece(F, spec, 'bookcase', -3.0, D - 0.25, y0, '-d'); piece(F, spec, 'bookcase', -4.05, D - 0.25, y0, '-d');
+  // dining (right, middle) + kitchen along the back wall with an island
+  piece(F, spec, 'table', 4.3, 5.4, y0, '+d'); piece(F, spec, 'table', 5.75, 5.4, y0, '+d');
+  piece(F, spec, 'kitchen', 7.0, D - 0.35, y0, '-d', 4.6);
+  furn(4.8, 9.2, D - 3.0, D - 2.2, y0, y0 + 0.92, 0xeeeae2);
+  furn(4.75, 9.25, D - 3.05, D - 2.15, y0 + 0.92, y0 + 0.97, 0x2b2b2b, false);
+  piece(F, spec, 'plant', hl - 0.45, 0.45, y0);
+  for (const a of [-7, 0, 6]) for (const d of [3, 9]) lamp(a, d, y1 - 0.03);
+  // stairs at the back left (like the house), rising along the lateral axis
+  const run = Math.min(L - 3.2, H1 / 0.6);
+  const sa0 = -hl + 0.1, sa1 = sa0 + run, sd0 = D - 1.35, sd1 = D;
+  const sr = F.rect(sa0, sa1, sd0, sd1);
+  const p0 = F.pt(sa0, 0), p1 = F.pt(sa1, 0);
+  const axis = F.lateralAxis;
+  const startMin = axis === 'x' ? p0[0] < p1[0] : p0[1] < p1[1];
+  spec.surfaces.push(makeSurface(sr[0], sr[1], sr[2], sr[3], startMin ? y0 : y1, startMin ? y1 : y0, axis));
+  spec.stairs.push({ rect: sr, y0, y1, axis, startMin, color: 0xcfc6b6 });
+  for (const r of [F.rect(-hl, hl, 0, sd0), F.rect(sa1, hl, sd0, D)]) {
+    spec.surfaces.push(makeSurface(r[0], r[1], r[2], r[3], y1));
+    spec.slabs.push({ rect: r, y: y1, color: 0xcbb79c, under: 0xffffff });
+    C.push(colFromRect(r, y1 - 0.25, y1 - 0.02, 'slab'));
+  }
+  furn(sa0, sa1, sd0 - 0.08, sd0, y1, y1 + 0.95, 0xdedede, true);
+  spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0: y1, y1: top, wall: 0xf3f0ea, floor: null, ceil: 0xffffff, door: null, b });
+  // master bedroom (left front) + walk-in wardrobe
+  piece(F, spec, 'rug', -7.5, 2.6, y1, '+d', 0x8c7a6b, false);
+  piece(F, spec, 'bed', -7.5, 1.3, y1, '+d', 0xf0ebe3);
+  piece(F, spec, 'nightstand', -8.85, 0.35, y1, '+d'); piece(F, spec, 'nightstand', -6.15, 0.35, y1, '+d');
+  piece(F, spec, 'wardrobe', -hl + 0.4, 4.2, y1, '+a', 0xe8e1d4); piece(F, spec, 'wardrobe', -hl + 0.4, 5.45, y1, '+a', 0xe8e1d4); piece(F, spec, 'wardrobe', -hl + 0.4, 6.7, y1, '+a', 0xe8e1d4);
+  spec.wardrobe = { pt: F.pt(-hl + 1.5, 5.45), y: y1 };
+  // study (middle front) + guest bedroom (right front) + upstairs lounge (back right)
+  piece(F, spec, 'desk', -1.5, 0.45, y1, '+d'); piece(F, spec, 'chair', -1.5, 1.2, y1, '-d'); piece(F, spec, 'bookcase', 0.2, 0.25, y1, '+d');
+  piece(F, spec, 'bed', 8.5, 1.3, y1, '+d', 0x7fa6c4); piece(F, spec, 'nightstand', 7.15, 0.35, y1, '+d'); piece(F, spec, 'wardrobe', hl - 0.4, 3.6, y1, '-a');
+  piece(F, spec, 'sofa', 6.0, D - 4.6, y1, '-d', 0x5a6e7f); piece(F, spec, 'tv', 6.0, D - 7.6, y1, '+d'); piece(F, spec, 'coffee', 6.0, D - 5.8, y1, '+d');
+  piece(F, spec, 'plant', hl - 0.45, D - 0.45, y1); piece(F, spec, 'lamp', -hl + 0.4, 0.4, y1);
+  for (const a of [-7, 0, 6]) for (const d of [3, 9]) lamp(a, d, top - 0.03);
+}
 
 export function interiorSpec(b) {
   if (b._spec) return b._spec;
@@ -232,6 +290,28 @@ export function interiorSpec(b) {
       piece(F, spec, 'desk', 0.4, 0.45, y1, '+d');
       lamp(0, D * 0.4, top - 0.03);
     }
+  } else if (b.interior === 'villa') {
+    villaSpec(b, F, spec, piece, lamp, furn, C, y0);
+  } else if (b.interior === 'library') {
+    const H = Math.min(5.2, b.h);
+    spec.door = { face: b.face, w: 2.4, h: 2.8 };
+    shellColliders(b, y0 + H, spec.door, C);
+    if (b.h > H) C.push(makeBox(b.x, b.z, b.w / 2, b.d / 2, 0, y0 + H, y0 + b.h));
+    spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1: y0 + H, wall: 0xf0e6d2, floor: 0x9c6b43, ceil: 0xf7f3ea, door: spec.door, b });
+    // librarian's desk by the entrance
+    piece(F, spec, 'desk_reception', hl - 2.4, 2.2, y0, '+d');
+    spec.counter = { pt: F.pt(hl - 2.4, 1.1), keeper: F.pt(hl - 2.4, 3.0), yaw: Math.atan2(F.fx, F.fz), y: y0 };
+    // rows of tall bookcases (both faces) along the back half
+    for (let a = -hl + 1.2; a < hl - 0.8; a += 1.05) {
+      for (let d = Math.max(5.5, D * 0.45); d < D - 1.2; d += 2.6) { piece(F, spec, 'bookcase', a, d, y0, '+d'); piece(F, spec, 'bookcase', a, d + 0.38, y0, '-d'); }
+    }
+    for (let a = -hl + 1.0; a < hl - 0.8; a += 1.05) piece(F, spec, 'bookcase', a, D - 0.25, y0, '-d');
+    // reading tables, armchairs, rugs and plants at the front
+    for (let a = -hl + 2.2; a < hl - 5; a += 3.4) { piece(F, spec, 'table', a, Math.min(3.4, D * 0.3), y0, '+d'); }
+    piece(F, spec, 'rug', -hl + 2.4, 1.4, y0, '+d', 0x2e5d8a, false);
+    piece(F, spec, 'armchair', -hl + 1.6, 1.2, y0, '+a', 0x7a3b2e); piece(F, spec, 'armchair', -hl + 3.2, 1.2, y0, '-a', 0x7a3b2e);
+    piece(F, spec, 'plant', -hl + 0.45, 0.45, y0); piece(F, spec, 'plant', hl - 0.45, 0.45, y0);
+    for (let a = -hl + 3; a < hl; a += 6) for (let d = 2.5; d < D; d += 5) lamp(a, d, y0 + H - 0.03);
   } else if (b.interior === 'hall') {
     const H = Math.min(b.h, 7);
     spec.door = { face: b.face, w: 3.0, h: 3.2 };

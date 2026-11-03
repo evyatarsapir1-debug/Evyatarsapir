@@ -12,7 +12,7 @@ const KINDS = [
   ['equipment', ['אלקטרו', 'משקפי', 'פארם', 'צעצועי', 'ספרים', 'חדר כושר', 'דיוטי פרי']],
   ['food', ['קפה טרמינל', 'קפה', 'פיצה', 'בורגר', 'פלאפל', 'מאפיית', 'סושי', 'גלידת', 'מסעדת', 'מכולת', 'סופר', 'יין', 'דלק+', 'פרחי']],
 ];
-export const KIND_NAMES = { weapons: 'חנות ציוד משחק (בדיוני)', mechanic: 'מוסך', barber: 'מספרה', clothes: 'חנות בגדים', equipment: 'חנות ציוד', food: 'אוכל ושתייה' };
+export const KIND_NAMES = { wardrobe: 'ארון בגדים', weapons: 'חנות ציוד משחק (בדיוני)', mechanic: 'מוסך', barber: 'מספרה', clothes: 'חנות בגדים', equipment: 'חנות ציוד', food: 'אוכל ושתייה' };
 export function shopKind(sign) {
   if (!sign) return null;
   for (const [k, words] of KINDS) if (words.some((w) => sign.includes(w))) return k;
@@ -29,13 +29,36 @@ function catalogue(kind, ctx) {
   const out = [];
   const wear = (patch, label) => () => { player.model.setAppearance({ ...player.model.app, ...patch }); game.save(); return `לבשת: ${label}`; };
   switch (kind) {
-    case 'clothes':
-      for (const st of TOP_STYLES) for (const c of COLOR_PICKS.slice(0, 4)) out.push({ id: `top-${st}-${c}`, name: `${TOP_NAMES[st]}`, swatch: CLOTH_COLORS[(c + TOP_STYLES.indexOf(st) * 2) % CLOTH_COLORS.length], price: st === 'jacket' ? 450 : st === 'hoodie' ? 320 : 120, buy: null, patch: { top: st, topColor: (c + TOP_STYLES.indexOf(st) * 2) % CLOTH_COLORS.length } });
-      for (const st of BOTTOM_STYLES) for (const c of COLOR_PICKS.slice(2, 5)) out.push({ id: `bot-${st}-${c}`, name: `${BOTTOM_NAMES[st]}`, swatch: CLOTH_COLORS[(c + 5) % CLOTH_COLORS.length], price: st === 'jeans' ? 260 : 180, patch: { bottom: st, bottomColor: (c + 5) % CLOTH_COLORS.length } });
+    case 'clothes': {
+      // --- suits (jacket + trousers in the same colour, white shirt and tie)
+      const SUITS = [['חליפה שחורה קלאסית', 1, 2500], ['חליפה כחול נייבי', 17, 2450], ['חליפה אפורה פחם', 16, 2400], ['חליפה בורדו', 15, 2350], ['חליפה בז׳ קיצית', 14, 2300], ['חליפה לבנה', 18, 2200]];
+      for (const [name, c, price] of SUITS) out.push({ id: `suit-${c}`, name, desc: 'ז׳קט, מכנסיים, חולצה לבנה ועניבה', swatch: CLOTH_COLORS[c], price, patch: { top: 'suit', topColor: c, bottom: 'pants', bottomColor: c, shoes: 1 } });
+      // --- t-shirts: premium 200, basic 100
+      for (const c of [0, 1, 3, 2]) out.push({ id: `tee200-${c}`, name: 'חולצה קצרה — מותג', desc: 'כותנה איכותית', swatch: CLOTH_COLORS[c], price: 200, patch: { top: 'tshirt', topColor: c } });
+      for (const c of [4, 5, 7, 9]) out.push({ id: `tee100-${c}`, name: 'חולצה קצרה — בסיסית', swatch: CLOTH_COLORS[c], price: 100, patch: { top: 'tshirt', topColor: c } });
+      // --- shorts: 120 and 80
+      for (const c of [14, 17, 1]) out.push({ id: `sh120-${c}`, name: 'מכנס קצר — ברמודה', swatch: CLOTH_COLORS[c], price: 120, patch: { bottom: 'shorts', bottomColor: c } });
+      for (const c of [3, 8, 9]) out.push({ id: `sh80-${c}`, name: 'מכנס קצר — ספורט', swatch: CLOTH_COLORS[c], price: 80, patch: { bottom: 'shorts', bottomColor: c } });
+      // --- the rest of the store
+      for (const st of ['jacket', 'hoodie', 'tank']) for (const c of COLOR_PICKS.slice(0, 3)) { const col = (c + TOP_STYLES.indexOf(st) * 2) % 14; out.push({ id: `top-${st}-${col}`, name: TOP_NAMES[st], swatch: CLOTH_COLORS[col], price: st === 'jacket' ? 450 : st === 'hoodie' ? 320 : 90, patch: { top: st, topColor: col } }); }
+      for (const st of ['jeans', 'pants', 'skirt']) for (const c of COLOR_PICKS.slice(2, 5)) { const col = (c + 5) % 14; out.push({ id: `bot-${st}-${col}`, name: BOTTOM_NAMES[st], swatch: CLOTH_COLORS[col], price: st === 'jeans' ? 260 : 180, patch: { bottom: st, bottomColor: col } }); }
       out.push({ id: 'shoes-0', name: 'נעלי ספורט לבנות', swatch: 0xf2f2f2, price: 350, patch: { shoes: 0 } });
       out.push({ id: 'shoes-1', name: 'נעליים שחורות', swatch: 0x1d1d1f, price: 380, patch: { shoes: 1 } });
-      for (const it of out) it.buy = wear(it.patch, it.name);
+      for (const it of out) {
+        const wearIt = wear(it.patch, it.name);
+        if (econ.ownsCloth(it.id)) { it.label = 'ללבוש'; it.price = 0; it.buy = wearIt; it.desc = (it.desc ? it.desc + ' · ' : '') + 'בבעלותך — גם בארון בבית'; }
+        else it.buy = () => { econ.startOutfit ||= { top: app.top, topColor: app.topColor, bottom: app.bottom, bottomColor: app.bottomColor, shoes: app.shoes }; econ.addCloth(it); return wearIt() + ' · נשמר בארון הבגדים בבית'; };
+      }
       break;
+    }
+    case 'wardrobe': {
+      // the closet at home: everything you bought, free to change into
+      const start = econ.startOutfit || (econ.startOutfit = { top: app.top, topColor: app.topColor, bottom: app.bottom, bottomColor: app.bottomColor, shoes: app.shoes });
+      out.push({ id: 'start', name: 'הבגדים מההתחלה', swatch: CLOTH_COLORS[start.topColor], price: 0, label: 'ללבוש', buy: wear(start, 'הבגדים מההתחלה') });
+      for (const w of econ.wardrobe) out.push({ id: w.id, name: w.name, swatch: w.swatch, price: 0, label: 'ללבוש', buy: wear(w.patch, w.name) });
+      if (!econ.wardrobe.length) out.push({ id: 'empty', name: 'הארון עוד ריק', desc: 'בגדים שתקנה בחנות הבגדים (אופנת אזורה) יחכו לך כאן', price: 0, disabled: true });
+      break;
+    }
     case 'barber':
       for (const st of HAIR_STYLES) out.push({ id: `hair-${st}`, name: `תספורת: ${HAIR_NAMES[st]}`, price: 90, buy: wear({ hairStyle: st }, HAIR_NAMES[st]) });
       HAIR_COLORS.forEach((c, i) => out.push({ id: `hairc-${i}`, name: 'צביעת שיער', swatch: c, price: 140, buy: wear({ hairColor: i }, 'צבע שיער חדש') }));
@@ -101,7 +124,7 @@ export class ShopUI {
       row.innerHTML = `${sw}<div class="sname"><b>${it.name}</b>${it.desc ? `<small>${it.desc}</small>` : ''}</div>`;
       const btn = document.createElement('button');
       btn.className = 'sbuy'; btn.type = 'button';
-      btn.textContent = it.owned ? 'בבעלותך' : it.price ? fmt(it.price) : '—';
+      btn.textContent = it.label || (it.owned ? 'בבעלותך' : it.price ? fmt(it.price) : '—');
       btn.disabled = !!(it.disabled || it.owned || !econ.canAfford(it.price) || !it.buy);
       btn.onclick = () => {
         if (!econ.pay(it.price, it.name)) { this.msg.textContent = 'אין מספיק כסף'; return; }

@@ -205,10 +205,10 @@ export function getHouseRoof() {
 }
 
 // Sign atlas: 4 columns x 8 rows, each 256x64
-export const SIGN_COLS = 4, SIGN_ROWS = 12;
+export const SIGN_COLS = 4, SIGN_ROWS = 16;
 export function getSignAtlas() {
   return cache.signs ||= (() => {
-    const [c, g] = canvas(1024, 768);
+    const [c, g] = canvas(1024, 1024);
     const colors = ['#1f4e79', '#7b241c', '#145a32', '#4a235a', '#7e5109', '#1b2631', '#943126', '#0e6251'];
     ALL_SIGNS.forEach((name, i) => {
       const cx = (i % SIGN_COLS) * 256, cy = Math.floor(i / SIGN_COLS) * 64;

@@ -13,7 +13,7 @@ import { interiorSpec, garageSpec } from './interiors.js';
 export const WATER_Y = -1.0;
 export const RIDGE = { x0: -60, x1: 1060, z0: -760, z1: -640, h: 42 };
 export const TUNNEL_H = 8, TUNNEL_HALF = 9.5;
-const URBAN = new Set('DSCAHPGMTBLKI'.split(''));
+const URBAN = new Set('DSCAHPGMTBLKIV'.split(''));
 const TOWN_NAMES = ['נווה ים', 'כפר אלונים', 'רמת השקד', 'עין הדקל', 'קריית הגפן', 'נאות הברוש', 'גבעת הכלנית', 'כרם התאנה'];
 const COUNTRY_NAMES = ['עמק השקדים', 'שדות הזהב', 'יער האלונים', 'מישור הרוח', 'גבעות הכלנית', 'נחל הצפצפות'];
 const mod = (a, n) => ((a % n) + n) % n;
@@ -409,6 +409,9 @@ export function propColliders(p, out) {
     case 'tree': case 'palm': out.push(makeCircle(p.x, p.z, 0.3 * (p.s || 1), 0, 6)); break;
     case 'bench': out.push(makeBox(p.x, p.z, 0.85, 0.3, p.rot || 0, 0, 0.9)); break;
     case 'bin': out.push(makeCircle(p.x, p.z, 0.3, 0, 1)); break;
+    case 'hedge': out.push(makeBox(p.x, p.z, p.w / 2, p.d / 2, 0, 0, 1.5)); break;
+    case 'lounger': out.push(makeBox(p.x, p.z, 0.35, 0.95, p.rot || 0, 0, 0.6)); break;
+    case 'parasol': out.push(makeCircle(p.x, p.z, 0.12, 0, 2.4)); break;
     case 'container': out.push(makeBox(p.x, p.z, 3.0, 1.2, p.rot || 0, 0, 2.6)); break;
     case 'chimney': out.push(makeCircle(p.x, p.z, 1.6, 0, p.h)); break;
     case 'pump': out.push(makeBox(p.x, p.z, 0.5, 0.35, 0, 0, 1.8)); break;

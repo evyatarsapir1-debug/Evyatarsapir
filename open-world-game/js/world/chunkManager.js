@@ -65,6 +65,39 @@ function addProp(pb, p, lampB) {
       break;
     }
     case 'bin': pb.addGeometry(G.cyl, mat(p.x, y + 0.45, p.z, 0, 0.55, 0.9, 0.55), 0x2e5d3a); break;
+    case 'pool': {
+      // swimming pool: white stone coping, tiled walls, turquoise water and a steel ladder
+      const hw = p.w / 2, hd = p.d / 2, c = 0.6;
+      pb.addGeometry(G.box, mat(p.x, y + 0.1, p.z - hd - c / 2, 0, p.w + 2 * c, 0.14, c), 0xf2efe8);
+      pb.addGeometry(G.box, mat(p.x, y + 0.1, p.z + hd + c / 2, 0, p.w + 2 * c, 0.14, c), 0xf2efe8);
+      pb.addGeometry(G.box, mat(p.x - hw - c / 2, y + 0.1, p.z, 0, c, 0.14, p.d), 0xf2efe8);
+      pb.addGeometry(G.box, mat(p.x + hw + c / 2, y + 0.1, p.z, 0, c, 0.14, p.d), 0xf2efe8);
+      pb.addGeometry(G.box, mat(p.x, y + 0.05, p.z, 0, p.w, 0.04, p.d), 0x29b6e0);
+      pb.addGeometry(G.box, mat(p.x, y + 0.075, p.z, 0, p.w - 0.3, 0.01, p.d - 0.3), 0x46cdf0);
+      for (const dx of [-0.3, 0.3]) {
+        pb.addGeometry(G.cyl, mat(p.x + hw - 1.2 + dx, y + 0.5, p.z - hd + 0.05, 0, 0.06, 0.9, 0.06), 0xd5d9dd);
+        pb.addGeometry(G.box, mat(p.x + hw - 1.2 + dx, y + 0.95, p.z - hd - 0.12, 0, 0.06, 0.06, 0.35), 0xd5d9dd);
+      }
+      break;
+    }
+    case 'lounger': {
+      const r = p.rot || 0, c = Math.cos(r), sn = Math.sin(r);
+      const at = (lx, ly, lz) => [p.x + lx * c + lz * sn, y + ly, p.z - lx * sn + lz * c];
+      let q = at(0, 0.32, 0.2); pb.addGeometry(G.box, mat(q[0], q[1], q[2], r, 0.7, 0.08, 1.5), 0xf4f1ea);
+      q = at(0, 0.55, -0.75); pb.addGeometry(G.box, mat(q[0], q[1], q[2], r, 0.7, 0.08, 0.7, -0.75), 0xf4f1ea);
+      q = at(0, 0.38, 0.2); pb.addGeometry(G.box, mat(q[0], q[1], q[2], r, 0.62, 0.05, 1.4), 0x2e86c1);
+      for (const lx of [-0.3, 0.3]) for (const lz of [-0.6, 0.8]) { q = at(lx, 0.14, lz); pb.addGeometry(G.box, mat(q[0], q[1], q[2], r, 0.05, 0.28, 0.05), 0x9aa0a6); }
+      break;
+    }
+    case 'parasol':
+      pb.addGeometry(G.cyl, mat(p.x, y + 1.25, p.z, 0, 0.07, 2.5, 0.07), 0xdddddd);
+      pb.addGeometry(G.cone, mat(p.x, y + 2.6, p.z, 0, 3.2, 0.6, 3.2), 0xf4f1ea);
+      pb.addGeometry(G.cone, mat(p.x, y + 2.62, p.z, 0.4, 2.0, 0.42, 2.0), 0x2e86c1);
+      break;
+    case 'hedge':
+      pb.addGeometry(G.box, mat(p.x, y + 0.75, p.z, 0, p.w, 1.5, p.d), 0x3b6e2e);
+      pb.addGeometry(G.box, mat(p.x, y + 1.52, p.z, 0, p.w + 0.1, 0.06, p.d + 0.1), 0x4b8a3a);
+      break;
     case 'container': pb.addGeometry(G.box, mat(p.x, y + 1.3, p.z, p.rot || 0, 6, 2.6, 2.4), p.color); break;
     case 'chimney':
       pb.addGeometry(G.cyl16, mat(p.x, y + p.h / 2, p.z, 0, 3.2, p.h, 3.2), 0x9c9a95);
@@ -209,7 +242,33 @@ function buildBuilding(b, out, B) {
     let y = CURB_H;
     const top = CURB_H + b.h;
     const roof = f('roof');
-    if (b.storefront) {
+    if (b.villa) {
+      // modern villa: glass ground floor, white upper floor, deep flat-roof overhang, wood cladding, balcony
+      const mid = CURB_H + b.h / 2;
+      const [fx, fz] = faceVector(b.face), rx = -fz, rz = fx;
+      const half = fx !== 0 ? b.w / 2 : b.d / 2, ry = fx !== 0 ? Math.PI / 2 : 0;
+      const F0 = (a, out) => [b.x + fx * (half + out) + rx * a, b.z + fz * (half + out) + rz * a];
+      faces(f('glass'), rect, CURB_H, mid, 3, 3.8, 0xcfe0ea, door);
+      faces(f('plaster'), rect, mid, top, 40, 40, 0xf8f6f1, null);
+      roof.floor(rect[0], rect[1], rect[2], rect[3], top, 0xdedbd4, 6);
+      B.props.addGeometry(G.box, mat(b.x, top + 0.17, b.z, 0, b.w + 2.6, 0.34, b.d + 2.6), 0xf6f4ef);
+      B.props.addGeometry(G.box, mat(b.x, mid + 0.12, b.z, 0, b.w + 0.9, 0.26, b.d + 0.9), 0xf1eee8);
+      // ribbon windows on the upper floor (dark glass) on all four sides
+      for (const [sx, sz, len] of [[0, -1, b.w], [0, 1, b.w], [-1, 0, b.d], [1, 0, b.d]]) {
+        const cx = b.x + sx * (b.w / 2 + 0.03), cz = b.z + sz * (b.d / 2 + 0.03);
+        B.props.addGeometry(G.box, mat(cx, mid + 1.9, cz, sx !== 0 ? Math.PI / 2 : 0, len * 0.62, 1.5, 0.06), 0x24394a);
+      }
+      // wood cladding block on the left of the front, stone base
+      let q = F0(-b.w * 0.3, 0.1); B.props.addGeometry(G.box, mat(q[0], (mid + top) / 2, q[1], ry, b.w * 0.3, top - mid - 0.1, 0.2), 0x8a5a3b);
+      B.props.addGeometry(G.box, mat(b.x, CURB_H + 0.2, b.z, 0, b.w + 0.3, 0.4, b.d + 0.3), 0x9c958a);
+      // balcony over the entrance with glass railing
+      q = F0(b.w * 0.18, 0.9); B.props.addGeometry(G.box, mat(q[0], mid + 0.12, q[1], ry, b.w * 0.42, 0.24, 1.8), 0xf1eee8);
+      q = F0(b.w * 0.18, 1.75); B.props.addGeometry(G.box, mat(q[0], mid + 0.75, q[1], ry, b.w * 0.42, 1.0, 0.05), 0x9fc6dc);
+      q = F0(b.w * 0.18, 1.75); B.props.addGeometry(G.box, mat(q[0], mid + 1.27, q[1], ry, b.w * 0.42, 0.05, 0.08), 0xc9ced3);
+      // house-name plaque by the door + wall lights
+      signQuad(B.signs, F0(2.3, 0.12)[0], CURB_H + 2.0, F0(2.3, 0.12)[1], fx, fz, 1.6, b.sign);
+      for (const s2 of [-1, 1]) { q = F0(s2 * 1.6, 0.12); B.props.addGeometry(G.box, mat(q[0], CURB_H + 2.4, q[1], ry, 0.18, 0.32, 0.12), 0xfff3d0); }
+    } else if (b.storefront) {
       const sh = Math.min(4.2, b.h);
       faces(f('storefront'), rect, y, y + sh, 6, 4, 0xffffff, door);
       y += sh;
@@ -244,7 +303,7 @@ function buildBuilding(b, out, B) {
         }
       }
     }
-    if (!(b.tower && b.setback)) {
+    if (!(b.tower && b.setback) && !b.villa) {
       roof.floor(rect[0], rect[1], rect[2], rect[3], top, 0xaaaaaa, 6);
       faces(f('concrete'), [rect[0] - 0.15, rect[1] - 0.15, rect[2] + 0.15, rect[3] + 0.15], top, top + 0.8, 60, 60, 0xcfcac2, null);
       if (b.h > 12 && b.w > 12 && b.d > 12) {
@@ -256,7 +315,7 @@ function buildBuilding(b, out, B) {
     const half = fx !== 0 ? b.w / 2 : b.d / 2;
     const frontLen = fx !== 0 ? b.d : b.w;
     if (b.garage && !door) B.props.addGeometry(G.box, mat(b.x + fx * (half + 0.05), CURB_H + 2.6, b.z + fz * (half + 0.05), fx !== 0 ? Math.PI / 2 : 0, 10, 5.2, 0.1), 0x2a2d30);
-    if (b.sign) {
+    if (b.sign && !b.villa) {
       const tall = b.station || b.airport || b.mall || (b.tower && b.sign);
       const sw = tall ? Math.min(frontLen * 0.6, 24) : Math.min(frontLen * 0.7, 7);
       const sh = sw / 4;

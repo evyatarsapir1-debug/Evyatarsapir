@@ -13,7 +13,7 @@ import { GPS } from './phone/gps.js';
 import { Phone } from './phone/phone.js';
 import { Missions, CONTACTS, MISSIONS } from './game/missions.js';
 import { Radio } from './core/audio.js';
-import { PARK_OFFSET } from './world/layout.js';
+import { PARK_OFFSET, VILLA } from './world/layout.js';
 import { AirportManager, LIVERIES } from './world/airport.js';
 import { Combat } from './game/combat.js';
 import { setAnisotropy } from './world/textures.js';
@@ -256,22 +256,36 @@ class Game {
     const p = this.player, v = p.state === 'driving' ? p.vehicle : null;
     return { x: v ? v.x : p.x, z: v ? v.z : p.z, y: v ? v.y : p.y, facing: v ? v.heading : p.facing };
   }
+  // named places shown on every map (icon + short name) and used for the "where am I" label
+  landmarks() {
+    if (this._landmarks) return this._landmarks;
+    const find = (cells, pred) => { for (const [i, j] of cells) { const b = WG.cellData(i, j).buildings.find(pred); if (b) return b; } return null; };
+    const door = (b) => b && { x: b.door.x + (b.door.x - b.x) * 0.15, z: b.door.z + (b.door.z - b.z) * 0.15 };
+    const list = [
+      { short: 'הבית שלי', name: 'הבית שלי — וילה עם בריכה', icon: '🏠', color: '#e0533b', x: VILLA.door.x, z: VILLA.door.z - 1 },
+      { short: 'נמל תעופה', name: 'נמל התעופה אזורה — טרמינל', icon: '✈', color: '#1f5fa8', x: -300, z: 514 },
+      { short: 'מרינה', name: 'מרינה מזרח', icon: '⚓', color: '#0e7c86', x: 2500, z: 510 },
+      { short: 'חנות נשקים', name: 'חנות נשקים — ארסנל הצללים', icon: '🎯', color: '#5b2c6f', ...door(find([[2, 5]], (b) => b.sign === 'ארסנל הצללים')) },
+      { short: 'חנות בגדים', name: 'חנות בגדים — אופנת אזורה', icon: '👕', color: '#c2185b', ...door(find([[7, 5]], (b) => b.sign === 'אופנת אזורה')) },
+      { short: 'גלידה', name: 'גלידת שקיעה', icon: '🍦', color: '#f39c12', ...door(find([[7, 3]], (b) => b.sign === 'גלידת שקיעה')) },
+      { short: 'ספרייה', name: 'ספריית העיר', icon: '📚', color: '#6d4c41', ...door(find([[2, 3]], (b) => b.sign === 'ספריית העיר')) },
+    ].filter((L) => Number.isFinite(L.x));
+    this.minimap.landmarks = list;
+    return (this._landmarks = list);
+  }
   places() {
     const find = (cells, pred) => { for (const [i, j] of cells) { const b = WG.cellData(i, j).buildings.find(pred); if (b) return b; } return null; };
     const door = (b) => b && { x: b.door.x + (b.door.x - b.x) * 0.2, z: b.door.z + (b.door.z - b.z) * 0.2 };
     const reg = WG.regionInfo(0, 1);
     const list = [
-      { name: 'נמל התעופה אזורה — טרמינל', x: -300, z: 514 },
+      ...this.landmarks().map((L) => ({ name: L.name, x: L.x, z: L.z })),
       { name: 'קניון העיר (גבעת הרימון)', ...door(find([reg.mall], (b) => b.mall)) },
-      { name: 'אופנת אזורה — בגדים', ...door(find([[7, 5]], (b) => b.sign === 'אופנת אזורה')) },
       { name: 'פלאפל הכיכר', ...door(find([[7, 6]], (b) => b.sign === 'פלאפל הכיכר')) },
-      { name: 'ארסנל הצללים', ...door(find([[2, 5]], (b) => b.sign === 'ארסנל הצללים')) },
       { name: 'מוסך אזורה', ...door(find([[8, 3], [2, 7]], (b) => b.sign === 'מוסך אזורה')) },
       { name: 'התחנה המרכזית', x: 500, z: 992 },
       { name: 'כיכר העירייה', x: 550, z: 545 },
       { name: 'חוף אזורה', x: 1030, z: 300 },
       { name: 'גשר המפרץ', x: 1500, z: 502 },
-      { name: 'מרינה מזרח', x: 2500, z: 510 },
       { name: 'מנהרת הרכס', x: 502, z: -620 },
     ];
     const last = this.player.lastVehicle;
@@ -663,6 +677,16 @@ class Game {
       const ep = this.interiors.promptFor(p);
       if (ep) { p.prompt = { key: 'interact', text: ep.text }; if (input.wasPressed('interact')) ep.action(); }
     }
+    // the wardrobe in the villa: change into any clothes you own
+    if (!p.prompt && p.state === 'foot') {
+      for (const L of this.interiors.places()) {
+        const w = L.spec.wardrobe;
+        if (!w || Math.abs(w.y - p.y) > 1 || Math.hypot(w.pt[0] - p.x, w.pt[1] - p.z) > 2.0) continue;
+        p.prompt = { key: 'interact', text: 'ארון בגדים' };
+        if (input.wasPressed('interact')) { this.openShop('wardrobe', 'הבית שלי'); input.endFrame(); return; }
+        break;
+      }
+    }
     // shop counters
     if (!p.prompt && p.state === 'foot') {
       outer: for (const L of this.interiors.places()) {
@@ -688,7 +712,7 @@ class Game {
     for (const car of all) if (car.driver === 'ai' && !car.driverPed && !car.isAir && !car.removed) this.peds.addDriver(car);
     this.vehicles.update(dt, focusX, focusZ, all, (x, z) => this.chunks.isPhysicsReady(x, z));
     this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
-      onPlayerHit: (who, n) => { this.hurt(n, 'קטטה'); this.rig.shake = Math.max(this.rig.shake, 0.3); p.combatT = 5; } });
+      onPlayerHit: (who, n) => { this.hurt(n, 'קטטה'); this.rig.shake = Math.max(this.rig.shake, 0.3); p.combatT = 3; } });
     this.airport.update(dt, this.env.hour, focusX, focusZ, all);
     // GPS, missions, phone, radio
     const pp = this.playerPos();
@@ -796,7 +820,7 @@ class Game {
     this._mmT = (this._mmT || 0) + dt;
     if (this._mmT > 1 / 20) {
       this._mmT = 0;
-      this.minimap.draw(v ? v.x : p.x, v ? v.z : p.z, v ? v.heading : p.facing, this.rig.yaw, this.gps.dest ? [{ x: this.gps.dest.x, z: this.gps.dest.z, color: '#b35cff' }] : [], this.gps.route?.points);
+      this.minimap.draw(v ? v.x : p.x, v ? v.z : p.z, v ? v.heading : p.facing, this.rig.yaw, this.gps.dest ? [{ x: this.gps.dest.x, z: this.gps.dest.z, color: '#b35cff' }] : [], this.gps.route?.points, this.landmarks());
       const ob = $('objective'), st = this.missions.objective();
       ob.textContent = st ? st.text : ''; ob.classList.toggle('show', !!st);
       const gh = $('gpsHud');
@@ -811,6 +835,12 @@ class Game {
     if (this._dT > 0.5) {
       this._dT = 0;
       const d = districtAt(v ? v.x : p.x, v ? v.z : p.z);
+      // "where am I": the nearest named place within 70 m, otherwise the district — always under the minimap
+      const hx = v ? v.x : p.x, hz = v ? v.z : p.z;
+      let near = null, nd = 70;
+      for (const L of this.landmarks()) { const dd = Math.hypot(L.x - hx, L.z - hz); if (dd < nd) { nd = dd; near = L; } }
+      const here = near ? `${near.icon} ${near.short}` : `📍 ${d}`;
+      if ($('here').textContent !== here) $('here').textContent = here;
       if (d !== this.lastDistrict) {
         this.lastDistrict = d;
         const el = $('district'); el.textContent = d; el.classList.add('show');

@@ -27,7 +27,7 @@ const MAP = [
   'HACDDSDCGB',
   'HACDDDDCAB',
   'IIMCCAPAAB',
-  'IIICGAAHHP',
+  'IIICGAAHVP',
   'IIIACTCHHB',
 ];
 
@@ -43,6 +43,7 @@ const DISTRICTS = {
   M: 'מוסך',
   T: 'התחנה המרכזית',
   B: 'טיילת החוף',
+  V: 'וילת החוף — הבית שלי',
 };
 
 const SHOP_NAMES = [
@@ -51,7 +52,7 @@ const SHOP_NAMES = [
   'נעלי הצעד', 'בית הקפה הירוק', 'מסעדת הנמל', 'סושי גל', 'פלאפל הכיכר', 'תכשיטי אור',
   'משקפי עין', 'פארם העיר', 'צעצועי קשת', 'יין ושמש', 'בגדי רחוב', 'מכולת אבי',
 ];
-export const SPECIAL_SIGNS = ['תחנת רכבת מרכזית', 'מוסך אזורה', 'דלק+', 'נמל התעופה אזורה', 'מגדל אזורה', 'בית העירייה', 'מחסני הנמל', 'בית קפה החוף', 'קניון העיר', 'חניון', 'חוות השקד', 'מנהרת הרכס', 'ארסנל הצללים', 'צ׳ק-אין', 'שער 1', 'שער 2', 'שער 3', 'שירותים', 'דיוטי פרי', 'קפה טרמינל', 'מסוע מזוודות', 'האנגר אזורה', 'מגדל פיקוח', 'הגעות'];
+export const SPECIAL_SIGNS = ['תחנת רכבת מרכזית', 'מוסך אזורה', 'דלק+', 'נמל התעופה אזורה', 'מגדל אזורה', 'בית העירייה', 'מחסני הנמל', 'בית קפה החוף', 'קניון העיר', 'חניון', 'חוות השקד', 'מנהרת הרכס', 'ארסנל הצללים', 'צ׳ק-אין', 'שער 1', 'שער 2', 'שער 3', 'שירותים', 'דיוטי פרי', 'קפה טרמינל', 'מסוע מזוודות', 'האנגר אזורה', 'מגדל פיקוח', 'הגעות', 'ספריית העיר', 'הבית שלי'];
 export const ALL_SIGNS = [...SHOP_NAMES, ...SPECIAL_SIGNS];
 
 const PASTELS = [0xf2e3c6, 0xe8d1b5, 0xd9c8a9, 0xf0d9c0, 0xc9d6df, 0xe4c9b6, 0xd8e2cf, 0xefe6d8, 0xd4b8a0, 0xbfcfd9];
@@ -59,7 +60,11 @@ const TOWER_TINTS = [0x9fb8cc, 0x7f9bb5, 0xa9b9c4, 0x8aa3a8, 0xb7c4cf, 0x6f8aa3,
 const BRICK = [0xa65a45, 0x9b4f3c, 0xb26b4f, 0x8c5040];
 const ROOF_COLORS = [0xa04a35, 0x8a3f30, 0x5d5b5a, 0x7a4a33, 0x3f4b57];
 
-const FORCED_SHOPS = { '7,5': 'אופנת אזורה', '7,6': 'פלאפל הכיכר', '7,4': 'אלקטרו פלוס', '2,5': 'ארסנל הצללים', '2,6': 'מספרת סטייל' };
+const FORCED_SHOPS = { '2,3': 'ספריית העיר', '7,3': 'גלידת שקיעה', '7,5': 'אופנת אזורה', '7,6': 'פלאפל הכיכר', '7,4': 'אלקטרו פלוס', '2,5': 'ארסנל הצללים', '2,6': 'מספרת סטייל' };
+
+// The player's own beach villa (block 8,8): house, pool deck, garden, two cars in the driveway.
+export const VILLA = { bx: 8, bz: 8, x: 850, z: 832, w: 26, d: 15, h: 7.6, door: { x: 850, z: 824.2 } };
+export const POOLS = [{ x: 850, z: 864, w: 16, d: 8 }];
 
 export function blockType(bx, bz) {
   if (bx < 0 || bz < 0 || bx >= N || bz >= N) return null;
@@ -270,6 +275,23 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
       B.push({ x: ox + 30, z: oz + 18, w: 30, d: 12, h: 9, style: 'concrete', color: rng.pick(PASTELS), face: 'n', storefront: true, sign: rng.pick(SHOP_NAMES) });
       break;
     }
+    case 'V': { // the player's villa
+      blk.ground = 'grass';
+      const V = VILLA;
+      B.push({ x: V.x, z: V.z, w: V.w, d: V.d, h: V.h, style: 'plaster', color: 0xf6f2ea, face: 'n', villa: true, sign: 'הבית שלי' });
+      blk.paths.push({ x: V.x, z: oz + 17, w: 5, d: 14 }, { x: V.x, z: oz + 64, w: 30, d: 20 }, { x: ox + 24, z: oz + 17, w: 7, d: 12 }, { x: ox + 76, z: oz + 17, w: 7, d: 12 });
+      for (const P0 of POOLS) PR.push({ kind: 'pool', x: P0.x, z: P0.z, w: P0.w, d: P0.d });
+      for (let k = 0; k < 4; k++) PR.push({ kind: 'lounger', x: V.x - 9 + k * 6, z: oz + 72.5, rot: Math.PI });
+      PR.push({ kind: 'parasol', x: V.x - 6, z: oz + 73.5 }, { kind: 'parasol', x: V.x + 6, z: oz + 73.5 });
+      // palm-like trees around the garden + a hedge wall around the plot (gaps for the gate and driveways)
+      for (let k = 0; k < 7; k++) PR.push({ kind: 'tree', x: ox + 16 + k * 11.3, z: oz + 84, s: 1.1 });
+      for (const zz of [42, 56, 70]) { PR.push({ kind: 'tree', x: ox + 15, z: oz + zz, s: 1.2 }); PR.push({ kind: 'tree', x: ox + 85, z: oz + zz, s: 1.2 }); }
+      const hedge = (x0, z0, x1, z1) => PR.push({ kind: 'hedge', x: (x0 + x1) / 2, z: (z0 + z1) / 2, w: Math.max(0.8, x1 - x0), d: Math.max(0.8, z1 - z0) });
+      hedge(ox + 11, oz + 11, ox + 19, oz + 11.8); hedge(ox + 29, oz + 11, ox + 47, oz + 11.8); hedge(ox + 53, oz + 11, ox + 71, oz + 11.8); hedge(ox + 81, oz + 11, ox + 89, oz + 11.8);
+      hedge(ox + 11, oz + 88.2, ox + 89, oz + 89); hedge(ox + 11, oz + 11, ox + 11.8, oz + 89); hedge(ox + 88.2, oz + 11, ox + 89, oz + 89);
+      blk.parking.push({ x: ox + 24, z: oz + 18, rot: Math.PI, type: 'luxury', fixed: true, mine: true }, { x: ox + 76, z: oz + 18, rot: Math.PI, type: 'sports', fixed: true, mine: true });
+      break;
+    }
     case 'T': {
       blk.ground = 'plaza';
       B.push({ x: cx, z: oz + 70, w: 64, d: 26, h: 16, style: 'glass', color: 0xc9d3db, face: 's', station: true, sign: 'תחנת רכבת מרכזית' });
@@ -281,7 +303,7 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
   }
 
   // bus-stop style benches + trash bins along sidewalks of non-park blocks
-  if (type !== 'P' && type !== 'H') {
+  if (type !== 'P' && type !== 'H' && type !== 'V') {
     if (rng.chance(0.5)) PR.push({ kind: 'bench', x: cx + rng.float(-25, 25), z: oz + 9, rot: Math.PI });
     PR.push({ kind: 'bin', x: ox + 8.4, z: oz + 32 });
   }
@@ -304,7 +326,9 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
 // Which buildings can be entered (real interiors are generated from this flag)
 export function markInteriors(B, rng) {
   for (const b of B) {
-    if (b.forceShop) b.interior = 'shop';
+    if (b.sign === 'ספריית העיר') b.interior = 'library';
+    else if (b.villa) b.interior = 'villa';
+    else if (b.forceShop) b.interior = 'shop';
     else if (b.mall) b.interior = 'mall';
     else if (b.station || b.airport || b.sign === 'בית העירייה' || b.garage) b.interior = 'hall';
     else if (b.house) { if (rng.chance(0.7)) b.interior = 'house'; }

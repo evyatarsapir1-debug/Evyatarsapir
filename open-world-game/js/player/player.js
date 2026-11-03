@@ -5,6 +5,7 @@ import { CharacterModel } from '../character/characterModel.js';
 import { heightAt, WATER_Y } from '../world/terrain.js';
 import { circleVs, verticalOverlap } from '../physics/collision.js';
 import { clamp, damp, dampAngle } from '../core/mathx.js';
+import { POOLS } from '../world/layout.js';
 
 const RADIUS = 0.35, HEIGHT = 1.8;
 const WALK = 2.3, RUN = 6.2, GRAVITY = 17, JUMP_V = 5.4;
@@ -94,6 +95,10 @@ export class Player {
     const floatY = WATER_Y - 1.25;
     this.swimming = g < floatY - 0.05;
     if (this.swimming) g = floatY;
+    // swimming pools (the villa): float with the shoulders at the water line
+    const pool = POOLS.find((q) => Math.abs(this.x - q.x) < q.w / 2 - 0.2 && Math.abs(this.z - q.z) < q.d / 2 - 0.2);
+    if (pool && this.y < g + 1.2 && g < 0.6) { this.swimming = true; g -= 1.15; this.inPool = true; }
+    else if (this.inPool) { this.inPool = false; if (this.y < g) { this.y = g; this.vy = 0; } }
     if (this.y <= g) {
       if (!wasGrounded) {
         const drop = (this.fallTop ?? this.y) - g;

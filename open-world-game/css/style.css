@@ -59,6 +59,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
 #minimap { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 12px; width: 150px; height: 150px; border-radius: 50%;
   border: 3px solid #ffffffcc; box-shadow: 0 4px 16px #0008; background: #4f9dc9; }
+#here { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 153px); left: 12px; width: 150px; text-align: center; pointer-events: none;
+  font-size: 12px; font-weight: 800; color: #fff; text-shadow: 0 1px 3px #000c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#here:empty { display: none; }
 #district { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); font-size: 22px; font-weight: 800;
   text-shadow: 0 2px 10px #000, 0 0 2px #000; opacity: 0; transition: opacity .6s; white-space: nowrap; }
 #district.show { opacity: 1; }
@@ -232,12 +235,13 @@ body.touch #speedVal { font-size: 18px; }
 body.touch #speedo .unit, body.touch #vehName { font-size: 9px; }
 body.touch #dmgBar { height: 3px; margin-top: 2px; }
 body.touch #weaponHud { bottom: 70px; }
-.mapbtn { position: absolute; top: 172px; left: 12px; width: 50px; height: 50px; font-size: 12px; }
+.mapbtn { position: absolute; top: 186px; left: 12px; width: 50px; height: 50px; font-size: 12px; }
 
 @media (max-height: 480px) {
   #minimap { width: 110px; height: 110px; }
+  #here { width: 110px; top: calc(max(12px, env(safe-area-inset-top)) + 112px); font-size: 11px; }
   #fps { top: 128px; }
-  .mapbtn { top: 128px; }
+  .mapbtn { top: 142px; }
   .logo.big { font-size: 48px; }
   .menu-buttons { gap: 6px; }
   .mbtn { padding: 8px 18px; font-size: 16px; }

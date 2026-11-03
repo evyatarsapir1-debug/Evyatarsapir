@@ -4,6 +4,7 @@
 import { CONTACTS, MISSIONS } from '../game/missions.js';
 import { STATIONS, ringtone } from '../core/audio.js';
 import { fmt } from '../game/economy.js';
+import { drawLandmarks } from '../ui/minimap.js';
 
 const ICONS = {
   map: '<path d="M4 6l5-2 6 2 5-2v14l-5 2-6-2-5 2z" fill="none" stroke="#fff" stroke-width="2"/><path d="M9 4v14M15 6v14" stroke="#fff" stroke-width="2"/>',
@@ -257,6 +258,7 @@ export class Phone {
       ctx.strokeStyle = '#b35cff'; ctx.lineWidth = 6; ctx.lineJoin = 'round'; ctx.beginPath();
       route.forEach(([x, z], i) => { const [a, b] = W(x, z); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); }); ctx.stroke();
     }
+    drawLandmarks(ctx, g.landmarks(), W, 17, v.scale > 0.12);
     if (g.gps.dest) { const [a, b] = W(g.gps.dest.x, g.gps.dest.z); ctx.fillStyle = '#b35cff'; ctx.beginPath(); ctx.arc(a, b, 10, 0, 7); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke(); }
     const p = g.playerPos(); const [a, b] = W(p.x, p.z);
     ctx.save(); ctx.translate(a, b); ctx.rotate(-p.facing + Math.PI);

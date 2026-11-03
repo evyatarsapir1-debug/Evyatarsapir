@@ -7,11 +7,12 @@ export const SKIN_TONES = [0xf6d7c3, 0xe9b98f, 0xc98e62, 0xa86f48, 0x7b4a2c, 0x4
 export const HAIR_COLORS = [0x1b1410, 0x3b2416, 0x6b4325, 0xa8743b, 0xd9b26a, 0xb5402a, 0x9a9a9a, 0x2a3f8f];
 export const HAIR_STYLES = ['short', 'buzz', 'long', 'ponytail', 'curly', 'mohawk', 'bun', 'bald'];
 export const HAIR_NAMES = { short: 'קצר', buzz: 'מגולח', long: 'ארוך', ponytail: 'קוקו', curly: 'מתולתל', mohawk: 'מוהיקן', bun: 'פקעת', bald: 'קרחת' };
-export const TOP_STYLES = ['tshirt', 'jacket', 'tank', 'hoodie'];
-export const TOP_NAMES = { tshirt: 'חולצת טי', jacket: 'ז׳קט', tank: 'גופייה', hoodie: 'קפוצ׳ון' };
+export const TOP_STYLES = ['tshirt', 'jacket', 'tank', 'hoodie', 'suit'];
+export const TOP_NAMES = { tshirt: 'חולצת טי', jacket: 'ז׳קט', tank: 'גופייה', hoodie: 'קפוצ׳ון', suit: 'חליפה' };
 export const BOTTOM_STYLES = ['jeans', 'shorts', 'skirt', 'pants'];
 export const BOTTOM_NAMES = { jeans: 'ג׳ינס', shorts: 'מכנס קצר', skirt: 'חצאית', pants: 'מכנס בד' };
-export const CLOTH_COLORS = [0xffffff, 0x1d1d1f, 0xc0392b, 0x2e86c1, 0x27ae60, 0xf1c40f, 0x8e44ad, 0xe67e22, 0x34495e, 0x95a5a6, 0x2c3e50, 0x16a085, 0xd35480, 0x6e4b3a];
+export const CLOTH_COLORS = [0xffffff, 0x1d1d1f, 0xc0392b, 0x2e86c1, 0x27ae60, 0xf1c40f, 0x8e44ad, 0xe67e22, 0x34495e, 0x95a5a6, 0x2c3e50, 0x16a085, 0xd35480, 0x6e4b3a,
+  0xc8b48a, 0x6d1a2a, 0x3d4148, 0x1f2d4d, 0xf3efe6]; // 14 beige, 15 bordeaux, 16 charcoal, 17 navy, 18 cream
 
 export const PRESETS = [
   { name: 'נועם', skin: 1, hairStyle: 'short', hairColor: 1, top: 'jacket', topColor: 8, bottom: 'jeans', bottomColor: 10, shoes: 1, height: 1.0, build: 1.0 },
@@ -90,6 +91,16 @@ export class CharacterModel {
     this.skirt.material = M.bottom;
     this.hood = this._mesh(new THREE.TorusGeometry(0.11, 0.045, 6, 12), M.top, spine, 0, 0.5, -0.06);
     this.hood.rotation.x = Math.PI / 2.4;
+    // suit: white shirt front, tie, lapels and buttons over the jacket
+    this.suit = this._pivot(spine, 0, 0, 0);
+    const shirtM = new THREE.MeshStandardMaterial({ color: 0xf8f8f6, roughness: 0.7 });
+    this.tieMat = new THREE.MeshStandardMaterial({ color: 0x7b1e2b, roughness: 0.5 });
+    const sh = this._mesh(new THREE.BoxGeometry(0.1, 0.17, 0.012), shirtM, this.suit, 0, 0.415, 0.106); sh.rotation.x = -0.12;
+    const tie = this._mesh(new THREE.BoxGeometry(0.034, 0.2, 0.012), this.tieMat, this.suit, 0, 0.385, 0.116); tie.rotation.x = -0.1;
+    this._mesh(new THREE.BoxGeometry(0.045, 0.03, 0.02), this.tieMat, this.suit, 0, 0.485, 0.112);
+    for (const sx of [-1, 1]) { const l = this._mesh(new THREE.BoxGeometry(0.05, 0.2, 0.012), M.top, this.suit, sx * 0.058, 0.41, 0.112); l.rotation.z = sx * 0.32; l.rotation.x = -0.1; }
+    for (const y of [0.25, 0.18]) this._mesh(new THREE.SphereGeometry(0.009, 6, 4), new THREE.MeshStandardMaterial({ color: 0x222222 }), this.suit, 0, y, 0.113);
+    this.suit.traverse((o) => { if (o.isMesh) o.castShadow = false; });
   }
 
   _hair(style) {
@@ -139,9 +150,11 @@ export class CharacterModel {
     const top = app.top;
     for (const a of this.arms) {
       a.upper.material = top === 'tank' ? M.skin : M.top;
-      a.lower.material = top === 'jacket' || top === 'hoodie' ? M.top : M.skin;
+      a.lower.material = top === 'jacket' || top === 'hoodie' || top === 'suit' ? M.top : M.skin;
     }
     this.hood.visible = top === 'hoodie';
+    this.suit.visible = top === 'suit';
+    this.tieMat.color.setHex(app.topColor === 2 || app.topColor === 15 ? 0x1d1d1f : app.topColor === 1 || app.topColor === 17 ? 0x7b1e2b : 0x2b4a7a);
     const b = app.bottom;
     for (const l of this.legs) {
       l.upper.material = b === 'skirt' ? M.skin : M.bottom;

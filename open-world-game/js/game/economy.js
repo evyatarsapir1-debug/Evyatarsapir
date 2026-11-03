@@ -8,16 +8,22 @@ export class Economy {
     this.weapons = {};          // id -> { ammo }
     this.equipped = null;       // weapon id or null
     this.flashlightOn = false;
+    this.startOutfit = null;
+    this.wardrobe = [];         // clothes the player owns: [{ id, name, swatch, patch }]
     this.log = [];
   }
-  toJSON() { return { money: this.money, health: this.health, items: this.items, weapons: this.weapons, equipped: this.equipped }; }
+  toJSON() { return { money: this.money, health: this.health, items: this.items, weapons: this.weapons, equipped: this.equipped, wardrobe: this.wardrobe, startOutfit: this.startOutfit }; }
   load(o) {
     this.reset();
     if (!o) return;
     this.money = o.money ?? this.money; this.health = o.health ?? 100;
     Object.assign(this.items, o.items || {});
+    this.wardrobe = Array.isArray(o.wardrobe) ? o.wardrobe : [];
+    this.startOutfit = o.startOutfit || null;
     this.weapons = o.weapons || {}; this.equipped = o.equipped && this.weapons[o.equipped] ? o.equipped : null;
   }
+  ownsCloth(id) { return this.wardrobe.some((w) => w.id === id); }
+  addCloth(it) { if (!this.ownsCloth(it.id)) this.wardrobe.push({ id: it.id, name: it.name, swatch: it.swatch, patch: it.patch }); }
   canAfford(p) { return this.money >= p; }
   pay(p, what) {
     if (this.money < p) return false;

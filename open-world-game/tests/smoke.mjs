@@ -453,6 +453,49 @@ check('fight: a person goes down after enough hits (non-graphic)', fight.down, J
 check('fight: dropped money can be collected', fight.drops.length === 0 || ([60, 120, 210].includes(fight.drops[0]) && fight.earned === fight.drops[0]), JSON.stringify({ drops: fight.drops, earned: fight.earned }));
 check('fight: people have different personalities', fight.tempers.length >= 4, fight.tempers.join(', '));
 
+// ---------------------------------------------------------------- punching people indoors + guard drops after 3 s
+const indoor = await g(() => {
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const ped = game.peds.peds.find((q) => q.state === 'resident' || q.state === 'shopkeeper');
+  if (!ped) return { err: 'no indoor person', states: [...new Set(game.peds.peds.map((q) => q.state))] };
+  const s0 = ped.state, hp0 = ped.hp;
+  game.player.setPosition(ped.x - Math.sin(ped.yaw) * -1.1, ped.z - Math.cos(ped.yaw) * -1.1, 0, ped.y + 0.3);
+  game.player.facing = Math.atan2(ped.x - game.player.x, ped.z - game.player.z);
+  game.input.pressed.add('fire'); step(20);
+  const hit = ped.hp < hp0;
+  const stance1 = game.player.combatT > 0;
+  step(30 * 3.3);
+  return { s0, hit, hp: ped.hp, stance1, stanceAfter3s: game.player.combatT > 0, nowState: ped.state };
+});
+check('fight: you can punch people inside buildings (shopkeepers / residents)', indoor.hit, JSON.stringify(indoor));
+check('fight: guard drops back to normal ~3 s after the last punch', indoor.stance1 && !indoor.stanceAfter3s, JSON.stringify(indoor));
+
+// ---------------------------------------------------------------- my villa, pool, wardrobe, clothes shop, map landmarks
+const home = await g(() => {
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const L = game.landmarks().map((l) => l.short);
+  game.teleport(850, 864, 0, 0.3); step(20);
+  const swimming = game.player.swimming;
+  game.teleport(850, 818, 0, 0.3); step(40);
+  const V = game.interiors.places().find((l) => l.spec.wardrobe);
+  let wardrobe = null;
+  if (V) { const w = V.spec.wardrobe; game.teleport(w.pt[0], w.pt[1], 0, w.y + 0.3); step(10); wardrobe = game.player.prompt?.text; }
+  const m0 = game.econ.money;
+  game.openShop('clothes', 'אופנת אזורה');
+  const prices = [...document.querySelectorAll('#shopPanel .srow')].map((r) => [r.querySelector('b').textContent, r.querySelector('.sbuy').textContent]);
+  const own0 = game.econ.wardrobe.length;
+  const btn = [...document.querySelectorAll('#shopPanel .srow')].find((r) => r.querySelector('b').textContent.includes('חליפה') && r.querySelector('.sbuy').textContent !== 'ללבוש')?.querySelector('.sbuy');
+  btn?.click();
+  game.shop.close();
+  const paid = m0 - game.econ.money, top = game.player.model.app.top, owned = game.econ.wardrobe.length - own0;
+  return { L, swimming, villa: !!V, wardrobe, prices, paid, top, owned, here: document.getElementById('here').textContent };
+});
+const price = (name) => home.prices.filter(([n, p]) => n.includes(name) && p !== 'ללבוש').map(([, p]) => +p.replace(/[^\d]/g, ''));
+check('map: airport, marina, weapons, ice cream, library, clothes and my home are labelled', ['נמל תעופה', 'מרינה', 'חנות נשקים', 'גלידה', 'ספרייה', 'הבית שלי', 'חנות בגדים'].every((n) => home.L.includes(n)), home.L.join(', '));
+check('my home: villa with an interior, a swimmable pool and a wardrobe', home.villa && home.swimming && home.wardrobe === 'ארון בגדים', JSON.stringify({ villa: home.villa, swim: home.swimming, wardrobe: home.wardrobe, here: home.here }));
+check('clothes shop: suits ₪2,200–2,500, t-shirts ₪100/₪200, shorts ₪80/₪120', price('חליפה').length >= 4 && price('חליפה').every((p) => p >= 2200 && p <= 2500) && new Set(price('חולצה קצרה')).size === 2 && price('חולצה קצרה').every((p) => p === 100 || p === 200) && price('מכנס קצר').every((p) => p === 80 || p === 120), JSON.stringify(home.prices.slice(0, 16)));
+check('clothes shop: buying a suit dresses you and saves it in the wardrobe', home.paid >= 2200 && home.top === 'suit' && home.owned === 1, JSON.stringify({ paid: home.paid, top: home.top, owned: home.owned }));
+
 // ---------------------------------------------------------------- traffic drivers + carjacking
 const jack = await g(() => {
   const game = __game, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
