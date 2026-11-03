@@ -324,7 +324,7 @@ export class InteriorManager {
       L.elevator.update(dt);
       if (player.state === 'foot' && L.elevator.contains(px, player.y, pz)) inside = L.elevator;
     }
-    this._panel(inside);
+    this._panel(inside, dt);
   }
 
   // contextual action near an elevator landing: { text, action }
@@ -354,22 +354,29 @@ export class InteriorManager {
     return doorPrompt;
   }
 
-  _panel(el) {
+  _panel(el, dt = 1 / 30) {
     if (!this.panel) return;
     if (el !== this.active) {
       this.active = el;
-      this.panel.classList.toggle('show', !!el);
+      this.chosen = false;                 // fresh entry into a cabin: show the floor buttons
       if (el) {
         const btns = this.panel.querySelector('.floors');
         btns.innerHTML = '';
+        btns.classList.toggle('many', !el.e.labels && el.e.floors.length > 9);
         el.e.floors.forEach((_, k) => {
           const b = document.createElement('button');
           b.className = 'fbtn' + (el.e.labels ? ' wide' : ''); b.textContent = el.e.labels ? el.e.labels[k] : k === 0 ? 'ק' : String(k); b.dataset.k = k;
-          b.onpointerdown = (ev) => { ev.preventDefault(); ev.stopPropagation(); el.go(k); };
+          b.onpointerdown = (ev) => { ev.preventDefault(); ev.stopPropagation(); el.go(k); this.chosen = true; this.idleIn = 0; };
           btns.appendChild(b);
         });
       }
     }
+    // after a floor is picked the panel hides; it comes back only if you stay in the stopped cabin a while
+    if (el && this.chosen && el.target === null) {
+      this.idleIn = (this.idleIn || 0) + dt;
+      if (this.idleIn > 4) this.chosen = false;
+    }
+    this.panel.classList.toggle('show', !!el && !this.chosen);
     if (el) {
       const st = this.panel.querySelector('.status');
       const cur = el.e.labels ? el.e.labels[el.floor] : el.floor === 0 ? 'קרקע' : el.floor;
