@@ -211,7 +211,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 .tbtns { position: absolute; right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); display: none; gap: 8px;
   grid-auto-rows: min-content; align-items: end; justify-items: center; }
 .tbtns.show { display: grid; }
-.tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "fire light cyc" "jump run ."; }
+.tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "cyc . ." "fire light ." "jump run ."; }
 .tbtns.drive { grid-template-columns: 58px 58px 48px; grid-template-areas: ". cam horn" "brake gas hb"; }
 .tbtns.heli { grid-template-columns: 58px 58px 48px; grid-template-areas: ". . cam" "brake gas ."; }
 .tbtns.plane { grid-template-columns: 58px 58px 48px; grid-template-areas: "dn up cam" "brake gas ."; }
@@ -279,3 +279,4 @@ body.touch #weaponHud { bottom: 70px; }
 .npctag .st { font-size: 10px; font-weight: 800; color: #fff; background: #0008; padding: 1px 6px; border-radius: 6px; }
 /* attack button a little further right */
 #tFire { justify-self: start; transform: translateX(6px); }
+.tbtns.foot [data-btn="cycle"] { justify-self: start; transform: translateX(1px); margin-bottom: 2px; }
