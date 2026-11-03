@@ -142,24 +142,6 @@ export class WeaponSystem {
     const { player, econ, input, camera } = ctx;
     this.cool -= dt;
     const id = econ.equipped;
-    // bare hands: a punch knocks people over (they get up and run off, unhurt) and dents cars a little
-    if (!id && player.state === 'foot' && input.wasPressed('fire') && this.cool <= 0) {
-      this.cool = 0.45; player.punchT = 0.3; player.punchSide = player.punchSide ? 0 : 1;
-      const fx = Math.sin(player.facing), fz = Math.cos(player.facing);
-      let hit = false;
-      for (const ped of ctx.peds) {
-        const dx = ped.x - player.x, dz = ped.z - player.z, d = Math.hypot(dx, dz);
-        if (d < 1.5 && Math.abs(ped.y - player.y) < 1 && (dx * fx + dz * fz) / (d || 1) > 0.4) { ctx.scare?.(ped, { x: player.x, z: player.z }, true); hit = true; }
-      }
-      for (const v of ctx.vehicles) {
-        if (Math.abs(v.x - player.x) > 6 || Math.abs(v.z - player.z) > 6) continue;
-        const px = player.x + fx * 1.0, pz = player.z + fz * 1.0;
-        const r = segmentVsBox(player.x, player.y + 1.2, player.z, px, player.y + 1.2, pz, v.collider, 0.1);
-        if (r < 1) { v.addDamage(4, -fx, -fz); hit = true; }
-      }
-      if (hit) ctx.onShake?.(0.15);
-    }
-    if (player.punchT > 0) player.punchT -= dt;
     const canUse = id && player.state === 'foot' && econ.weapons[id];
     if (canUse) {
       const W = WEAPONS[id], inv = econ.weapons[id];

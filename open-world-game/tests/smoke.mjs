@@ -429,6 +429,30 @@ const tw = await g(() => {
 check('control tower: elevator up to the cab', Math.abs(tw.y - tw.top) < 0.1, JSON.stringify(tw));
 await shot('13-tower-cab');
 
+// ---------------------------------------------------------------- fist fights
+const fight = await g(() => {
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (game.player.state !== 'foot') { game.player.exitVehicle({ statics: game.statics, vehicles: game.vehicles.all() }); step(60); }
+  game.equip(null);
+  game.teleport(311, 309, 0); step(60);
+  const ped = game.peds.peds.find((q) => !q.shopKey && !q.defeated);
+  if (!ped) return { err: 'no pedestrian' };
+  ped.temper = 'flee';
+  const place = () => { game.player.setPosition(ped.x, ped.z - 1.0, 0, ped.y + 0.3); game.player.facing = 0; ped.state = 'phone'; ped.timer = 30; ped.x = game.player.x; ped.z = game.player.z + 1.0; };
+  const seq = [];
+  for (let k = 0; k < 3; k++) { place(); game.input.pressed.add('fire'); step(1); seq.push(game.player.attack?.type); step(22); }
+  let n = 0; while (ped.hp > 0 && n++ < 12) { place(); game.input.pressed.add('fire'); step(24); }
+  const drops = game.combat.pickups.map((k) => k.amount);
+  const m0 = game.econ.money;
+  if (game.combat.pickups.length) { const k = game.combat.pickups[0]; game.player.setPosition(k.x, k.z, 0, k.y + 0.3); step(3); }
+  const tempers = new Set(game.peds.peds.map((q) => q.temper));
+  return { seq, down: ped.state === 'down', drops, earned: game.econ.money - m0, tempers: [...tempers] };
+});
+check('fight: combo jab -> cross -> kick', JSON.stringify(fight.seq) === '["jabR","jabL","kick"]', JSON.stringify(fight.seq));
+check('fight: a person goes down after enough hits (non-graphic)', fight.down, JSON.stringify(fight));
+check('fight: dropped money can be collected', fight.drops.length === 0 || ([60, 120, 210].includes(fight.drops[0]) && fight.earned === fight.drops[0]), JSON.stringify({ drops: fight.drops, earned: fight.earned }));
+check('fight: people have different personalities', fight.tempers.length >= 4, fight.tempers.join(', '));
+
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);
 await g(() => __game.save());

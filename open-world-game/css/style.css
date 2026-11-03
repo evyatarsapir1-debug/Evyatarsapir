@@ -246,3 +246,13 @@ body.touch #weaponHud { bottom: 70px; }
 #fullMap { touch-action: none; cursor: grab; }
 .mapzoom { position: absolute; top: 14px; right: 14px; display: flex; gap: 8px; }
 .mapzoom .mbtn { min-width: 0; width: 46px; padding: 8px 0; text-align: center; font-size: 22px; }
+
+/* fight system: status bar + speech bubble above people (no gore, just a clear meter) */
+#npcLayer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.npctag { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; will-change: transform; }
+.npctag .say { background: #fffffff0; color: #111; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 10px; white-space: nowrap; box-shadow: 0 2px 6px #0006; }
+.npctag .hp { width: 54px; height: 6px; background: #0009; border-radius: 3px; overflow: hidden; border: 1px solid #fff8; }
+.npctag .hp i { display: block; height: 100%; }
+.npctag .st { font-size: 10px; font-weight: 800; color: #fff; background: #0008; padding: 1px 6px; border-radius: 6px; }
+/* attack button a little further right */
+#tFire { justify-self: start; transform: translateX(6px); }

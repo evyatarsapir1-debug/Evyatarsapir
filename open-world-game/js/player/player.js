@@ -67,11 +67,11 @@ export class Player {
     let dx = fx * my + rx * mx, dz = fz * my + rz * mx;
     const dl = Math.hypot(dx, dz);
     if (dl > 0) { dx /= dl; dz /= dl; }
-    const target = mag * (this.swimming ? 1.6 : running ? RUN : WALK);
+    const target = mag * (this.swimming ? 1.6 : running ? RUN : WALK) * (this.attack ? 0.2 : this.combatT > 0 ? 0.75 : 1);
     const lam = this.grounded ? 10 : 2;
     this.vx = damp(this.vx, dx * target, lam, dt);
     this.vz = damp(this.vz, dz * target, lam, dt);
-    if (mag > 0.1) this.facing = dampAngle(this.facing, Math.atan2(dx, dz), 12, dt);
+    if (mag > 0.1 && !this.attack) this.facing = dampAngle(this.facing, Math.atan2(dx, dz), 12, dt);
 
     if (this.grounded && !this.swimming && input.wasPressed('jump')) { this.vy = JUMP_V; this.grounded = false; }
     const wasGrounded = this.grounded;
@@ -115,7 +115,7 @@ export class Player {
       this.prompt = { key: 'interact', text: this.nearSeat.kind === 'sleep' ? 'לישון' : 'לשבת', seat: this.nearSeat.label };
       if (input.wasPressed('interact')) this.useSeat(this.nearSeat);
     }
-    this.model.animate(dt, { speed: this.parachute ? 0 : Math.hypot(this.vx, this.vz), grounded: this.grounded || this.parachute, vy: this.vy, mode: this.swimming ? 'swim' : 'foot', aim: this.armed ? (this.firing > 0 ? 2 : 1) : 0, chute: this.parachute, punch: this.punchT > 0 ? (this.punchSide ? 2 : 1) : 0 });
+    this.model.animate(dt, { speed: this.parachute ? 0 : Math.hypot(this.vx, this.vz), grounded: this.grounded || this.parachute, vy: this.vy, mode: this.swimming ? 'swim' : 'foot', aim: this.armed ? (this.firing > 0 ? 2 : 1) : 0, chute: this.parachute, attack: this.attack, stance: this.combatT > 0 && !this.armed });
     if (this.canopy) this.canopy.visible = !!this.parachute;
     this._sync();
   }

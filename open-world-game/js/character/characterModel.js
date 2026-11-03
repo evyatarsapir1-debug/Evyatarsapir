@@ -187,11 +187,22 @@ export class CharacterModel {
       }
       if (s.doorReach) { target.armR = -1.2; target.elbowR = -0.2; }
       if (s.aim) { target.armR = s.aim > 1 ? -1.5 : -0.5; target.elbowR = s.aim > 1 ? -0.05 : -0.6; if (s.aim > 1) { target.armL = -1.3; target.elbowL = -0.5; } }
-      if (s.punch) {
-        // jab: one arm shoots forward, the other guards
-        const R = s.punch === 1;
-        target[R ? 'armR' : 'armL'] = -1.6; target[R ? 'elbowR' : 'elbowL'] = -0.05;
-        target[R ? 'armL' : 'armR'] = -0.9; target[R ? 'elbowL' : 'elbowR'] = -1.8; target.spine = 0.15;
+      if (s.attack || (s.stance && speed < 2.5)) {
+        // fighting stance: guard up, knees soft, weight forward
+        target.armL = -1.0; target.armR = -1.0; target.elbowL = -1.85; target.elbowR = -1.85; target.armSide = 0.25;
+        target.spine = 0.1 + target.spine * 0.3; hipsY -= 0.04;
+        if (speed < 0.3) { target.kneeL = target.kneeR = 0.22; target.legL = -0.12; target.legR = 0.08; }
+      }
+      if (s.attack) {
+        const A = s.attack, k = Math.min(1, A.t / A.m.dur);
+        // smooth extension curve: fast out, slower return
+        const e = k < 0.36 ? Math.sin((k / 0.36) * Math.PI / 2) : Math.cos(((k - 0.36) / 0.64) * Math.PI / 2);
+        if (A.type === 'jabR') { target.armR = -1.0 - 0.62 * e; target.elbowR = -1.85 + 1.8 * e; target.twist = 0.38 * e; target.spine = 0.12 + 0.12 * e; }
+        else if (A.type === 'jabL') { target.armL = -1.0 - 0.62 * e; target.elbowL = -1.85 + 1.8 * e; target.twist = -0.38 * e; target.spine = 0.12 + 0.12 * e; }
+        else { // front kick with the right leg
+          target.legR = -1.5 * e; target.kneeR = 1.35 - 1.25 * e; target.legL = 0.18 * e; target.kneeL = 0.25;
+          target.spine = 0.1 - 0.3 * e; target.twist = -0.1 * e; target.armL = -1.2; target.armR = -0.6;
+        }
       }
       if (s.chute) { target.armL = target.armR = -2.8; target.elbowL = target.elbowR = -0.2; target.legL = -0.2; target.legR = 0.1; }
     } else if (mode === 'sit' || mode === 'drive' || mode === 'passenger') {
@@ -223,8 +234,8 @@ export class CharacterModel {
       hipsY = 0.62;
       bodyZ = -0.05;
     }
-    const k = 14;
-    for (const key of ['legL', 'legR', 'kneeL', 'kneeR', 'armL', 'armR', 'elbowL', 'elbowR', 'spine', 'armSide']) {
+    const k = s.attack ? 22 : 14;
+    for (const key of ['legL', 'legR', 'kneeL', 'kneeR', 'armL', 'armR', 'elbowL', 'elbowR', 'spine', 'armSide', 'twist']) {
       t[key] = damp(t[key] ?? 0, target[key] ?? 0, k, dt);
     }
     t.hipsY = damp(t.hipsY ?? hipsY, hipsY, k, dt);
@@ -233,6 +244,7 @@ export class CharacterModel {
     this.body.rotation.x = -Math.PI / 2 * t.lie;
     this.hips.position.z = bodyZ;
     this.spine.rotation.x = t.spine;
+    this.spine.rotation.y = t.twist;
     this.legs[0].hip.rotation.x = t.legL; this.legs[1].hip.rotation.x = t.legR;
     this.legs[0].knee.rotation.x = t.kneeL; this.legs[1].knee.rotation.x = t.kneeR;
     this.arms[0].sh.rotation.x = t.armL; this.arms[1].sh.rotation.x = t.armR;

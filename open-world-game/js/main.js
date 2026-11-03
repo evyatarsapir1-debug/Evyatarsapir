@@ -15,6 +15,7 @@ import { Missions, CONTACTS, MISSIONS } from './game/missions.js';
 import { Radio } from './core/audio.js';
 import { PARK_OFFSET } from './world/layout.js';
 import { AirportManager } from './world/airport.js';
+import { Combat } from './game/combat.js';
 import { setAnisotropy } from './world/textures.js';
 import { makeMaterials } from './world/worldBuilder.js';
 import { ChunkManager } from './world/chunkManager.js';
@@ -81,6 +82,7 @@ class Game {
     this.rig = new CameraRig(this.camera, this.statics);
     this.econ = new Economy();
     this.weapons = new WeaponSystem(this.scene, this.statics);
+    this.combat = new Combat(this);
     this.flashlight = new THREE.SpotLight(0xfff2d8, 0, 40, 0.5, 0.5, 1.2);
     this.scene.add(this.flashlight, this.flashlight.target);
     this.headlight = new THREE.SpotLight(0xfff4e0, 0, 70, 0.55, 0.45, 1.3);
@@ -654,7 +656,8 @@ class Game {
     const obstacles = p.state === 'foot' || p.state === 'sitting' ? [{ x: p.x, z: p.z, r: 0.5 }, ...pedObs] : pedObs;
     this.traffic.update(dt, this.time, focusX, focusZ, all, obstacles);
     this.vehicles.update(dt, focusX, focusZ, all, (x, z) => this.chunks.isPhysicsReady(x, z));
-    this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places() });
+    this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
+      onPlayerHit: (who, n) => { this.hurt(n, 'קטטה'); this.rig.shake = Math.max(this.rig.shake, 0.3); p.combatT = 5; } });
     this.airport.update(dt, this.env.hour, focusX, focusZ, all);
     // GPS, missions, phone, radio
     const pp = this.playerPos();
@@ -667,6 +670,10 @@ class Game {
     if (wantRadio && this.radio.station !== this.selectedStation) this.radio.play(this.selectedStation);
     if (!wantRadio && this.radio.station >= 0) this.radio.stop();
     if (p.state === 'sitting' && p.seq?.seat.kind === 'sleep' && p.seq.phase === 'idle') this.econ.heal(dt * 3);
+    this.combat.update(dt, {
+      player: p, input, econ: this.econ, pedSys: this.peds, vehicles: all,
+      onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); },
+    });
     this.weapons.update(dt, {
       player: p, econ: this.econ, input, camera: this.camera, vehicles: all,
       peds: this.peds.peds.filter((q) => q.state !== 'inside'),
