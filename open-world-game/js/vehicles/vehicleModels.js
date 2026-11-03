@@ -108,7 +108,11 @@ export function buildVehicleModel(type, color) {
       const cabL = 2.2;
       m(box(W, H * 0.75, cabL), paint, body, 0, clear + H * 0.4, L / 2 - cabL / 2);
       parts.glassParts.push(m(box(W - 0.1, 0.8, 0.05), shared.glass, body, 0, clear + H * 0.62, L / 2 + 0.01));
-      m(box(W, H - 0.3, L - cabL - 0.3), new THREE.MeshStandardMaterial({ color: 0xdfe4e8, roughness: 0.6 }), body, 0, clear + (H - 0.3) / 2 + 0.2, -cabL / 2 - 0.15);
+      if (T.tank) {
+        const tank = m(new THREE.CylinderGeometry(1.05, 1.05, L - cabL - 0.6, 18), new THREE.MeshStandardMaterial({ color: 0xd9dde1, metalness: 0.6, roughness: 0.3 }), body, 0, clear + 1.55, -cabL / 2 - 0.15);
+        tank.rotation.x = Math.PI / 2;
+        m(box(W, 0.3, L - cabL - 0.4), shared.dark, body, 0, clear + 0.5, -cabL / 2 - 0.15);
+      } else m(box(W, H - 0.3, L - cabL - 0.3), new THREE.MeshStandardMaterial({ color: 0xdfe4e8, roughness: 0.6 }), body, 0, clear + (H - 0.3) / 2 + 0.2, -cabL / 2 - 0.15);
       parts.seat.set(0.55, 1.35, L / 2 - 1.1);
       parts.panels.front = m(box(W, 0.35, 0.15), shared.dark, body, 0, clear + 0.25, L / 2 + 0.05);
       parts.panels.rear = m(box(W, 0.3, 0.15), shared.dark, body, 0, clear + 0.2, -L / 2 - 0.05);

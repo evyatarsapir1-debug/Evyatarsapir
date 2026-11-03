@@ -197,6 +197,10 @@ export class CharacterModel {
         target.armL = -1.05 + st; target.armR = -1.05 - st; target.elbowL = -0.55; target.elbowR = -0.55;
         target.legL = -1.25; target.legR = -1.25; target.kneeL = 1.1; target.kneeR = 1.1;
       } else { target.armL = -0.35; target.armR = -0.35; target.elbowL = -0.9; target.elbowR = -0.9; }
+    } else if (mode === 'lie') {
+      target.legL = 0.02; target.legR = -0.02; target.kneeL = 0.05; target.kneeR = 0.05;
+      target.armL = 0.05; target.armR = 0.05; target.elbowL = -0.1; target.elbowR = -0.1; target.armSide = 0.12; target.spine = 0;
+      hipsY = 0.95;
     } else if (mode === 'swim') {
       const ph2 = performance.now() * 0.004;
       target.spine = 1.15; hipsY = 0.95;
@@ -219,6 +223,8 @@ export class CharacterModel {
     }
     t.hipsY = damp(t.hipsY ?? hipsY, hipsY, k, dt);
     this.hips.position.y = t.hipsY;
+    t.lie = damp(t.lie ?? 0, mode === 'lie' ? 1 : 0, 6, dt);
+    this.body.rotation.x = -Math.PI / 2 * t.lie;
     this.hips.position.z = bodyZ;
     this.spine.rotation.x = t.spine;
     this.legs[0].hip.rotation.x = t.legL; this.legs[1].hip.rotation.x = t.legR;

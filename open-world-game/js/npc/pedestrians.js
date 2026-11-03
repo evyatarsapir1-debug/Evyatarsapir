@@ -45,6 +45,7 @@ class Rig {
       this.a.uLeg.push(g(hip, 0, -0.21, 0)); this.a.lLeg.push(g(knee, 0, -0.2, 0)); this.a.foot.push(g(knee, 0, -0.44, 0.05));
     }
     this.a.phone = g(this.a.hand[1], 0, -0.02, 0.05);
+    this.a.bag = g(this.a.hand[0], -0.12, -0.3, 0);
   }
 }
 
@@ -76,6 +77,7 @@ export class Pedestrians {
       lLeg: mk(cap(0.065, 0.3), MAX * 2, 0xffffff),
       foot: mk(new THREE.BoxGeometry(0.1, 0.07, 0.25), MAX * 2, 0xffffff),
       phone: mk(new THREE.BoxGeometry(0.07, 0.14, 0.012), MAX, 0x111111),
+      bag: mk(new THREE.BoxGeometry(0.22, 0.55, 0.38), MAX, 0x2c3e50),
     };
     this.zero = new THREE.Matrix4().makeScale(0, 0, 0);
     this.benchesTaken = new Set();
@@ -128,6 +130,7 @@ export class Pedestrians {
       const set = (m, idx, hex) => m.setColorAt(idx, c.setHex(hex));
       set(this.M.pelvis, i, a.pants); set(this.M.torso, i, a.shirt); set(this.M.head, i, a.skin);
       set(this.M.hairS, i, a.hair); set(this.M.hairL, i, a.hair); set(this.M.phone, i, 0x111111);
+      set(this.M.bag, i, [0x2c3e50, 0xc0392b, 0x16a085, 0x7f8c8d][i % 4]);
       for (let s = 0; s < 2; s++) {
         set(this.M.uArm, i * 2 + s, a.shirt); set(this.M.lArm, i * 2 + s, a.skin); set(this.M.hand, i * 2 + s, a.skin);
         set(this.M.uLeg, i * 2 + s, a.pants); set(this.M.lLeg, i * 2 + s, a.pants); set(this.M.foot, i * 2 + s, a.shoes);
@@ -144,6 +147,13 @@ export class Pedestrians {
       const c = L.spec.counter;
       if (c) want.set(key + ':k', { x: c.keeper[0], z: c.keeper[1], y: c.y, yaw: c.yaw, state: 'shopkeeper' });
       if (L.spec.home) { const h = L.spec.home; want.set(key + ':h', { x: h.pt[0], z: h.pt[1], y: h.y, yaw: h.yaw, state: 'resident' }); }
+      (L.spec.counters || []).forEach((c, i) => want.set(`${key}:c${i}`, { x: c.keeper[0], z: c.keeper[1], y: c.y, yaw: c.yaw, state: 'shopkeeper' }));
+      (L.spec.staff || []).forEach((c, i) => want.set(`${key}:s${i}`, { x: c.pt[0], z: c.pt[1], y: c.y, yaw: c.yaw, state: c.sit ? 'resident' : 'shopkeeper' }));
+      (L.spec.outdoor || []).forEach((c, i) => want.set(`${key}:o${i}`, { x: c.pt[0], z: c.pt[1], y: c.y, yaw: c.yaw, state: 'shopkeeper', phone: i === 1 }));
+      if (L.spec.wander) {
+        const pts = L.spec.wander.points;
+        for (let i = 0; i < L.spec.wander.n; i++) want.set(`${key}:w${i}`, { x: pts[i % pts.length][0] + (i % 3) * 0.7, z: pts[i % pts.length][1], y: L.spec.rooms[0].y0, yaw: i, state: 'wander', pts, seats: L.spec.seats || [], suitcase: i % 5 < 3 });
+      }
       if (L.spec.homes) {
         L.spec.homes.forEach((h, i) => {
           if (Math.abs(h.y - player.y) > 4 || i % 2) return;
@@ -154,14 +164,15 @@ export class Pedestrians {
     let changed = false;
     for (let i = this.peds.length - 1; i >= 0; i--) {
       const p = this.peds[i];
-      if ((p.state === 'shopkeeper' || p.state === 'resident') && !want.has(p.shopKey)) { this.peds.splice(i, 1); changed = true; }
+      if (p.shopKey && !want.has(p.shopKey)) { this._release(p); this.peds.splice(i, 1); changed = true; }
     }
     if (changed) this._colors();
     for (const [k, w] of want) {
       if (this.peds.length >= MAX) break;
       if (this.peds.some((p) => p.shopKey === k)) continue;
-      const p = this._add({ x: w.x, z: w.z, y: w.y, state: w.state, shopKey: k });
-      p.yaw = w.yaw; p.phone = w.state === 'resident' && this.rng.chance(0.3);
+      const p = this._add({ x: w.x, z: w.z, y: w.y, state: w.state, shopKey: k, pts: w.pts, seats: w.seats, suitcase: !!w.suitcase });
+      p.yaw = w.yaw; p.phone = !!w.phone;
+      if (w.state === 'wander') { p.wi = this.rng.int(0, w.pts.length - 1); p.timer = this.rng.float(0, 4); }
     }
   }
 
@@ -171,9 +182,9 @@ export class Pedestrians {
     // population
     for (let i = this.peds.length - 1; i >= 0; i--) {
       const p = this.peds[i];
-      if (p.state !== 'shopkeeper' && p.state !== 'resident' && Math.hypot(p.x - px, p.z - pz) > 140) { this._release(p); this.peds.splice(i, 1); this._colors(); }
+      if (!p.shopKey && Math.hypot(p.x - px, p.z - pz) > 140) { this._release(p); this.peds.splice(i, 1); this._colors(); }
     }
-    const walkers = this.peds.filter((p) => p.state !== 'shopkeeper' && p.state !== 'resident').length;
+    const walkers = this.peds.filter((p) => !p.shopKey).length;
     if (walkers < this.target && cells.length && this.peds.length < MAX) this._spawnWalker(px, pz, cells);
     this._skT = (this._skT || 0) - dt;
     if (this._skT <= 0) { this._skT = 1; this._syncInteriorPeople(ctx.places, ctx.player); }
@@ -203,7 +214,7 @@ export class Pedestrians {
         const lat = Math.abs(dx * v.vz - dz * v.vx) / sp;
         if (v.collider && verticalOverlap(p.y, p.y + 1.7, v.collider) && circleVs(p.x, p.z, 0.35, v.collider).hit && sp > 3) {
           this._release(p);
-          p.state = 'fall'; p.timer = 2.6; p.fallYaw = Math.atan2(v.vx, v.vz); p.bench = null;
+          p.state = 'fall'; p.timer = 2.6; p.seat = null; p.fixedY = null; p.fallYaw = Math.atan2(v.vx, v.vz); p.bench = null;
           p.vx = v.vx * 0.5; p.vz = v.vz * 0.5;
           break;
         }
@@ -212,17 +223,41 @@ export class Pedestrians {
           p.dodge = [p.x + (v.vz / sp) * side * 2.6, p.z - (v.vx / sp) * side * 2.6];
           p.prevState = p.state === 'cross' ? 'cross' : p.state === 'sit' ? 'walk' : p.state;
           this._release(p);
-          p.state = 'dodge'; p.timer = 0.9;
+          p.state = 'dodge'; p.timer = 0.9; p.seat = null; p.fixedY = null;
         }
       }
     }
     switch (p.state) {
       case 'shopkeeper':
-        pose = Math.sin(time * 0.3 + p.x) > 0.7 ? 'talk' : 'idle'; speed = 0;
+        pose = p.phone ? 'phone' : Math.sin(time * 0.3 + p.x) > 0.7 ? 'talk' : 'idle'; speed = 0;
         break;
       case 'resident':
         pose = 'sit'; speed = 0;
         break;
+      case 'wander': {
+        // travellers in the terminal: walk to a spot, wait or sit for a while, move on
+        goal = p.pts[p.wi]; speed = p.walkSpeed * 0.9;
+        if (p.timer > 0) { speed = 0; pose = p.phone ? 'phone' : 'idle'; goal = null; break; }
+        if (Math.hypot(goal[0] - p.x, goal[1] - p.z) < 0.8) {
+          const seats = (p.seats || []).filter((st) => Math.hypot(st.x - p.x, st.z - p.z) < 14 && !this.peds.some((o) => o !== p && o.seat === st));
+          if (seats.length && this.rng.chance(0.55)) { p.seat = this.rng.pick(seats); p.state = 'toSeat'; }
+          else { p.timer = this.rng.float(3, 9); p.wi = this.rng.int(0, p.pts.length - 1); p.phone = this.rng.chance(0.3); }
+        }
+        break;
+      }
+      case 'toSeat': {
+        const st = p.seat, ax = st.x + Math.sin(st.yaw) * 0.6, az = st.z + Math.cos(st.yaw) * 0.6;
+        goal = [ax, az]; speed = p.walkSpeed * 0.9;
+        if (Math.hypot(ax - p.x, az - p.z) < 0.35) { p.state = 'seated'; p.timer = this.rng.float(10, 25); }
+        break;
+      }
+      case 'seated': {
+        const st = p.seat; speed = 0; pose = 'sit';
+        p.x = damp(p.x, st.x, 6, dt); p.z = damp(p.z, st.z, 6, dt); p.yaw = dampAngle(p.yaw, st.yaw, 8, dt);
+        p.fixedY = st.y + st.seatH - 0.43;
+        if (p.timer <= 0) { p.state = 'wander'; p.seat = null; p.fixedY = null; p.wi = this.rng.int(0, p.pts.length - 1); }
+        break;
+      }
       case 'walk': {
         goal = this._goalOnLoop(p);
         if (p.phone) pose = 'phoneWalk';
@@ -268,17 +303,17 @@ export class Pedestrians {
         speed = 0; pose = 'sit'; p.x = p.bench.sx; p.z = p.bench.sz; p.yaw = dampAngle(p.yaw, (p.bench.rot || 0) + Math.PI, 8, dt);
         if (p.timer <= 0) { this._release(p); p.state = 'walk'; p.timer = this.rng.float(6, 12); p.bench = null; }
         break;
-      case 'dodge': goal = p.dodge; speed = 4.5; pose = 'run'; if (p.timer <= 0) { p.state = p.prevState === 'cross' ? 'cross' : 'walk'; p.timer = this.rng.float(3, 8); } break;
+      case 'dodge': goal = p.dodge; speed = 4.5; pose = 'run'; if (p.timer <= 0) { p.state = p.prevState === 'cross' ? 'cross' : p.pts ? 'wander' : 'walk'; p.timer = p.pts ? 0 : this.rng.float(3, 8); } break;
       case 'fall':
         speed = 0; pose = 'fall';
         p.x += (p.vx || 0) * dt; p.z += (p.vz || 0) * dt; p.vx *= Math.exp(-4 * dt); p.vz *= Math.exp(-4 * dt);
-        if (p.timer <= 0) { if (p.afterFall === 'flee') { p.state = 'flee'; p.timer = 6; p.afterFall = null; } else { p.state = 'walk'; p.timer = 4; } }
+        if (p.timer <= 0) { if (p.afterFall === 'flee') { p.state = 'flee'; p.timer = 6; p.afterFall = null; } else { p.state = p.pts ? 'wander' : 'walk'; p.timer = p.pts ? 0 : 4; } }
         break;
       case 'flee': {
         const [sx, sz] = p.fleeFrom;
         const dx = p.x - sx, dz = p.z - sz, L = Math.hypot(dx, dz) || 1;
         goal = [p.x + dx / L * 10, p.z + dz / L * 10]; speed = 4.8; pose = 'run';
-        if (p.timer <= 0) { p.state = 'walk'; p.timer = 5; }
+        if (p.timer <= 0) { p.state = p.pts ? 'wander' : 'walk'; p.timer = p.pts ? 0 : 5; }
         break;
       }
     }
@@ -306,7 +341,7 @@ export class Pedestrians {
       p.yaw = dampAngle(p.yaw, Math.atan2(dx, dz), 8, dt);
       p.speed = damp(p.speed, sp, 8, dt);
       // never walk through walls/poles (interiors use doors)
-      if (statics && p.state !== 'toShop' && p.state !== 'leaveShop') {
+      if (statics && p.state !== 'toShop' && p.state !== 'leaveShop' && p.state !== 'seated') {
         // never overlap vehicles either
         for (const v of ctx.vehicles) {
           if (Math.abs(v.x - p.x) > 6 || Math.abs(v.z - p.z) > 6) continue;
@@ -321,13 +356,14 @@ export class Pedestrians {
         }
       }
     } else p.speed = damp(p.speed, 0, 8, dt);
-    p.y = damp(p.y, heightAt(p.x, p.z, p.y + 0.4), 12, dt);
+    p.y = p.fixedY != null ? damp(p.y, p.fixedY, 8, dt) : damp(p.y, heightAt(p.x, p.z, p.y + 0.4), 12, dt);
     p.pose = pose;
   }
 
   // something dangerous happened near this person (explosion, energy blast): duck / fall, then run away
   scare(p, src, hit) {
     if (p.state === 'shopkeeper' || p.state === 'resident') { p.pose = 'idle'; return; }
+    p.seat = null; p.fixedY = null;
     this._release(p);
     if (hit && p.state !== 'fall') {
       p.state = 'fall'; p.timer = 2.4; p.fallYaw = Math.atan2(p.x - src.x, p.z - src.z); p.vx = (p.x - src.x) * 0.6; p.vz = (p.z - src.z) * 0.6;
@@ -479,6 +515,7 @@ export class Pedestrians {
       M.hairS.setMatrixAt(i, p.app.bald ? this.zero : a.hairS.matrixWorld);
       M.hairL.setMatrixAt(i, p.app.long ? a.hairL.matrixWorld : this.zero);
       M.phone.setMatrixAt(i, p.pose === 'phone' || p.pose === 'phoneWalk' ? a.phone.matrixWorld : this.zero);
+      M.bag.setMatrixAt(i, p.suitcase && p.pose !== 'sit' ? a.bag.matrixWorld : this.zero);
       for (let s = 0; s < 2; s++) {
         M.uArm.setMatrixAt(i * 2 + s, a.uArm[s].matrixWorld); M.lArm.setMatrixAt(i * 2 + s, a.lArm[s].matrixWorld); M.hand.setMatrixAt(i * 2 + s, a.hand[s].matrixWorld);
         M.uLeg.setMatrixAt(i * 2 + s, a.uLeg[s].matrixWorld); M.lLeg.setMatrixAt(i * 2 + s, a.lLeg[s].matrixWorld); M.foot.setMatrixAt(i * 2 + s, a.foot[s].matrixWorld);

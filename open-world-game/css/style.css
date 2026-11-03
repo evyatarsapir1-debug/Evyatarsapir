@@ -75,6 +75,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1620; col
 #elevPanel .floors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-height: 50vh; overflow-y: auto; direction: ltr; }
 .fbtn { font: inherit; font-weight: 800; font-size: 15px; height: 38px; border-radius: 50%; border: 2px solid #ffffff66; background: #ffffff14; color: #fff; cursor: pointer; }
 .fbtn.on { background: #ff8a3d; border-color: #fff; }
+.fbtn.wide { grid-column: span 3; border-radius: 12px; font-size: 13px; }
 #prompt.show { display: block; }
 #prompt kbd { background: #fff; color: #000; border-radius: 4px; padding: 0 6px; font-weight: 800; margin-left: 6px; font-family: inherit; }
 #speedo { position: absolute; right: 18px; bottom: 18px; text-align: center; background: #0008; border-radius: 14px; padding: 8px 16px; display: none; min-width: 110px; }
@@ -116,6 +117,85 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1620; col
 .sbuy { font: inherit; font-weight: 800; min-width: 86px; padding: 8px 10px; border-radius: 10px; border: none; background: linear-gradient(90deg, #ff6a3d, #ff9a3d); color: #fff; cursor: pointer; font-variant-numeric: tabular-nums; }
 .sbuy:disabled { background: #ffffff22; color: #fff8; cursor: default; }
 .tbtn.fire { background: #c0392bcc; }
+
+/* phone */
+#phoneBtn { position: absolute; top: max(112px, calc(env(safe-area-inset-top) + 100px)); right: 12px; width: 44px; height: 44px; border-radius: 50%; border: none; background: #0007; pointer-events: auto; padding: 9px; }
+#phoneBadge { position: absolute; top: -2px; left: -2px; min-width: 18px; height: 18px; border-radius: 9px; background: #ff3b30; color: #fff; font-size: 11px; font-style: normal; font-weight: 800; display: none; align-items: center; justify-content: center; padding: 0 4px; }
+#gpsHud { position: absolute; top: max(172px, calc(env(safe-area-inset-top) + 160px)); left: 12px; width: 150px; text-align: center; font-size: 12px; font-weight: 700; background: #3b1d5acc; border-radius: 10px; padding: 4px 6px; display: none; }
+#gpsHud.show { display: block; }
+#objective { position: absolute; top: max(64px, calc(env(safe-area-inset-top) + 52px)); left: 50%; transform: translateX(-50%); max-width: min(520px, 70vw); text-align: center; font-size: 14px; font-weight: 700;
+  background: #0009; border-right: 3px solid #ff9f0a; border-radius: 8px; padding: 5px 12px; display: none; }
+#objective.show { display: block; }
+#phone { position: fixed; z-index: 24; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); width: 300px; height: min(580px, calc(100vh - 90px)); transform: translateY(115%); transition: transform .28s cubic-bezier(.2,.8,.2,1); pointer-events: none; }
+#phone.show { transform: none; pointer-events: auto; }
+.pframe { height: 100%; background: #111; border-radius: 36px; padding: 10px; box-shadow: 0 10px 40px #000c, inset 0 0 0 2px #333; display: flex; flex-direction: column; }
+.pstatus { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; padding: 2px 14px 6px; direction: ltr; font-variant-numeric: tabular-nums; }
+.pnotch { width: 70px; height: 18px; background: #000; border-radius: 10px; }
+.pscreen { flex: 1; border-radius: 26px; overflow-y: auto; overflow-x: hidden; padding: 10px; position: relative; touch-action: pan-y; }
+.pnav { display: flex; justify-content: center; align-items: center; gap: 12px; padding-top: 8px; position: relative; }
+.phome { width: 110px; height: 6px; border-radius: 3px; background: #fff; border: none; padding: 10px 0; background-clip: content-box; cursor: pointer; }
+.pclose { position: absolute; left: 6px; font: inherit; font-size: 11px; color: #fff; background: #333; border: none; border-radius: 8px; padding: 4px 8px; cursor: pointer; }
+.pwidget { text-align: center; padding: 14px 0 18px; text-shadow: 0 2px 8px #0008; }
+.pclock { font-size: 44px; font-weight: 300; font-variant-numeric: tabular-nums; line-height: 1; }
+.pgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 6px; }
+.papp { background: none; border: none; color: #fff; font: inherit; font-size: 10.5px; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; text-shadow: 0 1px 3px #000; }
+.pico { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; position: relative; box-shadow: 0 3px 8px #0006; }
+.pico svg { width: 28px; height: 28px; }
+.pdot { position: absolute; top: -3px; left: -3px; width: 12px; height: 12px; border-radius: 50%; background: #ff3b30; border: 2px solid #fff; }
+.phead { display: flex; justify-content: space-between; align-items: center; margin: -10px -10px 8px; padding: 10px; background: #000a; position: sticky; top: -10px; z-index: 2; font-size: 15px; }
+.pback, .pdel { font: inherit; font-size: 22px; line-height: 1; color: #4da3ff; background: none; border: none; cursor: pointer; min-width: 30px; }
+.pdel { font-size: 13px; color: #ff6b6b; }
+.plist { display: flex; flex-direction: column; gap: 6px; }
+.prow { display: flex; align-items: center; gap: 10px; background: #000a; border: none; border-radius: 14px; color: #fff; font: inherit; padding: 9px 10px; text-align: right; cursor: pointer; width: 100%; }
+.prow > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.prow small { opacity: .7; font-size: 11px; }
+.prow.on { outline: 2px solid #ff375f; }
+.prow.dim { opacity: .5; }
+.pav { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; flex: none; }
+.pav.big { width: 84px; height: 84px; font-size: 34px; }
+.pcall { font: inherit; font-size: 12px; font-weight: 800; color: #fff; background: #34c759; border: none; border-radius: 10px; padding: 6px 9px; cursor: pointer; white-space: nowrap; }
+.pbtns { display: flex; flex-direction: column; gap: 4px; }
+.pcount { font-style: normal; background: #ff3b30; border-radius: 9px; padding: 1px 7px; font-size: 11px; font-weight: 800; }
+.ptag { font-size: 11px; background: #ff9f0a; color: #000; border-radius: 8px; padding: 3px 7px; font-weight: 800; }
+.ptag.ok { background: #34c759; color: #fff; }
+.pbtn { font: inherit; font-size: 13px; font-weight: 700; color: #fff; background: #ffffff26; border: none; border-radius: 10px; padding: 7px 10px; cursor: pointer; }
+.pbtn.warn { background: #ff3b3088; }
+.pbig { font: inherit; font-weight: 800; width: 100%; padding: 14px; border-radius: 14px; border: none; background: #fff; color: #111; cursor: pointer; margin-bottom: 10px; }
+.pmap { width: 100%; aspect-ratio: 1; border-radius: 14px; touch-action: none; display: block; }
+.pmapbar { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; }
+.pinfo { font-size: 12px; background: #000a; border-radius: 10px; padding: 7px 9px; margin: 6px 0; }
+.pcard { background: #000b; border-radius: 14px; padding: 10px; margin-bottom: 8px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.mtimer { color: #ffcf5a; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pchat { display: flex; flex-direction: column; gap: 6px; max-height: calc(100% - 110px); overflow-y: auto; padding-bottom: 6px; }
+.pmsg { max-width: 82%; padding: 7px 11px; border-radius: 16px; font-size: 13px; background: #2c2c2e; align-self: flex-end; }
+.pmsg.me { background: #0a84ff; align-self: flex-start; }
+.preplies { display: flex; flex-wrap: wrap; gap: 6px; position: sticky; bottom: -10px; background: #000c; margin: 0 -10px -10px; padding: 8px 10px; }
+.pchip { font: inherit; font-size: 12px; color: #fff; background: #0a84ff; border: none; border-radius: 14px; padding: 7px 12px; cursor: pointer; }
+.pgal { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.pgal img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; cursor: pointer; }
+.pfull { width: 100%; border-radius: 10px; }
+.pempty { text-align: center; opacity: .75; padding: 20px 0; font-size: 13px; background: #0007; border-radius: 12px; }
+.pcallscr { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 30px; text-align: center; min-height: 100%; background: #000a; margin: -10px; padding: 40px 14px 20px; }
+.pline { min-height: 3em; font-size: 14px; background: #ffffff14; border-radius: 12px; padding: 8px; width: 100%; }
+.pline:empty { display: none; }
+.pacts { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.pend { margin-top: auto; width: 64px; height: 64px; border-radius: 50%; background: #ff3b30; color: #fff; border: none; font: inherit; font-weight: 800; cursor: pointer; }
+.pset { display: flex; flex-direction: column; gap: 10px; background: #000a; border-radius: 14px; padding: 12px; font-size: 13px; }
+.pset label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pset select { font: inherit; background: #333; color: #fff; border: none; border-radius: 8px; padding: 4px; }
+.pwalls { display: flex; gap: 8px; }
+.pwall { width: 44px; height: 70px; border-radius: 10px; border: 2px solid transparent; cursor: pointer; }
+.pwall.on { border-color: #fff; }
+.prange { display: flex; align-items: center; gap: 8px; font-size: 13px; background: #000a; border-radius: 12px; padding: 8px 10px; margin-top: 8px; }
+#camOverlay { position: fixed; inset: 0; z-index: 23; display: none; pointer-events: none; }
+#camOverlay.show { display: block; }
+#camOverlay.flash { background: #fffc; }
+.cframe { position: absolute; inset: 7% 6%; border: 2px solid #fff9; border-radius: 12px; }
+.cshoot { position: absolute; bottom: max(20px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: 74px; height: 74px; border-radius: 50%; background: #fff; border: 6px solid #fff6; pointer-events: auto; cursor: pointer; }
+.cdone { position: absolute; top: max(14px, env(safe-area-inset-top)); right: 14px; pointer-events: auto; min-width: 0; }
+#fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 30; transition: opacity .4s; }
+#fade.on { opacity: 1; }
+@media (max-width: 560px) { #phone { width: min(300px, 86vw); height: min(560px, 64vh); } }
 
 /* touch */
 #touch { position: fixed; inset: 0; pointer-events: none; z-index: 11; }

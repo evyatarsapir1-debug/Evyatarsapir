@@ -71,7 +71,7 @@ export class MiniMap {
       }
   }
 
-  draw(px, pz, facing, camYaw, markers = []) {
+  draw(px, pz, facing, camYaw, markers = [], route = null) {
     const c = this.canvas, g = this.ctx, w = c.width, h = c.height;
     const zoom = 1.6;
     const R = (w / 2) / zoom / S * 1.45; // world radius visible (corners included)
@@ -83,6 +83,11 @@ export class MiniMap {
     g.rotate(Math.PI + camYaw);
     g.scale(zoom, zoom);
     this._drawArea(g, px - R, pz - R, px + R, pz + R, px, pz);
+    if (route) {
+      g.strokeStyle = '#b35cff'; g.lineWidth = 5 / zoom * 1.6; g.lineJoin = 'round'; g.beginPath();
+      route.forEach(([x, z], i) => { const a = (x - px) * S, b = (z - pz) * S; i ? g.lineTo(a, b) : g.moveTo(a, b); });
+      g.stroke();
+    }
     for (const m of markers) {
       g.fillStyle = m.color; g.beginPath(); g.arc((m.x - px) * S, (m.z - pz) * S, 3, 0, Math.PI * 2); g.fill();
     }

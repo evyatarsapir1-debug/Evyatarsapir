@@ -22,7 +22,7 @@ export class Input {
     const keyMap = {
       KeyE: 'interact', KeyF: 'vehicle', KeyC: 'camera', KeyH: 'horn', KeyM: 'map', Escape: 'pause', KeyP: 'pause',
       Space: 'jump', ShiftLeft: 'run', ShiftRight: 'run', KeyQ: 'down', KeyR: 'up', Tab: 'map',
-      KeyG: 'cycle', KeyI: 'bag', KeyL: 'light', KeyT: 'fire',
+      KeyG: 'cycle', KeyI: 'bag', KeyL: 'light', KeyT: 'fire', KeyN: 'phone',
     };
     addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;

@@ -165,26 +165,41 @@ export function districtAt(x, z) {
 }
 
 // --------------------------------------------------------------------------- airport content
+// Landside (road z=500) -> terminal -> gates/apron -> taxiway -> runway, from north to south.
+export const AIRPORT = {
+  gates: [-360, -300, -240], gateZ: 612, taxiZ: 710, runwayZ: 790, runwayW: -960, runwayE: -60,
+};
 const AIRPORT_ITEMS = (() => {
   const b = [
-    { x: -300, z: 552, w: 120, d: 40, h: 18, style: 'glass', color: 0xd0dbe3, face: 'n', sign: 'נמל התעופה אזורה', airport: true },
-    { x: -470, z: 600, w: 70, d: 50, h: 20, style: 'industrial', color: 0xb8c0c5, face: 'n', hangar: true },
+    { x: -300, z: 555, w: 180, d: 50, h: 18, style: 'glass', color: 0xd0dbe3, face: 'n', sign: 'נמל התעופה אזורה', airport: true, interior: 'terminal' },
+    { x: -760, z: 640, w: 80, d: 56, h: 24, style: 'industrial', color: 0xb8c0c5, face: 's', interior: 'hangar', sign: 'האנגר אזורה' },
+    { x: -560, z: 640, w: 12, d: 12, h: 38, style: 'glass', color: 0x9fb8cc, face: 'n', interior: 'ctower', sign: 'מגדל פיקוח' },
   ];
-  const p = [
-    { kind: 'tower', x: -400, z: 528, h: 34, y: 0 },
-    { kind: 'helipad', x: -200, z: 560 },
-    { kind: 'plane', x: -560, z: 548, rot: Math.PI / 2, y: 0 },
-    { kind: 'plane', x: -620, z: 600, rot: Math.PI / 2 + 0.3, y: 0 },
-  ];
+  const p = [{ kind: 'helipad', x: -85, z: 625 }];
+  // jet bridges from the terminal to each gate
+  for (const gx of AIRPORT.gates) p.push({ kind: 'jetbridge', x: gx - 4.2, z: 588, y: 0 });
+  // runway edge lights, taxiway centre line
+  for (let x = AIRPORT.runwayW; x <= AIRPORT.runwayE; x += 60) for (const z of [762, 818]) p.push({ kind: 'rlight', x, z, y: 0 });
+  for (let x = -900; x <= -80; x += 12) p.push({ kind: 'tline', x, z: 710, y: 0 });
   const parking = [];
-  for (let k = 0; k < 14; k++) parking.push({ x: -352 + k * 3.4, z: 517, rot: 0 });
+  // surface car park west of the terminal
+  for (let r = 0; r < 4; r++) for (let k = 0; k < 18; k++) parking.push({ x: -555 + k * 3.4, z: 522 + r * 16, rot: 0 });
+  // taxi rank + buses at the kerb in front of the terminal
+  for (let k = 0; k < 5; k++) parking.push({ x: -345 + k * 7, z: 512, rot: -Math.PI / 2, type: 'taxi', fixed: true });
+  parking.push({ x: -275, z: 512, rot: -Math.PI / 2, type: 'bus', fixed: true }, { x: -245, z: 512, rot: -Math.PI / 2, type: 'bus', fixed: true });
+  // service vehicles parked on the apron (drivable)
+  parking.push({ x: -420, z: 600, rot: 0, type: 'tug', fixed: true }, { x: -180, z: 600, rot: 0, type: 'fuel', fixed: true }, { x: -440, z: 600, rot: 0, type: 'van', fixed: true });
   return { b, p, parking };
 })();
-export const AIRPORT_AREAS = { apron: [-660, 440, -20, 720], runway: [-640, 350, -120, 400] };
+export const AIRPORT_AREAS = {
+  carpark: [-562, 512, -490, 586], plaza: [-395, 506, -205, 530], apron: [-640, 586, -60, 700], taxiway: [-920, 700, -60, 720],
+  conn1: [-945, 720, -905, 762], conn2: [-100, 720, -60, 762], runway: [AIRPORT.runwayW - 20, 760, AIRPORT.runwayE + 20, 820],
+};
+export const AIRPORT_GARAGE = { x: -150, z: 565, w: 64, d: 44, levels: 4, levelH: 3.15 };
 
 const FEATURED = [
-  { x: -200, z: 560, rot: 0, type: 'heli' },
-  { x: -230, z: 602, rot: Math.PI / 2, type: 'heli' },
+  { x: -85, z: 625, rot: 0, type: 'heli' },
+  { x: -85, z: 655, rot: Math.PI / 2, type: 'heli' },
   { x: 560, z: 994.4, rot: -Math.PI / 2, type: 'bus' },
   { x: 150, z: 994.4, rot: -Math.PI / 2, type: 'truck' },
   { x: 1012, z: 300, rot: 0, type: 'bicycle' }, { x: 1012, z: 302, rot: 0, type: 'bicycle' },
@@ -253,8 +268,10 @@ function generateCell(ix, iz) {
       const x0 = Math.max(ox, r[0]), z0 = Math.max(oz, r[1]), x1 = Math.min(ox + P, r[2]), z1 = Math.min(oz + P, r[3]);
       if (x1 > x0 && z1 > z0) d.apron.push({ name, rect: [x0, z0, x1, z1] });
     }
-    markInteriors(B, rng);
-    if (!d.apron.length) addTrees(d, rng, rng.int(2, 8));
+    if (AIRPORT_GARAGE.x >= ox && AIRPORT_GARAGE.x < ox + P && AIRPORT_GARAGE.z >= oz && AIRPORT_GARAGE.z < oz + P) d.garage = { ...AIRPORT_GARAGE };
+    for (const r of Object.values(AIRPORT_AREAS)) d.keepOut.push(r);
+    d.keepOut.push([-640, 506, -20, 600]);
+    if (!d.apron.length && oz < 900) addTrees(d, rng, rng.int(2, 8));
   } else if (kind === 'Y' || kind === 'Z') {
     const west = kind === 'Y';
     const X = (x) => (west ? x : 3000 - x);
@@ -409,6 +426,7 @@ export function propColliders(p, out) {
     case 'hay': out.push(makeCircle(p.x, p.z, 0.9, 0, 1.6)); break;
     case 'rock': out.push(makeCircle(p.x, p.z, 1.1 * (p.s || 1), 0, 1.4 * (p.s || 1))); break;
     case 'umbrella': out.push(makeCircle(p.x, p.z, 0.15, 0, 2.4)); break;
+    case 'jetbridge': for (const dz of [-3, 4]) out.push(makeCircle(p.x, p.z + dz, 0.35, 0, 2.8)); out.push(makeBox(p.x, p.z, 1.5, 8, 0, 2.8, 5.6)); break;
   }
 }
 

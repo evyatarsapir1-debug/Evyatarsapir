@@ -7,6 +7,7 @@ import { buildInterior, G } from './chunkManager.js';
 import { cellData } from './worldGen.js';
 import { movingSurfaces } from './terrain.js';
 import { P } from './layout.js';
+import { buildAirliner } from './airport.js';
 
 const LOAD_R = 45, UNLOAD_R = 75;
 
@@ -166,9 +167,36 @@ export class InteriorManager {
       mesh.matrixAutoUpdate = false; mesh.updateMatrix();
       g.add(mesh);
     }
+    // flight boards with the live schedule
+    for (const bd of spec.boards || []) {
+      if (!this.boardTexture) continue;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(bd.w, bd.h), new THREE.MeshBasicMaterial({ map: this.boardTexture }));
+      m.position.set(bd.x + bd.nx * 0.05, bd.y, bd.z + bd.nz * 0.05);
+      m.rotation.y = Math.atan2(bd.nx, bd.nz);
+      g.add(m);
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(bd.w + 0.3, bd.h + 0.3, 0.15), M.metal);
+      frame.position.set(bd.x - bd.nx * 0.05, bd.y, bd.z - bd.nz * 0.05); frame.rotation.y = m.rotation.y; g.add(frame);
+    }
+    // an airliner in the hangar
+    if (spec.plane) {
+      const pb = new GeoBuilder();
+      buildAirliner(pb, { tail: 0x6b7480, stripe: 0xb0b8c0 }, true, spec.plane.x, 0.15, spec.plane.z, spec.plane.heading);
+      const pm = new THREE.Mesh(pb.build(), new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.35, roughness: 0.45 }));
+      pm.castShadow = true; g.add(pm);
+    }
+    // suitcases riding the baggage belts
+    let belts = null;
+    if (spec.belts?.length) {
+      const total = spec.belts.reduce((n, b) => n + (b.loop ? 9 : 5), 0);
+      const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.62, 0.42, 0.26), new THREE.MeshStandardMaterial({ roughness: 0.6 }), total);
+      const cols = [0x2c3e50, 0xc0392b, 0x16a085, 0x8e44ad, 0xd35400, 0x34495e, 0x7f8c8d];
+      for (let i = 0; i < total; i++) mesh.setColorAt(i, new THREE.Color(cols[i % cols.length]));
+      g.add(mesh);
+      belts = { mesh, list: spec.belts.map((bl) => ({ ...bl, n: bl.loop ? 9 : 5, len: bl.path.reduce((L, p, i) => i ? L + Math.hypot(p[0] - bl.path[i - 1][0], p[1] - bl.path[i - 1][1]) : 0, 0) + (bl.loop ? Math.hypot(bl.path[0][0] - bl.path.at(-1)[0], bl.path[0][1] - bl.path.at(-1)[1]) : 0) })), t: 0 };
+    }
     this.group.add(g);
     const elevator = spec.elevator ? new Elevator(spec.elevator, M, this.group) : null;
-    return { b, spec, group: g, elevator };
+    return { b, spec, group: g, elevator, belts };
   }
 
   _dispose(L) {
@@ -188,7 +216,7 @@ export class InteriorManager {
     const px = player.x, pz = player.z;
     const ix = Math.floor(px / P), iz = Math.floor(pz / P);
     const want = new Map();
-    for (let i = ix - 1; i <= ix + 1; i++) for (let j = iz - 1; j <= iz + 1; j++) {
+    for (let i = ix - 2; i <= ix + 2; i++) for (let j = iz - 2; j <= iz + 2; j++) {
       for (const b of cellData(i, j).buildings) {
         if (!b.interior) continue;
         const d = distToRect(px, pz, b);
@@ -202,6 +230,26 @@ export class InteriorManager {
     for (const [k, [b]] of todo) {
       if (!force && built >= 1) break;
       this.loaded.set(k, this._build(b)); built++;
+    }
+    // baggage belts
+    const _mm = new THREE.Matrix4(), _qq = new THREE.Quaternion(), _pp = new THREE.Vector3(), _ss = new THREE.Vector3(1, 1, 1);
+    for (const L of this.loaded.values()) {
+      const B = L.belts; if (!B) continue;
+      B.t += dt * 0.6;
+      let k = 0;
+      for (const bl of B.list) {
+        for (let i = 0; i < bl.n; i++, k++) {
+          let s = ((B.t + i * bl.len / bl.n) % bl.len + bl.len) % bl.len;
+          const pts = bl.loop ? [...bl.path, bl.path[0]] : bl.path;
+          let a = pts[0], c = pts[1];
+          for (let j = 1; j < pts.length; j++) { const seg = Math.hypot(pts[j][0] - pts[j - 1][0], pts[j][1] - pts[j - 1][1]); if (s <= seg) { a = pts[j - 1]; c = pts[j]; break; } s -= seg; }
+          const seg = Math.hypot(c[0] - a[0], c[1] - a[1]) || 1, t = Math.min(1, s / seg);
+          _pp.set(a[0] + (c[0] - a[0]) * t, bl.y + 0.21, a[1] + (c[1] - a[1]) * t);
+          _qq.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(c[0] - a[0], c[1] - a[1]) + Math.PI / 2);
+          B.mesh.setMatrixAt(k, _mm.compose(_pp, _qq, _ss));
+        }
+      }
+      B.mesh.instanceMatrix.needsUpdate = true;
     }
     // elevators
     let inside = null;
@@ -240,7 +288,7 @@ export class InteriorManager {
         btns.innerHTML = '';
         el.e.floors.forEach((_, k) => {
           const b = document.createElement('button');
-          b.className = 'fbtn'; b.textContent = k === 0 ? 'ק' : String(k); b.dataset.k = k;
+          b.className = 'fbtn' + (el.e.labels ? ' wide' : ''); b.textContent = el.e.labels ? el.e.labels[k] : k === 0 ? 'ק' : String(k); b.dataset.k = k;
           b.onpointerdown = (ev) => { ev.preventDefault(); ev.stopPropagation(); el.go(k); };
           btns.appendChild(b);
         });
@@ -248,7 +296,7 @@ export class InteriorManager {
     }
     if (el) {
       const st = this.panel.querySelector('.status');
-      const cur = el.floor === 0 ? 'קרקע' : el.floor;
+      const cur = el.e.labels ? el.e.labels[el.floor] : el.floor === 0 ? 'קרקע' : el.floor;
       st.textContent = el.target !== null ? `קומה ${cur} ${el.e.floors[el.target] > el.y ? '▲' : '▼'}` : `קומה ${cur}`;
       this.panel.querySelectorAll('.fbtn').forEach((b) => b.classList.toggle('on', +b.dataset.k === el.target || (+b.dataset.k === el.floor && el.target === null)));
     }

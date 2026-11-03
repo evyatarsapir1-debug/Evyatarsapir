@@ -34,7 +34,7 @@
         <button id="btnSettings" class="mbtn">הגדרות</button>
         <button id="btnExit" class="mbtn">יציאה</button>
       </div>
-      <div class="version">גרסה 0.4 — עיר חיה: מעליות, דירות, חנויות, יום ולילה ומזג אוויר</div>
+      <div class="version">גרסה 0.5 — נמל תעופה, טלפון חכם, משימות, ישיבה ושינה</div>
     </div>
   </div>
 
@@ -106,7 +106,8 @@
         <li><b>Shift</b> — ריצה (במסוק: ירידה)</li>
         <li><b>רווח</b> — קפיצה / בלם יד (במסוק: עלייה)</li>
         <li><b>F</b> — כניסה / יציאה מרכב</li>
-        <li><b>E</b> — אינטראקציה (לשבת על ספסל, לקום)</li>
+        <li><b>E</b> — אינטראקציה: לשבת / לישון / לקום, להזמין מעלית, לקנות בחנות</li>
+        <li><b>N</b> — טלפון · <b>I</b> — תיק · <b>G</b> — החלפת ציוד · <b>L</b> — פנס</li>
         <li><b>C</b> — מצלמה מתוך הרכב / מבחוץ</li>
         <li><b>H</b> — צופר · <b>M</b> — מפה · <b>Esc</b> — הפסקה</li>
         <li>גרירת עכבר — סיבוב מצלמה · גלגלת — זום</li>
@@ -152,6 +153,17 @@
     </div>
   </div>
 
+  <!-- Phone -->
+  <div id="phone">
+    <div class="pframe">
+      <div class="pstatus"><span class="ptime">10:00</span><span class="pnotch"></span><span>5G ▮▮▮</span></div>
+      <div class="pscreen"></div>
+      <div class="pnav"><button class="phome" type="button" aria-label="מסך הבית"></button><button class="pclose" type="button">סגור</button></div>
+    </div>
+  </div>
+  <div id="camOverlay"><div class="cframe"></div><button class="cshoot" type="button" aria-label="צלם"></button><button class="cdone mbtn" type="button">חזרה לטלפון</button></div>
+  <div id="fade"></div>
+
   <!-- HUD -->
   <div id="hud" class="hidden">
     <canvas id="minimap" width="300" height="300"></canvas>
@@ -166,6 +178,9 @@
     <div id="hurtFlash"></div>
     <div id="crosshair"></div>
     <button id="bagBtn" data-btn="bag" type="button">תיק</button>
+    <button id="phoneBtn" data-btn="phone" type="button" aria-label="טלפון"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3" fill="none" stroke="#fff" stroke-width="2"/><circle cx="12" cy="18" r="1.3" fill="#fff"/></svg><i id="phoneBadge"></i></button>
+    <div id="gpsHud"></div>
+    <div id="objective"></div>
     <button id="pauseBtn" data-btn="pause" aria-label="הפסקה">II</button>
   </div>
 

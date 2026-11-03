@@ -323,6 +323,112 @@ check('"צא מהרכב" button shown while driving', !!btn.exitText && btn.exit
 const kinds = await g(() => [...new Set([...__game.vehicles.all(), ...__game.traffic.cars].map((v) => v.typeKey))]);
 check('variety of cars around', kinds.length >= 6, kinds.join(', '));
 
+// ---------------------------------------------------------------- furniture: sit & sleep
+await g(() => { if (__game.player.state === 'driving') __game.player.exitVehicle({ statics: __game.statics, vehicles: __game.vehicles.all() }); });
+await sim(2);
+const fur = await g(() => {
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  let b = null;
+  for (let ix = 0; ix < 10 && !b; ix++) for (let iz = 0; iz < 3 && !b; iz++) b = __wg.cellData(ix, iz).buildings.find((q) => q.interior === 'house' && q.h >= 5.6);
+  const out = {};
+  for (const kind of ['sit', 'sleep']) {
+    const s = b._spec.seats.find((q) => q.kind === kind && (kind === 'sleep' || q.label === 'כורסה' || q.label === 'ספה'));
+    game.teleport(s.x + Math.sin(s.yaw) * 1.3, s.z + Math.cos(s.yaw) * 1.3, s.yaw + Math.PI, s.y + 0.3);
+    step(5);
+    const prompt = game.player.prompt?.text;
+    game.input.pressed.add('interact'); step(70);
+    const st = game.player.state, y = game.player.y, lie = game.player.model.body.rotation.x;
+    const dist = Math.hypot(game.player.x - s.x, game.player.z - s.z);
+    const getUp = game.player.prompt?.text;
+    game.input.keys.add('KeyW'); step(15); game.input.keys.delete('KeyW');
+    const still = Math.hypot(game.player.x - s.x, game.player.z - s.z) < 0.05;
+    game.input.pressed.add('interact'); step(30);
+    out[kind] = { prompt, st, y: +(y - s.y).toFixed(2), lie: +lie.toFixed(2), dist: +dist.toFixed(2), getUp, still, after: game.player.state };
+  }
+  return out;
+});
+check('furniture: "לשבת" on a sofa/armchair, sits in place', fur.sit.prompt === 'לשבת' && fur.sit.st === 'sitting' && fur.sit.dist < 0.1 && fur.sit.getUp === 'לקום', JSON.stringify(fur.sit));
+check('furniture: "לישון" on a bed, lies down', fur.sleep.prompt === 'לישון' && fur.sleep.lie < -1.3 && fur.sleep.y > 0.5, JSON.stringify(fur.sleep));
+check('furniture: stays put while seated, "לקום" returns to normal control', fur.sit.still && fur.sleep.still && fur.sit.after === 'foot' && fur.sleep.after === 'foot');
+
+// ---------------------------------------------------------------- phone
+await g(() => { __game.teleport(520, 590, Math.PI); });
+await page.click('#phoneBtn');
+await sim(1);
+const ph = await g(() => ({ open: __game.phone.open, apps: document.querySelectorAll('#phone .papp').length }));
+check('phone opens from its button', ph.open && ph.apps === 8, `${ph.apps} apps`);
+await page.click('#phone .papp[data-go="map"]');
+await page.click('#phone .prow[data-place="0"]');
+const gps = await g(() => ({ dest: __game.gps.dest?.name, pts: __game.gps.route?.points.length, len: Math.round(__game.gps.route?.length || 0) }));
+check('GPS: choose a destination, route follows the roads', !!gps.dest && gps.pts > 3 && gps.len > 500, JSON.stringify(gps));
+await shot('12-phone-map');
+await page.click('#phone .phome'); await page.click('#phone .papp[data-go="contacts"]'); await page.click('#phone .prow[data-arg="taxi"]');
+await page.waitForTimeout(1500);
+const nk = await g(() => __game.vehicles.kept.length);
+await page.click('#phone .pacts .pbtn');
+const taxi = await g(() => __game.vehicles.kept.filter((v) => v.typeKey === 'taxi').length);
+check('contacts: calling a taxi brings one', taxi > 0, `${taxi} taxi`);
+await page.click('#phone .pend');
+await page.click('#phone .phome'); await page.click('#phone .papp[data-go="camera"]'); await page.click('#phone .pbig');
+await page.click('#camOverlay .cshoot'); await page.click('#camOverlay .cdone');
+check('camera: photo saved to the gallery', (await g(() => __game.phone.photos.length)) > 0);
+await page.click('#phone .phome'); await page.click('#phone .papp[data-go="music"]'); await page.click('#phone .prow[data-st="1"]');
+check('music: station selected', (await g(() => __game.selectedStation)) === 1);
+await page.click('#phone .phome'); await page.click('#phone .papp[data-go="messages"]');
+await page.click('#phone .prow[data-arg="roni"]');
+await page.click('#phone .pchip[data-r="0"]'); await page.waitForTimeout(900);
+const mis = await g(() => ({ active: __game.missions.active, obj: __game.missions.objective()?.text }));
+check('messages: reply accepts a mission', mis.active === 'airport', JSON.stringify(mis));
+const done = await g(() => {
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const v = game.vehicles.kept.find((q) => q.typeKey === 'taxi');
+  const m0 = game.econ.money;
+  game.player.forceIntoVehicle(v);
+  for (let k = 0; k < 2; k++) { const t = game.missions.tgt; game.chunks.update(t.x, t.z, true); v.x = t.x; v.z = t.z; v.y = 0; v.sync(); step(8); }
+  return { state: game.missions.state.airport, earned: game.econ.money - m0 };
+});
+check('missions: complete the airport pickup and get paid', done.state === 'done' && done.earned > 0, JSON.stringify(done));
+await page.click('#phone .phome'); await page.click('#phone .papp[data-go="settings"]');
+await page.click('#phone .pwall[data-w="2"]');
+check('phone settings: wallpaper changes', (await g(() => __game.phone.settings.wall)) === 2);
+await page.click('#phone .pclose');
+await g(() => { const v = __game.player.vehicle; __game.player.exitVehicle({ statics: __game.statics, vehicles: __game.vehicles.all() }); });
+await sim(2);
+
+// ---------------------------------------------------------------- airport
+const air = await g(() => {
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const route = __game.gps.set({ x: -300, z: 514, name: 't' }, { x: 530, z: 545 }); __game.gps.clear();
+  game.teleport(-300, 540, 0); step(40);
+  const L = [...game.interiors.loaded.values()].find((l) => l.b.interior === 'terminal');
+  const staff = game.peds.peds.filter((q) => q.shopKey && q.state === 'shopkeeper').length;
+  const travellers = game.peds.peds.filter((q) => q.pts).length;
+  const counters = L ? L.spec.counters.length : 0;
+  let took = null, landed = null;
+  for (let i = 0; i < 30 * 420 && !(took && landed); i++) {
+    game.time += 1 / 30; game.airport.update(1 / 30, game.env.hour, -300, 540, []);
+    if (!took && game.airport.planes.some((p) => p.state === 'depart' && p.y > 20)) took = Math.round(i / 30);
+    if (!landed && game.airport.planes.some((p) => p.state === 'arrive' && p.y < 0.5 && p.speed > 20)) landed = Math.round(i / 30);
+  }
+  return { route: Math.round(route?.length || 0), terminal: !!L, staff, travellers, counters, belts: L?.belts?.list.length || 0, took, landed, board: game.airport.departures().length };
+});
+check('airport: reachable by road from the city', air.route > 500, `${air.route}m route`);
+check('airport: terminal interior with counters, belts, staff and travellers', air.terminal && air.counters >= 3 && air.belts >= 3 && air.staff > 5 && air.travellers > 8, JSON.stringify(air));
+check('airport: planes take off and land', !!air.took && !!air.landed, `takeoff at ${air.took}s, landing at ${air.landed}s`);
+const tw = await g(() => {
+  const game = __game, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const b = __wg.cellData(-6, 6).buildings.find((q) => q.interior === 'ctower');
+  const e = b._spec.elevator;
+  game.teleport(e.doorPt[0], e.doorPt[1], 0, 0.2); step(5);
+  game.input.pressed.add('interact'); step(70);
+  game.input.keys.add('KeyW'); step(30, () => { game.rig.yaw = Math.atan2(e.insidePt[0] - game.player.x, e.insidePt[1] - game.player.z); game.rig.idle = 0; }); game.input.keys.delete('KeyW');
+  const L = [...game.interiors.loaded.values()].find((l) => l.b === b);
+  L.elevator.go(1); step(30 * 25);
+  return { y: game.player.y, top: e.floors[1], label: document.querySelector('#elevPanel .fbtn')?.textContent };
+});
+check('control tower: elevator up to the cab', Math.abs(tw.y - tw.top) < 0.1, JSON.stringify(tw));
+await shot('13-tower-cab');
+
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);
 await g(() => __game.save());

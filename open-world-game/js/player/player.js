@@ -107,13 +107,13 @@ export class Player {
 
     // contextual interactions
     this.nearVehicle = this._findVehicle(world.vehicles);
-    this.nearBench = this.nearVehicle ? null : this._findBench(world.benches);
+    this.nearSeat = this.nearVehicle ? null : this._findSeat(world);
     if (this.nearVehicle) {
       this.prompt = { key: 'vehicle', text: `היכנס: ${this.nearVehicle.T.name}` };
       if (input.wasPressed('vehicle') || input.wasPressed('interact')) this.enterVehicle(this.nearVehicle, world);
-    } else if (this.nearBench) {
-      this.prompt = { key: 'interact', text: 'שב על הספסל' };
-      if (input.wasPressed('interact')) this._sitOn(this.nearBench);
+    } else if (this.nearSeat) {
+      this.prompt = { key: 'interact', text: this.nearSeat.kind === 'sleep' ? 'לישון' : 'לשבת', seat: this.nearSeat.label };
+      if (input.wasPressed('interact')) this.useSeat(this.nearSeat);
     }
     this.model.animate(dt, { speed: this.parachute ? 0 : Math.hypot(this.vx, this.vz), grounded: this.grounded || this.parachute, vy: this.vy, mode: this.swimming ? 'swim' : 'foot', aim: this.armed ? (this.firing > 0 ? 2 : 1) : 0, chute: this.parachute });
     if (this.canopy) this.canopy.visible = !!this.parachute;
@@ -166,39 +166,77 @@ export class Player {
     }
     return best;
   }
-  _findBench(benches) {
-    let best = null, bd = 1.8;
-    for (const b of benches) {
-      if (Math.abs(b.x - this.x) > 3 || Math.abs(b.z - this.z) > 3 || Math.abs((b.y ?? this.y) - this.y) > 1) continue;
-      const d = Math.hypot(b.x - this.x, b.z - this.z);
-      if (d < bd) { bd = d; best = b; }
+  // ---------------------------------------------------------------- furniture: sit / sleep
+  // Seats come from benches outside and from furniture inside loaded interiors.
+  // The seat you are facing wins when several are close.
+  _findSeat(world) {
+    const fx = Math.sin(this.facing), fz = Math.cos(this.facing);
+    let best = null, bs = Infinity;
+    const consider = (s) => {
+      if (Math.abs(s.x - this.x) > 2.2 || Math.abs(s.z - this.z) > 2.2 || Math.abs(s.y - this.y) > 0.8) return;
+      const dx = s.x - this.x, dz = s.z - this.z, d = Math.hypot(dx, dz);
+      if (d > 1.9) return;
+      if (world.pedPositions && world.pedPositions.some((p) => Math.abs(p.x - s.x) < 0.45 && Math.abs(p.z - s.z) < 0.45 && Math.abs(p.y - s.y) < 1)) return; // taken
+      const facingK = d > 0.01 ? (dx * fx + dz * fz) / d : 1;
+      const score = d - facingK * 0.9;
+      if (score < bs) { bs = score; best = s; }
+    };
+    for (const b of world.benches || []) {
+      const r = b.rot || 0;
+      for (const off of [-0.45, 0.45]) {
+        const ox = Math.cos(r) * off, oz = -Math.sin(r) * off; // along the bench
+        consider({ x: b.x + ox - Math.sin(r) * 0.06, z: b.z + oz - Math.cos(r) * 0.06, y: b.y ?? 0, seatH: 0.45, yaw: r + Math.PI, kind: 'sit', label: 'ספסל' });
+      }
     }
+    for (const s of world.seats || []) consider(s);
     return best;
   }
 
-  // ---------------------------------------------------------------- benches
-  _sitOn(b) {
-    this.state = 'sitting'; this.bench = b;
-    const r = b.rot || 0;
-    // the backrest is at local +z, so the sitter faces local -z
-    const sx = b.x - Math.sin(r) * 0.08, sz = b.z - Math.cos(r) * 0.08;
-    this.seq = { t: 0, fromX: this.x, fromZ: this.z, fromF: this.facing, toX: sx, toZ: sz, toF: r + Math.PI, benchY: b.y };
+  useSeat(seat) {
+    this.state = 'sitting';
     this.vx = this.vz = 0;
+    const fx = Math.sin(seat.yaw), fz = Math.cos(seat.yaw);
+    const ap = { x: seat.x + fx * 0.75, z: seat.z + fz * 0.75 };
+    this.seq = { seat, phase: 'walk', t: 0, ap, fromX: this.x, fromZ: this.z, fromY: this.y };
   }
+
   _sitting(dt, input) {
-    const s = this.seq;
-    s.t = Math.min(1, s.t + dt * 2.5);
-    this.x = s.fromX + (s.toX - s.fromX) * s.t;
-    this.z = s.fromZ + (s.toZ - s.fromZ) * s.t;
-    this.facing = dampAngle(this.facing, s.toF, 10, dt);
-    this.y = (s.benchY ?? heightAt(this.x, this.z, this.y)) + 0.02;
-    this.prompt = { key: 'interact', text: 'קום' };
-    this.model.animate(dt, { speed: 0, grounded: true, mode: s.t > 0.4 ? 'sit' : 'foot' });
-    if (s.t >= 1 && (input.wasPressed('interact') || input.wasPressed('jump') || Math.hypot(input.moveX, input.moveY) > 0.5)) {
-      this.state = 'foot'; this.bench = null;
-      const r = this.facing;
-      this.x += Math.sin(r) * 0.5; this.z += Math.cos(r) * 0.5;
+    const s = this.seq, seat = s.seat;
+    s.t += dt;
+    const lying = seat.kind === 'sleep';
+    const finalY = seat.y + (lying ? seat.seatH + 0.13 : seat.seatH - 0.43);
+    let mode = 'foot', speed = 0;
+    if (s.phase === 'walk') {
+      const dx = s.ap.x - this.x, dz = s.ap.z - this.z, d = Math.hypot(dx, dz);
+      if (d > 0.08 && s.t < 1.6) {
+        const st = Math.min(d, 2.4 * dt);
+        this.x += (dx / d) * st; this.z += (dz / d) * st; speed = 2.4;
+        this.facing = dampAngle(this.facing, Math.atan2(dx, dz), 12, dt);
+      } else { s.phase = 'turn'; s.t = 0; }
+      this.y = heightAt(this.x, this.z, this.y + 0.3);
+    } else if (s.phase === 'turn') {
+      this.facing = dampAngle(this.facing, seat.yaw, 14, dt);
+      if (s.t > 0.3) { s.phase = 'down'; s.t = 0; s.y0 = this.y; }
+    } else if (s.phase === 'down' || s.phase === 'idle') {
+      const k = Math.min(1, s.t / 0.6), e = k * k * (3 - 2 * k);
+      this.facing = dampAngle(this.facing, seat.yaw, 14, dt);
+      this.x = s.ap.x + (seat.x - s.ap.x) * e; this.z = s.ap.z + (seat.z - s.ap.z) * e;
+      this.y = s.y0 + (finalY - s.y0) * e;
+      mode = lying ? 'lie' : 'sit';
+      if (k >= 1) s.phase = 'idle';
+      if (s.phase === 'idle') {
+        this.prompt = { key: 'interact', text: 'לקום' };
+        if (input.wasPressed('interact') || input.wasPressed('jump')) { s.phase = 'up'; s.t = 0; s.fromX = this.x; s.fromZ = this.z; s.fromY = this.y; }
+      }
+    } else if (s.phase === 'up') {
+      const k = Math.min(1, s.t / 0.5);
+      this.x = s.fromX + (s.ap.x - s.fromX) * k; this.z = s.fromZ + (s.ap.z - s.fromZ) * k;
+      const gy = heightAt(s.ap.x, s.ap.z, seat.y + 0.3);
+      this.y = s.fromY + (gy - s.fromY) * k;
+      mode = k < 0.4 ? (lying ? 'lie' : 'sit') : 'foot';
+      if (k >= 1) { this.state = 'foot'; this.seq = null; this.grounded = true; this.vy = 0; }
     }
+    this.model.animate(dt, { speed, grounded: true, mode });
     this._sync();
   }
 

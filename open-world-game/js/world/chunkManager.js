@@ -120,6 +120,15 @@ function addProp(pb, p, lampB) {
       for (let k = -3; k <= 3; k++) pb.addGeometry(G.box, mat(p.x + k * (p.w / 7), y + 2.25, p.z, 0, 0.3, 4.5, 0.3), 0x8c9399);
       pb.addGeometry(G.box, mat(p.x, y + 4.6, p.z, 0, p.w, 0.3, p.d), 0x9aa3ab);
       break;
+    case 'jetbridge': {
+      // elevated walkway from the terminal to the aircraft door, on two legs
+      pb.addGeometry(G.box, mat(p.x, 4.2, p.z, 0, 3.0, 2.8, 16), 0xb9c0c7);
+      pb.addGeometry(G.box, mat(p.x, 4.2, p.z + 8.2, 0, 3.4, 3.2, 1.2), 0x8d959e);
+      for (const dz of [-3, 4]) pb.addGeometry(G.box, mat(p.x, 1.4, p.z + dz, 0, 0.5, 2.8, 0.5), 0x6b7480);
+      break;
+    }
+    case 'rlight': (lampB || pb).addGeometry(G.box, mat(p.x, 0.25, p.z, 0, 0.35, 0.3, 0.35), 0xffffff); break;
+    case 'tline': pb.addGeometry(G.box, mat(p.x, 0.02, p.z, 0, 6, 0.02, 0.3), 0xf1c40f); break;
     case 'rock': pb.addGeometry(G.rock, mat(p.x, y + 0.5 * p.s, p.z, p.rot || 0, 1.3 * p.s, 0.9 * p.s, 1.1 * p.s), 0x8d877c); break;
     case 'hay': pb.addGeometry(G.hay, mat(p.x, y + 0.8, p.z, p.rot || 0, 1, 1, 1), 0xd8b45a); break;
     case 'umbrella':
@@ -145,8 +154,10 @@ function facePiece(bld, f, u0, u1, y0, y1, yBase, uS, vS, color, inward) {
   else bld.quad([b[0], y0, b[1]], [a[0], y0, a[1]], [a[0], y1, a[1]], [b[0], y1, b[1]], [u1 / uS, v0, u0 / uS, v0, u0 / uS, v1, u1 / uS, v1], color);
 }
 // all four faces of rect; door (if any) is cut into face `door.face`, centered, starting at y0
-function faces(bld, rect, y0, y1, uS, vS, color, door, inward = false) {
+const OPP = { n: 's', s: 'n', e: 'w', w: 'e' };
+function faces(bld, rect, y0, y1, uS, vS, color, door, inward = false, skip = null) {
   for (const k of ['n', 's', 'e', 'w']) {
+    if (skip && (skip === 'all' || skip === k)) continue;
     const f = FACE[k](rect);
     if (door && door.face === k) {
       const c = f.len / 2, hw = door.w / 2, dh = Math.min(y1, y0 + door.h);
@@ -273,7 +284,7 @@ function buildDoorFrame(spec, b, B) {
 export function buildInterior(spec, b, B) {
   const I = B.interior;
   for (const r of spec.rooms) {
-    faces(I, r.rect, r.y0, r.y1, 3, 3, r.wall, r.door, true);
+    faces(I, r.rect, r.y0, r.y1, 3, 3, r.wall, r.door, true, r.glassAll ? 'all' : r.glassBack ? OPP[b.face] : null);
     if (r.floor !== null) I.floor(r.rect[0], r.rect[1], r.rect[2], r.rect[3], r.y0 + 0.02, r.floor, 2);
     const [x0, z0, x1, z1] = r.rect, y = r.y1 - 0.01;
     I.quad([x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1], [0, 0, 1, 0, 1, 1, 0, 1], r.ceil);
@@ -507,7 +518,7 @@ function buildCellNear(cd, B, bulbs) {
   }
   // buildings, props, garage, ridge
   for (const b of cd.buildings) buildBuilding(b, B.fac, B);
-  for (const p of cd.props) addProp(B.props, p);
+  for (const p of cd.props) addProp(B.props, p, B.lamp);
   if (cd.garage) buildGarage(cd.garage, B);
   if (cd.ridge) buildRidge(cd, B);
 }

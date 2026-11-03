@@ -60,12 +60,30 @@ export const PIECES = {
   lamp: () => [[-0.16, 0.16, -0.16, 0.16, 0, 0.04, 0x333333], [-0.025, 0.025, -0.025, 0.025, 0, 1.45, 0x333333], [-0.2, 0.2, -0.2, 0.2, 1.4, 1.72, 0xfff3d6, 'lamp']],
   desk: () => [[-0.7, 0.7, -0.35, 0.35, 0.72, 0.76, 0xe8e4dc], [-0.68, -0.62, -0.3, 0.3, 0, 0.72, 0x555555], [0.62, 0.68, -0.3, 0.3, 0, 0.72, 0x555555],
     [-0.3, 0.3, -0.3, -0.25, 0.8, 1.15, 0x111418], [-0.27, 0.27, -0.25, -0.24, 0.83, 1.12, 0x2a5a8a, 'screen'], [-0.25, 0.25, 0.45, 0.9, 0, 0.48, 0x333333], [-0.25, 0.25, 0.85, 0.9, 0.48, 0.95, 0x333333]],
+  chair: (c = 0x2f2f2f) => [[-0.22, 0.22, -0.22, 0.22, 0, 0.45, c], [-0.22, 0.22, -0.26, -0.2, 0.45, 0.92, c]],
+  bench: (c = 0x6b4a2f) => [[-0.95, 0.95, -0.25, 0.25, 0.38, 0.45, c], [-0.95, 0.95, -0.27, -0.21, 0.45, 0.85, c], [-0.9, -0.82, -0.2, 0.2, 0, 0.38, 0x333333], [0.82, 0.9, -0.2, 0.2, 0, 0.38, 0x333333]],
+  seatrow: (c = 0x2e5d8a) => [[-1.5, 1.5, -0.25, 0.25, 0.38, 0.45, c], [-1.5, 1.5, -0.28, -0.22, 0.45, 0.9, c], [-1.45, 1.45, -0.05, 0.05, 0, 0.38, 0x9aa0a6],
+    ...[-1.5, -0.9, -0.3, 0.3, 0.9, 1.5].map((u) => [u - 0.03, u + 0.03, -0.25, 0.2, 0.45, 0.62, 0x9aa0a6])],
   plant: () => [[-0.2, 0.2, -0.2, 0.2, 0, 0.4, 0xb5653d], [-0.35, 0.35, -0.35, 0.35, 0.4, 1.2, 0x3f7a32]],
   rug: (c = 0x9b3d3d) => [[-1.1, 1.1, -0.75, 0.75, 0, 0.012, c]],
   bookcase: () => [[-0.5, 0.5, -0.18, 0.18, 0, 1.9, WOOD], ...[0.35, 0.8, 1.25].map((y, i) => [-0.45, 0.45, -0.12, 0.17, y, y + 0.3, [0xa33b3b, 0x2e6da4, 0x3f8f4f][i]])],
   mailboxes: () => [[-1.0, 1.0, -0.15, 0.15, 0.9, 1.8, 0x8c939a], ...[0, 1, 2, 3].map((i) => [-0.95 + i * 0.5, -0.55 + i * 0.5, 0.15, 0.16, 1.35, 1.7, 0x5b6168])],
   desk_reception: () => [[-1.3, 1.3, -0.4, 0.4, 0, 1.05, 0x6b5a4a], [-1.35, 1.35, -0.45, 0.45, 1.05, 1.1, 0xd8d2c8]],
 };
+// Where a person sits / lies on each piece: [u, v, seatHeight, kind, faceOffset(rad, relative to the piece's front)]
+export const SEATS = {
+  sofa: [[-0.5, -0.05, 0.42, 'sit', 0], [0.5, -0.05, 0.42, 'sit', 0]],
+  armchair: [[0, -0.05, 0.42, 'sit', 0]],
+  bed: [[0, 0.95, 0.52, 'sleep', 0]],
+  chair: [[0, -0.02, 0.45, 'sit', 0]],
+  table: [[0, -0.8, 0.45, 'sit', 0], [0, 0.8, 0.45, 'sit', Math.PI]],
+  desk: [[0, 0.72, 0.48, 'sit', Math.PI]],
+  bench: [[-0.45, -0.02, 0.45, 'sit', 0], [0.45, -0.02, 0.45, 'sit', 0]],
+  seatrow: [[-1.2, -0.02, 0.45, 'sit', 0], [-0.6, -0.02, 0.45, 'sit', 0], [0, -0.02, 0.45, 'sit', 0], [0.6, -0.02, 0.45, 'sit', 0], [1.2, -0.02, 0.45, 'sit', 0]],
+};
+export const SEAT_LABEL = { sofa: 'ספה', armchair: 'כורסה', bed: 'מיטה', chair: 'כיסא', table: 'כיסא', desk: 'כיסא', bench: 'ספסל', seatrow: 'כיסא המתנה' };
+const DIR_VEC = (F, dir) => dir === '-d' ? [F.fx, F.fz] : dir === '+a' ? [-F.fz, F.fx] : dir === '-a' ? [F.fz, -F.fx] : [-F.fx, -F.fz];
+
 function mapUV(u0, u1, v0, v1, dir) {
   switch (dir) {
     case '-d': return [-u1, -u0, -v1, -v0];
@@ -83,6 +101,15 @@ function piece(F, spec, kind, a, d, y, dir = '+d', arg, solid = true) {
     ma0 = Math.min(ma0, A0); ma1 = Math.max(ma1, A1); md0 = Math.min(md0, D0); md1 = Math.max(md1, D1); my = Math.max(my, yb);
   }
   if (solid && kind !== 'rug') spec.colliders.push(colFromRect(F.rect(a + ma0 + 0.03, a + ma1 - 0.03, d + md0 + 0.03, d + md1 - 0.03), y - 0.1, y + my, 'furniture'));
+  if (SEATS[kind]) {
+    const [vx, vz] = DIR_VEC(F, dir);
+    const yaw = Math.atan2(vx, vz);
+    for (const [u, v, h, k, off] of SEATS[kind]) {
+      const [A0, , D0] = mapUV(u, u, v, v, dir);
+      const [x, z] = F.pt(a + A0, d + D0);
+      (spec.seats ||= []).push({ x, z, y, seatH: h, yaw: yaw + off, kind: k, label: SEAT_LABEL[kind] });
+    }
+  }
 }
 
 // Outer walls as colliders, with a door opening on the front face
@@ -135,8 +162,8 @@ export function interiorSpec(b) {
         if (dd > D - 3) continue;
         const a = -hl + 1.6 + i * 2.6;
         furn(a - 0.45, a + 0.45, dd - 0.45, dd + 0.45, y0, y0 + 0.75, 0x6b4a2f);
-        furn(a - 0.2, a + 0.2, dd + 0.6, dd + 1.0, y0, y0 + 0.45, 0x2f2f2f, false);
-        furn(a - 0.2, a + 0.2, dd - 1.0, dd - 0.6, y0, y0 + 0.45, 0x2f2f2f, false);
+        piece(F, spec, 'chair', a, dd - 0.8, y0, '+d', 0x2f2f2f, false);
+        piece(F, spec, 'chair', a, dd + 0.8, y0, '-d', 0x2f2f2f, false);
       }
     } else if (isClothes) {
       for (let dd = 2; dd < D - 3; dd += 2.4) {
@@ -164,6 +191,7 @@ export function interiorSpec(b) {
     piece(F, spec, 'tv', -hl + 2.2, Math.min(D - 2.0, 4.6), y0, '-d');
     piece(F, spec, 'kitchen', hl - 0.35, Math.min(D - 2.4, 2.9), y0, '-a', Math.min(D - 2.6, 3.4));
     piece(F, spec, 'table', 1.2, D * 0.5, y0, '+d');
+    piece(F, spec, 'armchair', -hl + 4.0, 2.4, y0, '-a', 0x8a5a44);
     piece(F, spec, 'plant', -hl + 0.45, 0.45, y0);
     piece(F, spec, 'bookcase', hl - 1.5, D - 0.25, y0, '-d');
     spec.home = { pt: F.pt(-hl + 2.2, 1.3), yaw: Math.atan2(-F.fx, -F.fz), y: y0, sit: true };
@@ -210,10 +238,16 @@ export function interiorSpec(b) {
       if (dd < 2 || dd > D - 1.5) continue;
       furn(a - 0.3, a + 0.3, dd - 0.3, dd + 0.3, y0, y0 + H, 0xd8d2c6); // pillars
     }
-    for (let a = -hl + 2; a < hl - 4; a += 5) furn(a, a + 2.2, D * 0.4, D * 0.4 + 0.6, y0, y0 + 0.5, 0x6b4a2f);
+    for (let a = -hl + 3; a < hl - 4; a += 5) piece(F, spec, 'bench', a, D * 0.4, y0, '+d');
     for (let a = -hl + 3; a < hl; a += 7) for (let d = 3; d < D; d += 7) lamp(a, d, y0 + H - 0.03);
   } else if (b.interior === 'apartment' || b.interior === 'tower') {
     apartmentSpec(b, F, spec, piece, lamp, furn);
+  } else if (b.interior === 'terminal') {
+    terminalSpec(b, F, spec, piece, lamp, furn);
+  } else if (b.interior === 'hangar') {
+    hangarSpec(b, F, spec, piece, lamp, furn);
+  } else if (b.interior === 'ctower') {
+    ctowerSpec(b, F, spec, piece, lamp, furn);
   } else if (b.interior === 'mall') {
     const H1 = 5, top = y0 + b.h - 0.5;
     spec.door = { face: b.face, w: 4, h: 3.4 };
@@ -246,11 +280,159 @@ export function interiorSpec(b) {
       }
     }
     // benches and planters on the ground floor
-    for (let a = -hl + 4; a < hl - 4; a += 9) { furn(a, a + 2, 3, 3.6, y0, y0 + 0.5, 0x6b4a2f); furn(a + 3, a + 4, 3, 4, y0, y0 + 0.9, 0x3f7a32); }
+    for (let a = -hl + 4; a < hl - 4; a += 9) { piece(F, spec, 'bench', a + 1, 3.3, y0, '+d'); piece(F, spec, 'plant', a + 3.5, 3.5, y0); }
     for (let a = -hl + 4; a < hl; a += 8) for (const d of [3, dm - 2, dm + 3, D - 5]) lamp(a, d, d < dm ? top - 0.03 : ym - 0.33);
   }
   b._spec = spec;
   return spec;
+}
+
+// --------------------------------------------------------------------------- airport terminal
+// Check-in hall with islands, agents and baggage belts; flight boards; café, duty free and fashion shops with counters;
+// restrooms; baggage-claim carousel; gate lounge with rows of seats facing a glass wall over the apron.
+function terminalSpec(b, F, spec, piece, lamp, furn) {
+  const C = spec.colliders, y0 = CURB_H, L = F.L, D = F.D, hl = L / 2, H = 12;
+  spec.door = { face: b.face, w: 8, h: 3.4 };
+  shellColliders(b, y0 + H, spec.door, C);
+  C.push(makeBox(b.x, b.z, b.w / 2, b.d / 2, 0, y0 + H, y0 + b.h));
+  C.push(colFromRect(F.rect(-hl, hl, 0, D), y0 + H - 0.2, y0 + H, 'slab'));
+  spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1: y0 + H, wall: 0xeef0f2, floor: 0xd9dcde, ceil: 0xf4f5f6, door: spec.door, b, glassBack: true });
+  spec.counters = []; spec.staff = []; spec.belts = []; spec.boards = []; spec.wander = { points: [], n: 18 };
+  const sign = (a, d, y, w, name, back = false) => { const [x, z] = F.pt(a, d); spec.signs.push({ x, y, z, nx: back ? -F.fx : F.fx, nz: back ? -F.fz : F.fz, w, name }); };
+  const wp = (a, d) => spec.wander.points.push(F.pt(a, d));
+  // structural columns
+  for (let a = -hl + 15; a < hl - 5; a += 25) for (const d of [16, 33]) furn(a - 0.4, a + 0.4, d - 0.4, d + 0.4, y0, y0 + H, 0xdfe2e5);
+  // check-in islands
+  ['A', 'B', 'C'].forEach((n, i) => {
+    const ac = -55 + i * 40;
+    furn(ac - 7, ac + 7, 9.6, 10.4, y0, y0 + 1.05, 0x5b6876);                 // counter
+    furn(ac - 7.1, ac + 7.1, 9.55, 10.45, y0 + 1.05, y0 + 1.1, 0xe0e3e6, false);
+    furn(ac - 7, ac + 7, 12.0, 12.8, y0, y0 + 0.55, 0x2a2d31);                 // baggage belt
+    spec.belts.push({ path: [F.pt(ac - 7, 12.4), F.pt(ac + 7, 12.4)], y: y0 + 0.55, loop: false });
+    furn(ac - 7, ac + 7, 13.0, 13.2, y0, y0 + 2.6, 0x9aa3ad);                  // partition behind the belt
+    for (let k = -2; k <= 2; k += 2) {
+      spec.staff.push({ pt: F.pt(ac + k * 2.2, 11.2), yaw: Math.atan2(F.fx, F.fz), y: y0 });
+      piece(F, spec, 'chair', ac + k * 2.2, 11.4, y0, '-d', 0x333333, false);
+    }
+    sign(ac, 9.5, y0 + 3.4, 5, 'צ׳ק-אין');
+    wp(ac - 4, 6); wp(ac + 4, 6);
+  });
+  // flight information boards
+  for (const a of [-80, 70]) spec.boards.push({ ...Object.fromEntries([['x', F.pt(a, 15.6)[0]], ['z', F.pt(a, 15.6)[1]]]), y: y0 + 4.2, w: 9, h: 4.4, nx: F.fx, nz: F.fz });
+  // café
+  const cafe = -75;
+  furn(cafe - 6, cafe + 2, 26, 27, y0, y0 + 1.05, 0x7a5233);
+  spec.counters.push({ pt: F.pt(cafe - 2, 25), keeper: F.pt(cafe - 2, 27.8), yaw: Math.atan2(F.fx, F.fz), y: y0, name: 'קפה טרמינל' });
+  sign(cafe - 2, 25.9, y0 + 3.2, 5, 'קפה טרמינל');
+  for (let i = 0; i < 3; i++) { piece(F, spec, 'table', cafe - 6 + i * 3.6, 21.5, y0, '+d'); }
+  wp(cafe, 22);
+  // duty free + fashion
+  const shop = (ac, name, colors) => {
+    furn(ac - 6, ac + 6, 27.5, 28, y0, y0 + 2.4, 0x8f98a2);
+    for (let k = -1; k <= 1; k++) furn(ac + k * 3.5 - 1.2, ac + k * 3.5 + 1.2, 21.5, 22.2, y0, y0 + 1.6, colors[(k + 3) % colors.length]);
+    furn(ac + 3, ac + 6, 25.2, 26, y0, y0 + 1.05, 0x5b6876);
+    spec.counters.push({ pt: F.pt(ac + 4.5, 24.4), keeper: F.pt(ac + 4.5, 26.6), yaw: Math.atan2(F.fx, F.fz), y: y0, name });
+    sign(ac, 27.4, y0 + 3.4, 6, name);
+    wp(ac, 20);
+  };
+  shop(-45, 'דיוטי פרי', [0xc0392b, 0x8e44ad, 0x2e86c1]);
+  shop(-20, 'אופנת אזורה', [0x27ae60, 0xf1c40f, 0xe67e22]);
+  // restrooms (real room with a door and stalls)
+  const ra0 = 52, ra1 = 68;
+  const wallR = (a0, a1, d0, d1) => { const r = F.rect(a0, a1, d0, d1); spec.boxes.push(boxFromRect(r, y0, y0 + 3.2, 0xd5e1ea, 'wall')); C.push(colFromRect(r, y0, y0 + 3.2)); };
+  wallR(ra0, ra0 + 0.15, 20, 29); wallR(ra1 - 0.15, ra1, 20, 29); wallR(ra0, ra1, 28.85, 29);
+  wallR(ra0, 58.5, 20, 20.15); wallR(61.5, ra1, 20, 20.15);
+  spec.boxes.push(boxFromRect(F.rect(ra0, ra1, 20, 29), y0 + 3.2, y0 + 3.3, 0xf2f2f2, 'wall'));
+  for (let k = 0; k < 4; k++) { const a = ra0 + 1 + k * 3.6; furn(a, a + 0.08, 25.5, 28.8, y0, y0 + 2.1, 0x7f8c8d); furn(a + 0.6, a + 1.4, 28.2, 28.8, y0, y0 + 0.45, 0xffffff); }
+  for (let k = 0; k < 3; k++) furn(ra0 + 2 + k * 4, ra0 + 3.2 + k * 4, 20.2, 20.7, y0 + 0.8, y0 + 0.95, 0xffffff);
+  sign(60, 19.9, y0 + 3.6, 4, 'שירותים');
+  // baggage claim carousel (oval loop)
+  const cx = 30, cd = 36, cr = 2.2, cl = 6;
+  furn(cx - cl, cx + cl, cd - cr, cd + cr, y0, y0 + 0.45, 0x2a2d31);
+  furn(cx - cl + 0.6, cx + cl - 0.6, cd - cr + 0.6, cd + cr - 0.6, y0 + 0.45, y0 + 0.9, 0x9aa3ad);
+  const loop = [];
+  for (let i = 0; i < 24; i++) { const t = i / 24 * Math.PI * 2; loop.push(F.pt(cx + Math.cos(t) * (cl - 0.4), cd + Math.sin(t) * (cr - 0.35))); }
+  spec.belts.push({ path: loop, y: y0 + 0.45, loop: true });
+  sign(cx, cd - cr - 0.2, y0 + 3.4, 5, 'מסוע מזוודות');
+  wp(cx, cd - 4); wp(cx - 8, cd);
+  // gate lounge: seat rows facing the glass wall, gate desks and signs
+  [-60, 0, 60].forEach((ga, i) => {
+    for (const d of [41, 44]) for (const o of [-7, -3.5, 3.5, 7]) piece(F, spec, 'seatrow', ga + o, d, y0, '+d', [0x2e5d8a, 0x8a2e3b, 0x2e8a5d][i]);
+    furn(ga + 10, ga + 13, 46.5, 47.4, y0, y0 + 1.05, 0x5b6876);
+    spec.staff.push({ pt: F.pt(ga + 11.5, 48.1), yaw: Math.atan2(F.fx, F.fz), y: y0 });
+    sign(ga + 11.5, 47.5, y0 + 3.2, 3.2, `שער ${i + 1}`);
+    wp(ga, 38); wp(ga + 9, 45);
+  });
+  // plants and benches near the entrance
+  for (const a of [-30, 30]) { piece(F, spec, 'bench', a, 3, y0, '+d'); piece(F, spec, 'plant', a + 3, 2.5, y0); }
+  for (let a = -hl + 6; a < hl; a += 12) for (const d of [5, 17, 30, 42]) lamp(a, d, y0 + H - 0.05);
+  for (const a of [-20, 0, 20]) wp(a, 3);
+  // taxi drivers waiting at the kerb outside
+  spec.outdoor = [];
+  for (let k = 0; k < 3; k++) { const [x, z] = [-343 + k * 14, 509.2]; spec.outdoor.push({ pt: [x, z], yaw: Math.PI, y: 0 }); }
+}
+
+function hangarSpec(b, F, spec, piece, lamp, furn) {
+  const C = spec.colliders, y0 = CURB_H, L = F.L, D = F.D, hl = L / 2, H = 20;
+  spec.door = { face: b.face, w: 46, h: 16 };
+  shellColliders(b, y0 + H, spec.door, C);
+  C.push(makeBox(b.x, b.z, b.w / 2, b.d / 2, 0, y0 + H, y0 + b.h));
+  C.push(colFromRect(F.rect(-hl, hl, 0, D), y0 + H - 0.2, y0 + H, 'slab'));
+  spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1: y0 + H, wall: 0xc9ced3, floor: 0x9aa0a6, ceil: 0xb8bec4, door: spec.door, b });
+  const [cx, cz] = F.pt(0, D * 0.5);
+  spec.plane = { x: cx, z: cz, heading: Math.atan2(F.fx, F.fz) };   // a parked airliner in maintenance
+  C.push(colFromRect(F.rect(-2.2, 2.2, D * 0.5 - 19, D * 0.5 + 19), 0, 5.5), colFromRect(F.rect(-17, 17, D * 0.5 - 2, D * 0.5 + 1.5), 2.2, 3.4));
+  for (const a of [-hl + 4, hl - 4]) for (let d = 6; d < D - 4; d += 9) furn(a - 1, a + 1, d - 0.5, d + 0.5, y0, y0 + 1.2, 0xd35400);
+  furn(-hl + 1, -hl + 7, D - 3, D - 1, y0, y0 + 2.2, 0x5b6876);
+  piece(F, spec, 'desk', hl - 6, D - 3, y0, '-d');
+  spec.counters = []; spec.staff = [{ pt: F.pt(hl - 6, D - 2), yaw: Math.atan2(F.fx, F.fz), y: y0 }];
+  for (let a = -hl + 8; a < hl; a += 16) for (let d = 8; d < D; d += 14) lamp(a, d, y0 + H - 0.05);
+}
+
+// control tower: lobby + elevator straight up to the glass cab with radar consoles
+function ctowerSpec(b, F, spec, piece, lamp, furn) {
+  const C = spec.colliders, y0 = CURB_H, L = F.L, D = F.D, hl = L / 2;
+  const top = y0 + b.h - 4.2;
+  spec.door = { face: b.face, w: 1.8, h: 2.6 };
+  shellColliders(b, y0 + b.h, spec.door, C);
+  C.push(colFromRect(F.rect(-hl, hl, 0, D), y0 + b.h - 0.4, y0 + b.h, 'slab'));
+  const sa0 = hl - 2.6, sd0 = D / 2 - 1.4, sd1 = D / 2 + 1.4;
+  spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1: y0 + 3.6, wall: 0xe6e1d6, floor: 0xc8c2b6, ceil: 0xf2f2f2, door: spec.door, b });
+  spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0: top, y1: y0 + b.h - 0.4, wall: 0xdfe5ea, floor: null, ceil: 0xf2f2f2, door: null, b, glassAll: true });
+  // lobby ceiling and cab floor (with the shaft opening)
+  for (const [y, r] of [[y0 + 3.6, null], [top, true]]) {
+    for (const rr of [F.rect(-hl, sa0, 0, D), F.rect(sa0, hl, 0, sd0), F.rect(sa0, hl, sd1, D)]) {
+      if (r) { spec.surfaces.push(makeSurface(rr[0], rr[1], rr[2], rr[3], y)); spec.slabs.push({ rect: rr, y, color: 0x6b7480, under: 0xf2f2f2 }); }
+      else spec.slabs.push({ rect: rr, y: y + 0.25, color: 0xf2f2f2, under: 0xf2f2f2 });
+      C.push(colFromRect(rr, y - 0.25, y - 0.02, 'slab'));
+    }
+  }
+  // the solid core between lobby and cab (only the shaft runs through it)
+  C.push(colFromRect(F.rect(-hl, sa0, 0, D), y0 + 3.6, top - 0.3));
+  const floors = [y0, top];
+  const wallBox = (a0, a1, d0, d1, ya, yb) => { const r = F.rect(a0, a1, d0, d1); spec.boxes.push(boxFromRect(r, ya, yb, 0xb8b2a6, 'wall')); C.push(colFromRect(r, ya, yb)); };
+  // shaft: full-height side walls, front wall with a door opening at each served floor
+  const yTopShaft = top + 3.2;
+  wallBox(sa0, hl, sd0 - 0.07, sd0 + 0.07, y0, yTopShaft); wallBox(sa0, hl, sd1 - 0.07, sd1 + 0.07, y0, yTopShaft);
+  wallBox(sa0 - 0.07, sa0 + 0.07, sd0, D / 2 - 0.6, y0, yTopShaft); wallBox(sa0 - 0.07, sa0 + 0.07, D / 2 + 0.6, sd1, y0, yTopShaft);
+  wallBox(sa0 - 0.07, sa0 + 0.07, D / 2 - 0.6, D / 2 + 0.6, y0 + 2.3, top);
+  wallBox(sa0 - 0.07, sa0 + 0.07, D / 2 - 0.6, D / 2 + 0.6, top + 2.3, yTopShaft);
+  furn(-2, 1, 1.5, 2.3, y0, y0 + 1.05, 0x5a6e7f);
+  spec.staff = [{ pt: F.pt(-0.5, 3), yaw: Math.atan2(F.fx, F.fz), y: y0 }];
+  // cab: consoles along the windows, controllers and radar screens
+  furn(-hl + 0.3, hl - 3, 0.3, 1.1, top, top + 0.95, 0x3b4148);
+  furn(-hl + 0.3, -hl + 1.1, 1.1, D - 0.3, top, top + 0.95, 0x3b4148);
+  for (const a of [-3, 0, 3]) { furn(a - 0.6, a + 0.6, 0.5, 0.55, top + 0.95, top + 1.5, 0x1d4f2a, true, 'lamp'); piece(F, spec, 'chair', a, 1.7, top, '-d', 0x222222, false); }
+  spec.staff.push({ pt: F.pt(-3, 1.75), yaw: Math.atan2(F.fx, F.fz), y: top, sit: true }, { pt: F.pt(3, 1.75), yaw: Math.atan2(F.fx, F.fz), y: top, sit: true });
+  lamp(0, D / 2, y0 + 3.55); lamp(-2, D / 2, y0 + b.h - 0.45);
+  const [rx, rz] = [-F.fz, F.fx];
+  const ldoors = floors.map((y) => { const c = colFromRect(F.rect(sa0 - 0.08, sa0 + 0.08, D / 2 - 0.6, D / 2 + 0.6), y, y + 2.3, 'ldoor'); C.push(c); return c; });
+  spec.floors = floors;
+  spec.elevator = {
+    floors, ldoors, cabin: F.rect(sa0 + 0.12, hl - 0.05, sd0 + 0.1, sd1 - 0.1), shaft: F.rect(sa0, hl, sd0, sd1),
+    doorPt: F.pt(sa0 - 0.9, D / 2), doorCenter: F.pt(sa0, D / 2), insidePt: F.pt((sa0 + hl) / 2, D / 2),
+    out: [-rx, -rz], lat: [-F.fx, -F.fz], width: 1.2, height: 2.3, labels: ['לובי', 'חדר פיקוח'],
+  };
 }
 
 // --------------------------------------------------------------------------- apartment buildings & towers
@@ -311,6 +493,7 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
       piece(F, spec, 'rug', lm, at(depth * 0.45), y, '+d', 0x7d5a8c, false);
       piece(F, spec, 'sofa', lm, at(0.75), y, inward, [0x4a6fa5, 0x8a5a44, 0x5b7f5a, 0x7a6f66][k % 4]);
       piece(F, spec, 'coffee', lm, at(1.9), y, inward);
+      if (uw > 6.5) piece(F, spec, 'armchair', u0 + 1.45, at(1.15), y, '+a', 0x8a6a4a);
       if (depth > 5.5) piece(F, spec, 'tv', lm, at(depth - 2.0), y, back);
       piece(F, spec, 'kitchen', u0 + 0.38, at(depth * 0.5), y, '+a', Math.min(depth - 2.6, 3.0));
       piece(F, spec, 'bed', bm, at(1.2), y, inward, [0x5d8aa8, 0xa86f5d, 0x6d9a6a][k % 3]);
