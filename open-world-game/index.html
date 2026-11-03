@@ -189,27 +189,27 @@
     <div id="joystick"><div id="joyKnob"></div></div>
     <div id="joyHint">גע כאן לתנועה</div>
     <div class="tbtns foot">
-      <button class="tbtn big" data-btn="jump">קפיצה</button>
-      <button class="tbtn" data-btn="run" id="runBtn">ריצה</button>
-      <button class="tbtn ctx" data-btn="interact" id="tInteract">פעולה</button>
-      <button class="tbtn ctx accent wide" data-btn="vehicle" id="tVehicle">היכנס לרכב</button>
-      <button class="tbtn ctx big fire" data-btn="fire" id="tFire">ירי</button>
-      <button class="tbtn small" data-btn="cycle">ציוד</button>
-      <button class="tbtn ctx small" data-btn="light" id="tLight">פנס</button>
+      <button class="tbtn ctx accent wide" data-btn="interact" id="tInteract" style="grid-area:act">פעולה</button>
+      <button class="tbtn ctx accent wide" data-btn="vehicle" id="tVehicle" style="grid-area:act">היכנס לרכב</button>
+      <button class="tbtn ctx fire" data-btn="fire" id="tFire" style="grid-area:fire">ירי</button>
+      <button class="tbtn ctx small" data-btn="light" id="tLight" style="grid-area:light">פנס</button>
+      <button class="tbtn small" data-btn="cycle" style="grid-area:cyc">ציוד</button>
+      <button class="tbtn" data-btn="run" id="runBtn" style="grid-area:run">ריצה</button>
+      <button class="tbtn big" data-btn="jump" style="grid-area:jump">קפיצה</button>
     </div>
     <div class="tbtns drive">
-      <button class="tbtn pedal gas" data-btn="gas">גז</button>
-      <button class="tbtn pedal brake" data-btn="brake">בלם</button>
-      <button class="tbtn small" data-btn="handbrake">בלם יד</button>
-      <button class="tbtn small" data-btn="camera">מצלמה</button>
-      <button class="tbtn small" data-btn="horn">צופר</button>
-      <button class="tbtn ctx accent wide" data-btn="vehicle" id="tExit">צא מהרכב</button>
+      <button class="tbtn ctx accent wide" data-btn="vehicle" id="tExit" style="grid-area:act">צא מהרכב</button>
+      <button class="tbtn small" data-btn="horn" style="grid-area:horn">צופר</button>
+      <button class="tbtn small" data-btn="camera" style="grid-area:cam">מצלמה</button>
+      <button class="tbtn small" data-btn="handbrake" style="grid-area:hb">בלם יד</button>
+      <button class="tbtn pedal brake" data-btn="brake" style="grid-area:brake">בלם</button>
+      <button class="tbtn pedal gas" data-btn="gas" style="grid-area:gas">גז</button>
     </div>
     <div class="tbtns heli">
-      <button class="tbtn pedal" data-btn="up">למעלה</button>
-      <button class="tbtn pedal" data-btn="down">למטה</button>
-      <button class="tbtn small" data-btn="camera">מצלמה</button>
-      <button class="tbtn ctx accent wide" data-btn="vehicle" id="tExitHeli">צא מהמסוק</button>
+      <button class="tbtn ctx accent wide" data-btn="vehicle" id="tExitHeli" style="grid-area:act">צא מהמסוק</button>
+      <button class="tbtn small" data-btn="camera" style="grid-area:cam">מצלמה</button>
+      <button class="tbtn pedal" data-btn="down" style="grid-area:brake">למטה</button>
+      <button class="tbtn pedal" data-btn="up" style="grid-area:gas">למעלה</button>
     </div>
     <button class="tbtn mapbtn" data-btn="map">מפה</button>
   </div>

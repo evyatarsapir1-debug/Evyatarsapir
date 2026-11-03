@@ -374,6 +374,7 @@ class Game {
     showScreen(null);
     $('hud').classList.remove('hidden');
     $('touch').classList.toggle('hidden', !this.input.isTouch);
+    document.body.classList.toggle('touch', this.input.isTouch);
     this.player.object.visible = true;
     this.chunks.update(this.player.x, this.player.z, true);
     this.saveTimer = 0;
@@ -678,7 +679,7 @@ class Game {
     // prompt
     const pr = $('prompt');
     // clickable action button (works with mouse, touch and keyboard)
-    if (p.prompt) {
+    if (p.prompt && !(this.input.isTouch && (p.prompt.key === 'vehicle' || p.prompt.key === 'interact'))) {
       const label = p.prompt.key === 'vehicle' ? (v ? (v.isHeli ? 'צא מהמסוק' : 'צא מהרכב') : 'היכנס לרכב') : p.prompt.text + (p.prompt.seat ? ` · ${p.prompt.seat}` : '');
       const html = this.input.isTouch ? label : `<kbd>${p.prompt.key === 'vehicle' ? 'F' : 'E'}</kbd>${label}${p.prompt.key === 'vehicle' && !v ? ' · ' + p.prompt.text.replace('היכנס: ', '') : ''}`;
       if (pr.dataset.html !== html) { pr.innerHTML = html; pr.dataset.html = html; }
@@ -706,7 +707,8 @@ class Game {
     if (this.input.isTouch) {
       const mode = v ? (v.isHeli ? 'heli' : 'drive') : (p.state === 'foot' || p.state === 'sitting' ? 'foot' : null);
       document.querySelectorAll('.tbtns').forEach((el) => el.classList.toggle('show', el.classList.contains(mode)));
-      $('tInteract').classList.toggle('show', p.prompt?.key === 'interact');
+      $('tInteract').classList.toggle('show', p.prompt?.key === 'interact' && !v);
+      if (p.prompt?.key === 'interact') { const t = p.prompt.text + (p.prompt.seat ? ` · ${p.prompt.seat}` : ''); if ($('tInteract').textContent !== t) $('tInteract').textContent = t; }
       $('tVehicle').classList.toggle('show', p.prompt?.key === 'vehicle' && !v);
       $('tExit').classList.toggle('show', !!v && p.prompt?.key === 'vehicle');
       $('tExitHeli').classList.toggle('show', !!v && p.prompt?.key === 'vehicle');
