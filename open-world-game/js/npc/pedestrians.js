@@ -82,10 +82,11 @@ export class Pedestrians {
     };
     this.zero = new THREE.Matrix4().makeScale(0, 0, 0);
     this.benchesTaken = new Set();
+    this.deadKeys = new Set();   // indoor people who died never come back
   }
 
   setDensity(n) { this.target = Math.min(MAX - 8, n); }
-  obstacles() { return this.peds.filter((p) => p.state !== 'inside' && p.state !== 'shopkeeper' && p.state !== 'resident' && !p.car).map((p) => ({ x: p.x, z: p.z, y: p.y, r: 0.45 })); }
+  obstacles() { return this.peds.filter((p) => p.state !== 'inside' && p.state !== 'shopkeeper' && p.state !== 'resident' && p.state !== 'dead' && !p.car).map((p) => ({ x: p.x, z: p.z, y: p.y, r: 0.45 })); }
 
   _appearance() {
     const r = this.rng;
@@ -175,7 +176,7 @@ export class Pedestrians {
     if (changed) this._colors();
     for (const [k, w] of want) {
       if (this.peds.length >= MAX) break;
-      if (this.peds.some((p) => p.shopKey === k)) continue;
+      if (this.deadKeys.has(k) || this.peds.some((p) => p.shopKey === k)) continue;
       const p = this._add({ x: w.x, z: w.z, y: w.y, state: w.state, shopKey: k, pts: w.pts, seats: w.seats, suitcase: !!w.suitcase });
       p.yaw = w.yaw; p.phone = !!w.phone;
       p.homeSpot = { x: w.x, z: w.z, y: w.y, yaw: w.yaw, state: w.state };
@@ -189,7 +190,8 @@ export class Pedestrians {
     // population
     for (let i = this.peds.length - 1; i >= 0; i--) {
       const p = this.peds[i];
-      const gone = p.car ? p.state === 'driving' && (p.car.removed || (p.car.driver !== 'ai' && !p.car.jacking)) : !p.shopKey && Math.hypot(p.x - px, p.z - pz) > 140;
+      if (p.state === 'dead' && p.timer <= 0 && Math.hypot(p.x - px, p.z - pz) > 25) { this._release(p); this.peds.splice(i, 1); this._colors(); continue; }
+      const gone = p.state === 'dead' ? false : p.car ? p.state === 'driving' && (p.car.removed || (p.car.driver !== 'ai' && !p.car.jacking)) : !p.shopKey && Math.hypot(p.x - px, p.z - pz) > 140;
       if (gone) { if (p.car && p.car.driverPed === p) p.car.driverPed = null; this._release(p); this.peds.splice(i, 1); this._colors(); }
     }
     const walkers = this.peds.filter((p) => !p.shopKey && !p.car).length;
@@ -303,7 +305,7 @@ export class Pedestrians {
     if (p.hitT > 0) p.hitT -= dt;
     if (p.sayT > 0) p.sayT -= dt;
     if (p.barT > 0) p.barT -= dt;
-    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'driving', 'pulled', 'thrown'].includes(p.state)) {
+    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'driving', 'pulled', 'thrown', 'dead'].includes(p.state)) {
       for (const v of vehicles) {
         const sp = Math.hypot(v.vx, v.vz);
         if (sp < 4 || Math.abs(v.x - p.x) > 12 || Math.abs(v.z - p.z) > 12 || v.y - p.y > 3) continue;
@@ -444,6 +446,10 @@ export class Pedestrians {
         speed = 0; pose = 'phone';
         if (p.timer <= 0) { p.state = 'flee'; p.timer = 6; }
         break;
+      case 'dead':
+        speed = 0; pose = 'fall';
+        p.x += (p.vx || 0) * dt; p.z += (p.vz || 0) * dt; p.vx *= Math.exp(-4 * dt); p.vz *= Math.exp(-4 * dt);
+        break;
       case 'down': {
         // knocked out of the fight (not injured): lies down a while, then gets up dazed and leaves
         speed = 0; pose = 'fall';
@@ -532,15 +538,17 @@ export class Pedestrians {
 
   // a person got hit in a fist fight
   hit(p, src, dmg, kick) {
-    if (p.state === 'down' || p.state === 'dazed' || p.state === 'driving' || p.state === 'pulled' || p.state === 'thrown') return false;
+    if (p.state === 'down' || p.state === 'dazed' || p.state === 'dead' || p.state === 'driving' || p.state === 'pulled' || p.state === 'thrown') return false;
     this._release(p); p.seat = null; p.fixedY = null;
     p.hp = Math.max(0, p.hp - dmg); p.barT = 6; p.hitT = 0.35;
     const dx = p.x - src.x, dz = p.z - src.z, L = Math.hypot(dx, dz) || 1;
     p.x += dx / L * (kick ? 0.7 : 0.35); p.z += dz / L * (kick ? 0.7 : 0.35);
     if (p.hp <= 0) {
-      p.state = 'down'; p.timer = 7; p.defeated = true; p.vx = dx / L * 2; p.vz = dz / L * 2; p.atk = null;
-      this.say(p, ['אאוץ׳...', 'נו באמת...', 'די, ניצחת'][this.rng.int(0, 2)]);
-      return 'down';
+      // out of health: the person collapses and stays down for good (no blood, no gore)
+      p.state = 'dead'; p.timer = 45; p.defeated = true; p.vx = dx / L * 2.4; p.vz = dz / L * 2.4; p.atk = null;
+      p.fallYaw = Math.atan2(-dx, -dz); p.sayT = 0; p.barT = 4;
+      if (p.shopKey) this.deadKeys.add(p.shopKey);
+      return 'dead';
     }
     if (p.state !== 'fight') {
       if (p.temper === 'fight') { p.state = 'fight'; this.say(p, ['רוצה מכות?!', 'בוא נראה אותך!', 'טעית בבן אדם!'][this.rng.int(0, 2)]); }
@@ -551,7 +559,7 @@ export class Pedestrians {
 
   // someone saw (or felt) a fight: every personality reacts differently
   react(p, src, wasHit = false) {
-    if (['fight', 'down', 'dazed', 'inside', 'driving', 'pulled', 'thrown'].includes(p.state)) return;
+    if (['fight', 'down', 'dazed', 'dead', 'inside', 'driving', 'pulled', 'thrown'].includes(p.state)) return;
     // people sitting at home or standing at work only react when they are hit or the fight is right next to them
     if ((p.state === 'shopkeeper' || p.state === 'resident') && !wasHit && Math.hypot(p.x - src.x, p.z - src.z) > 4) return;
     if (!wasHit && p.reactedAt && performance.now() - p.reactedAt < 8000) return;
@@ -740,7 +748,7 @@ export class Pedestrians {
     this.peds.forEach((p, i) => {
       this._pose(p, dt);
       R.root.position.set(p.x, p.y, p.z);
-      R.root.rotation.set(0, p.state === 'fall' ? p.fallYaw : p.yaw, 0);
+      R.root.rotation.set(0, p.state === 'fall' || p.state === 'dead' ? p.fallYaw : p.yaw, 0);
       if (p.state === 'thrown') {
         // somersault around the hips while flying, settling on the ground
         // rotate about the hips: keep the hip point at its height above the road (lower when lying flat)

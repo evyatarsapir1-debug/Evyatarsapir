@@ -7,6 +7,7 @@ import { heightAt, surfaces } from './world/terrain.js';
 import { Pedestrians } from './npc/pedestrians.js';
 import { InteriorManager } from './world/interiorManager.js';
 import { Economy, fmt, FOODS } from './game/economy.js';
+import { PostFX } from './render/postfx.js';
 import { ShopUI, shopKind } from './game/shops.js';
 import { WeaponSystem, WEAPONS, WEAPON_ORDER } from './game/weapons.js';
 import { shared as vehicleMats } from './vehicles/vehicleModels.js';
@@ -53,6 +54,7 @@ class Game {
     setAnisotropy(Math.min(8, this.renderer.capabilities.getMaxAnisotropy()));
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 2500);
+    this.fx = new PostFX(this.renderer, this.scene, this.camera);
     this.clock = new THREE.Clock();
     this.time = 0;
     this.fpsAvg = 60;
@@ -122,6 +124,7 @@ class Game {
     this.renderer.setPixelRatio(pr);
     this.renderer.shadowMap.enabled = q !== 'low';
     this.env?.setQuality(q);
+    this.fx?.setQuality(q); this.fx?.setSize(innerWidth, innerHeight);
     if (this.chunks) {
       this.chunks.radius = q === 'low' ? 260 : q === 'medium' ? 360 : 480;
       this.chunks.farRadius = q === 'low' ? 650 : q === 'medium' ? 950 : 1400;
@@ -143,6 +146,7 @@ class Game {
     this.renderer.setSize(innerWidth, innerHeight, false);
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
+    this.fx?.setSize(innerWidth, innerHeight);
   }
 
   _bindUI() {
@@ -630,12 +634,13 @@ class Game {
     else if (this.state === 'shop' && this.shop.tryOn) this._fittingFrame(dt);
     else if (this.state === 'playing') this._playFrame(dt);
     this._lights();
-    this.renderer.render(this.scene, this.camera);
+    this.fx.render();
   }
 
   // time of day + weather -> every light-dependent material
   _lighting(dt, cx, cz) {
     const L = this.env.tick(dt);
+    this.fx?.update(L, this.env.hour);
     const n = L.night, M = this.mats;
     for (const st of ['glass', 'office', 'concrete', 'plaster', 'brick', 'industrial', 'storefront']) M['f_' + st].emissiveIntensity = n * (st === 'storefront' ? 1.3 : 1.05);
     M.lamp.emissiveIntensity = 0.6 + n * 2.6;

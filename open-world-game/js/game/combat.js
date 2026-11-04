@@ -77,7 +77,7 @@ export class Combat {
     const fx = Math.sin(player.facing), fz = Math.cos(player.facing);
     let best = null, bd = reach;
     for (const p of peds) {
-      if (p.car || p.state === 'inside' || p.state === 'down' || p.state === 'dazed' || p.state === 'pulled' || p.state === 'thrown') continue;
+      if (p.car || p.state === 'inside' || p.state === 'down' || p.state === 'dead' || p.state === 'dazed' || p.state === 'pulled' || p.state === 'thrown') continue;
       if (Math.abs(p.y - player.y) > 1) continue;
       const dx = p.x - player.x, dz = p.z - player.z, d = Math.hypot(dx, dz);
       if (d < bd && (dx * fx + dz * fz) / (d || 1) > cone) { bd = d; best = p; }
@@ -88,15 +88,16 @@ export class Combat {
   _strike(A, ctx) {
     const { player, pedSys, vehicles } = ctx;
     const m = A.m;
-    const p = A.tgt && Math.hypot(A.tgt.x - player.x, A.tgt.z - player.z) < m.reach + 0.3 && Math.abs(A.tgt.y - player.y) < 1 && A.tgt.state !== 'down' && A.tgt.state !== 'dazed' ? A.tgt : this._target(player, pedSys.peds, m.reach, 0.35);
+    const p = A.tgt && Math.hypot(A.tgt.x - player.x, A.tgt.z - player.z) < m.reach + 0.3 && Math.abs(A.tgt.y - player.y) < 1 && A.tgt.state !== 'down' && A.tgt.state !== 'dead' && A.tgt.state !== 'dazed' ? A.tgt : this._target(player, pedSys.peds, m.reach, 0.35);
     let hit = false;
     if (p) {
       const r = pedSys.hit(p, player, m.dmg, A.type === 'kick');
       if (r) {
         hit = true;
-        if (r === 'down') this._drop(p);
+        if (r === 'dead') this._drop(p);
         // bystanders react according to their personality
-        for (const o of pedSys.peds) if (o !== p && !o.car && Math.hypot(o.x - player.x, o.z - player.z) < 14) pedSys.react(o, player, false);
+        // bystanders react according to their personality; after a death everyone nearby runs away
+        for (const o of pedSys.peds) if (o !== p && !o.car && Math.hypot(o.x - player.x, o.z - player.z) < (r === 'dead' ? 22 : 14)) { if (r === 'dead') pedSys.scare(o, player, false); else pedSys.react(o, player, false); }
       }
     }
     // a strike that lands on a car leaves a small dent
@@ -145,7 +146,7 @@ export class Combat {
     const cam = this.game.camera, W = innerWidth, H = innerHeight;
     const live = new Set();
     for (const p of ctx.pedSys.peds) {
-      const show = (p.barT > 0 && p.hp < p.maxHp) || p.state === 'down' || p.sayT > 0;
+      const show = (p.barT > 0 && p.hp < p.maxHp) || p.state === 'down' || (p.state === 'dead' && p.barT > 0) || p.sayT > 0;
       if (!show) continue;
       _v.set(p.x, p.y + 2.15, p.z).project(cam);
       if (_v.z > 1 || Math.abs(_v.x) > 1.1 || Math.abs(_v.y) > 1.1) continue;
@@ -161,11 +162,11 @@ export class Combat {
       el.style.transform = `translate(${(_v.x * 0.5 + 0.5) * W}px, ${(-_v.y * 0.5 + 0.5) * H}px) translate(-50%, -100%)`;
       const say = el.children[0], hp = el.children[1], st = el.children[2];
       say.textContent = p.sayT > 0 ? p.say : ''; say.style.display = p.sayT > 0 ? 'block' : 'none';
-      const showBar = (p.barT > 0 && p.hp < p.maxHp) || p.state === 'down';
+      const showBar = (p.barT > 0 && p.hp < p.maxHp) || p.state === 'down' || (p.state === 'dead' && p.barT > 0);
       hp.style.display = showBar ? 'block' : 'none';
       hp.firstChild.style.width = `${(p.hp / p.maxHp) * 100}%`;
       hp.firstChild.style.background = p.hp > 4 ? '#6fd36f' : p.hp > 2 ? '#f0c040' : '#f07040';
-      st.textContent = p.state === 'down' ? 'מחוץ לקרב' : p.state === 'fight' ? 'נלחם בחזרה' : '';
+      st.textContent = p.state === 'dead' ? 'מת' : p.state === 'down' ? 'מחוץ לקרב' : p.state === 'fight' ? 'נלחם בחזרה' : '';
       st.style.display = st.textContent ? 'block' : 'none';
     }
     for (const [p, el] of this.els) if (!live.has(p)) { el.remove(); this.els.delete(p); }

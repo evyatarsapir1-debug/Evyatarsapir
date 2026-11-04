@@ -446,10 +446,12 @@ const fight = await g(() => {
   const m0 = game.econ.money;
   if (game.combat.pickups.length) { const k = game.combat.pickups[0]; game.player.setPosition(k.x, k.z, 0, k.y + 0.3); step(3); }
   const tempers = new Set(game.peds.peds.map((q) => q.temper));
-  return { seq, down: ped.state === 'down', drops, earned: game.econ.money - m0, tempers: [...tempers] };
+  const dead = ped.state === 'dead';
+  step(30 * 20);   // 20 s later: still lying there, does not get up
+  return { seq, down: dead, stillDead: ped.state === 'dead' && game.peds.peds.includes(ped), drops, earned: game.econ.money - m0, tempers: [...tempers] };
 });
 check('fight: combo jab -> cross -> kick', JSON.stringify(fight.seq) === '["jabR","jabL","kick"]', JSON.stringify(fight.seq));
-check('fight: a person goes down after enough hits (non-graphic)', fight.down, JSON.stringify(fight));
+check('fight: when the health bar runs out the person dies and does not get up (no gore)', fight.down && fight.stillDead, JSON.stringify(fight));
 check('fight: dropped money can be collected', fight.drops.length === 0 || ([60, 120, 210].includes(fight.drops[0]) && fight.earned === fight.drops[0]), JSON.stringify({ drops: fight.drops, earned: fight.earned }));
 check('fight: people have different personalities', fight.tempers.length >= 4, fight.tempers.join(', '));
 

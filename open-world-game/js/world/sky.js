@@ -99,7 +99,7 @@ export class Environment {
   }
 
   setQuality(q) {
-    const size = q === 'high' ? 2048 : 1024;
+    const size = q === 'high' ? 4096 : 2048;
     this.sun.castShadow = q !== 'low';
     if (this.sun.shadow.mapSize.x !== size) {
       this.sun.shadow.mapSize.set(size, size);
