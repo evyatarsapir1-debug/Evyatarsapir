@@ -297,7 +297,12 @@ body.touch #weaponHud { bottom: 70px; }
 .npctag .st { font-size: 10px; font-weight: 800; color: #fff; background: #0008; padding: 1px 6px; border-radius: 6px; }
 /* attack button a little further right */
 /* punch button: pinned to the very right edge of the screen, just above the jump button */
-#tFire { position: fixed; right: max(0px, calc(env(safe-area-inset-right, 0px) - 44px)); bottom: calc(max(8px, env(safe-area-inset-bottom)) + 86px); transform: none; }
+#tFire { position: fixed; right: max(6px, calc(env(safe-area-inset-right, 0px) - 38px)); bottom: calc(max(8px, env(safe-area-inset-bottom)) + 78px); transform: none; }
+/* short landscape screens: smaller punch + jump so the punch never reaches the phone button */
+@media (max-height: 360px) {
+  #tFire { width: 50px; height: 50px; bottom: calc(max(8px, env(safe-area-inset-bottom)) + 66px); }
+  .tbtns.foot .tbtn.big { width: 60px; height: 60px; }
+}
 .tbtns.foot { grid-template-rows: auto 56px auto; }
 .tbtns.foot [data-btn="cycle"] { justify-self: start; transform: translateX(1px); margin-bottom: 2px; }
 
