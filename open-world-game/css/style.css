@@ -126,20 +126,20 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 #phoneBadge { position: absolute; top: -2px; left: -2px; min-width: 18px; height: 18px; border-radius: 9px; background: #ff3b30; color: #fff; font-size: 11px; font-style: normal; font-weight: 800; display: none; align-items: center; justify-content: center; padding: 0 4px; }
 /* navigation: arrow + metres + time to arrive, at the top centre */
 #gpsHud { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 10px;
-  background: #2a1450e6; border: 1.5px solid #b35cff; border-radius: 16px; padding: 6px 8px 6px 14px; box-shadow: 0 4px 14px #0007; white-space: nowrap; }
+  background: #2a1450e6; border: 1.5px solid #b35cff; border-radius: 14px; padding: 4px 6px 4px 10px; box-shadow: 0 3px 10px #0007; white-space: nowrap; gap: 7px; }
 #gpsHud.show { display: flex; }
-#gpsHud .garrow { width: 46px; height: 46px; border-radius: 50%; background: #b35cff; display: flex; align-items: center; justify-content: center; flex: none; }
-#gpsHud .garrow svg { width: 30px; height: 30px; fill: #fff; }
+#gpsHud .garrow { width: 32px; height: 32px; border-radius: 50%; background: #b35cff; display: flex; align-items: center; justify-content: center; flex: none; }
+#gpsHud .garrow svg { width: 20px; height: 20px; fill: #fff; }
 #gpsHud .ginfo { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
 #gpsHud .gmain { display: flex; gap: 8px; align-items: baseline; }
-#gpsHud .gdist { font-size: 21px; font-weight: 900; color: #fff; }
-#gpsHud .geta { font-size: 15px; font-weight: 800; color: #ffd27a; }
-#gpsHud .gname { font-size: 11px; opacity: .85; max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
-#gpsCancel { pointer-events: auto; flex: none; width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid #fff9; background: #c0392bcc; color: #fff; font: inherit; font-size: 14px; font-weight: 800; padding: 0; cursor: pointer; }
+#gpsHud .gdist { font-size: 15px; font-weight: 900; color: #fff; }
+#gpsHud .geta { font-size: 12px; font-weight: 800; color: #ffd27a; }
+#gpsHud .gname { font-size: 10px; opacity: .85; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+#gpsCancel { pointer-events: auto; flex: none; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid #fff9; background: #c0392bcc; color: #fff; font: inherit; font-size: 12px; font-weight: 800; padding: 0; cursor: pointer; }
 /* keep other top-centre messages below the navigation */
-body.navon #prompt { top: calc(max(10px, env(safe-area-inset-top)) + 70px); }
-body.navon #objective { top: calc(max(10px, env(safe-area-inset-top)) + 122px); }
-body.navon #elevPanel { top: calc(max(10px, env(safe-area-inset-top)) + 70px); }
+body.navon #prompt { top: calc(max(10px, env(safe-area-inset-top)) + 52px); }
+body.navon #objective { top: calc(max(10px, env(safe-area-inset-top)) + 104px); }
+body.navon #elevPanel { top: calc(max(10px, env(safe-area-inset-top)) + 52px); }
 #objective { position: absolute; top: max(64px, calc(env(safe-area-inset-top) + 52px)); left: 50%; transform: translateX(-50%); max-width: min(520px, 70vw); text-align: center; font-size: 14px; font-weight: 700;
   background: #0009; border-right: 3px solid #ff9f0a; border-radius: 8px; padding: 5px 12px; display: none; }
 #objective.show { display: block; }
@@ -289,7 +289,7 @@ body.touch #weaponHud { bottom: 70px; }
 .npctag .hp i { display: block; height: 100%; }
 .npctag .st { font-size: 10px; font-weight: 800; color: #fff; background: #0008; padding: 1px 6px; border-radius: 6px; }
 /* attack button a little further right */
-#tFire { justify-self: start; transform: translateX(6px); }
+#tFire { justify-self: start; transform: translateX(calc(8px + env(safe-area-inset-right, 0px) * 0.6)); }
 .tbtns.foot [data-btn="cycle"] { justify-self: start; transform: translateX(1px); margin-bottom: 2px; }
 
 /* never let the page zoom (iOS zooms into text fields under 16px and keeps the zoom) */
