@@ -56,6 +56,20 @@ export class GameAudio {
     const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 600;
     src.connect(f); f.connect(g); g.connect(this.master); src.start(t);
   }
+  // gunshot: sharp crack (filtered noise burst) + low thump
+  gunshot(kind) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime, heavy = kind === 'long' || kind === 'heavy';
+    const len = heavy ? 0.45 : 0.22, buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * len), ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, heavy ? 4 : 6);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = heavy ? 2200 : kind === 'pistol' ? 3800 : 3000;
+    const g = ctx.createGain(); g.gain.value = heavy ? 0.6 : 0.42;
+    src.connect(f); f.connect(g); g.connect(this.master); src.start(t);
+    const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.setValueAtTime(heavy ? 90 : 140, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+    og.gain.setValueAtTime(heavy ? 0.5 : 0.3, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    o.connect(og); og.connect(this.master); o.start(t); o.stop(t + 0.2);
+  }
   mute(on) { if (this.master) this.master.gain.value = on ? 0 : this.volume; }
 }
 

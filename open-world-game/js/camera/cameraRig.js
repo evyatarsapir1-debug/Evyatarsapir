@@ -62,6 +62,15 @@ export class CameraRig {
       tx = player.x; ty = player.y + 1.55; tz = player.z;
       if (player.state === 'sitting') ty -= 0.45;
       if (player.state === 'riding') { ty -= 0.45; dist = Math.max(dist, 7); lam = 30; this.ceiling = null; }
+      // aiming a weapon: over-the-right-shoulder camera, the body turns with the crosshair
+      this.aimK = damp(this.aimK || 0, player.armed && player.aimT > 0 && player.state === 'foot' ? 1 : 0, 8, dt);
+      if (this.aimK > 0.01) {
+        const k = this.aimK, rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw);
+        tx += rx * 0.55 * k; tz += rz * 0.55 * k; ty += 0.1 * k;
+        dist = dist + (Math.min(dist, 2.6) - dist) * k;
+        if (player.aimT > 0) { player.facing = dampAngle(player.facing, this.yaw, 18, dt); player.aimPitch = clamp(-(this.pitch - 0.15) * 0.9, -0.8, 0.9); }
+        lam = 24;
+      }
       // gentle auto-follow while walking
       if (this.idle > 2 && player.speed > 1) this.yaw = dampAngle(this.yaw, player.facing, 0.8, dt);
     }

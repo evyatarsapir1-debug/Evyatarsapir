@@ -260,7 +260,29 @@ export class CharacterModel {
         const bite = Math.sin(performance.now() * 0.009) * 0.18;
         target.armR = -1.35 + bite; target.elbowR = -2.05 - bite * 0.5; target.armL = -0.25; target.elbowL = -0.4; target.armSide = 0.1;
       }
-      if (s.aim) { target.armR = s.aim > 1 ? -1.5 : -0.5; target.elbowR = s.aim > 1 ? -0.05 : -0.6; if (s.aim > 1) { target.armL = -1.3; target.elbowL = -0.5; } }
+      if (s.aim) {
+        // aim > 1: weapon up and pointed where the camera looks (pitch follows the crosshair); 1: low ready
+        const up = s.aim > 1, ap = up ? (s.aimPitch || 0) : 0;
+        if (s.hold === 'rifle' || s.hold === 'heavy') {
+          // two hands: right hand on the grip, left hand forward under the fore-end, stock at the shoulder
+          // forearm (gun) direction = armR + elbowR: about -1.57 means level with the ground
+          target.armR = (up ? -1.02 : -0.55) - ap; target.elbowR = up ? -0.56 : -0.75;
+          target.armL = (up ? -1.22 : -0.85) - ap; target.elbowL = up ? -0.3 : -0.55;
+          target.armSide = up ? -0.16 : -0.05; target.twist = up ? 0.3 : 0.18; target.spine = 0.06;
+        } else if (s.hold === 'pistol') {
+          // pistol held out in both hands
+          target.armR = (up ? -1.55 : -0.55) - ap; target.elbowR = up ? -0.05 : -0.7;
+          target.armL = up ? -1.5 - ap : -0.2; target.elbowL = up ? -0.12 : -0.3;
+          target.armSide = up ? -0.26 : 0.08;
+        } else { target.armR = up ? -1.5 : -0.5; target.elbowR = up ? -0.05 : -0.6; }
+      }
+      if (s.throw > 0) {
+        // overarm throw: wind back (arm up behind the head), then whip forward and follow through
+        const k = 1 - s.throw / 0.55;
+        const back = k < 0.45 ? k / 0.45 : 0, fwd = k >= 0.45 ? Math.min(1, (k - 0.45) / 0.25) : 0;
+        target.armR = -2.6 * back + (-2.6 + 2.2 * fwd) * (k >= 0.45 ? 1 : 0); target.elbowR = -1.3 * back - 1.3 * (1 - fwd) * (k >= 0.45 ? 1 : 0);
+        target.armL = -1.0 + 0.6 * fwd; target.elbowL = -0.4; target.twist = -0.5 * back + 0.5 * fwd; target.spine = -0.1 * back + 0.25 * fwd; target.armSide = 0.1;
+      }
       if (s.attack || (s.stance && speed < 2.5)) {
         // fighting stance: guard up, knees soft, weight forward
         target.armL = -1.0; target.armR = -1.0; target.elbowL = -1.85; target.elbowR = -1.85; target.armSide = 0.25;
@@ -308,7 +330,7 @@ export class CharacterModel {
       hipsY = 0.62;
       bodyZ = -0.05;
     }
-    const k = s.attack ? 22 : 14;
+    const k = s.attack || s.throw > 0 ? 22 : s.aim > 1 ? 18 : 14;
     for (const key of ['legL', 'legR', 'kneeL', 'kneeR', 'armL', 'armR', 'elbowL', 'elbowR', 'spine', 'armSide', 'twist']) {
       t[key] = damp(t[key] ?? 0, target[key] ?? 0, k, dt);
     }

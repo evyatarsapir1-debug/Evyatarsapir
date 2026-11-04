@@ -252,7 +252,7 @@ await shot('10-apartment-corridor');
 const shopRes = await g(() => {
   const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
   const out = {};
-  for (const [cell, sign] of [[[7, 5], 'חנות בגדים'], [[2, 5], 'ארסנל הצללים'], [[7, 6], 'פלאפל הכיכר']]) {
+  for (const [cell, sign] of [[[7, 5], 'חנות בגדים'], [[2, 5], 'חנות נשקים'], [[7, 6], 'פלאפל הכיכר']]) {
     const b = __wg.cellData(cell[0], cell[1]).buildings.find((q) => q.sign === sign);
     const c = __wg.specOf(b).counter;
     game.teleport(c.pt[0], c.pt[1], c.yaw + Math.PI);
@@ -272,7 +272,7 @@ const shopRes = await g(() => {
   return out;
 });
 check('clothing store: buy and wear', shopRes['חנות בגדים'].open && shopRes['חנות בגדים'].paid > 0 && shopRes['חנות בגדים'].changedClothes, JSON.stringify(shopRes['חנות בגדים']));
-check('fictional gear store: buy an item', shopRes['ארסנל הצללים'].paid > 0 && !!shopRes.weapon, `${shopRes['ארסנל הצללים'].paid}₪, equipped ${shopRes.weapon}`);
+check('fictional gear store: buy an item', shopRes['חנות נשקים'].paid > 0 && !!shopRes.weapon, `${shopRes['חנות נשקים'].paid}₪, equipped ${shopRes.weapon}`);
 check('food shop: buy food', shopRes['פלאפל הכיכר'].paid > 0 && shopRes['פלאפל הכיכר'].closed);
 const fire = await g(() => {
   const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };

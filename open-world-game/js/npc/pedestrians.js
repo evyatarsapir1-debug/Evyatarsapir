@@ -545,7 +545,7 @@ export class Pedestrians {
     p.x += dx / L * (kick ? 0.7 : 0.35); p.z += dz / L * (kick ? 0.7 : 0.35);
     if (p.hp <= 0) {
       // out of health: the person collapses and stays down for good (no blood, no gore)
-      p.state = 'dead'; p.timer = 45; p.defeated = true; p.vx = dx / L * 2.4; p.vz = dz / L * 2.4; p.atk = null;
+      p.state = 'dead'; p.timer = 45; p.defeated = true; p.vx = dx / L * (kick === true ? 3 : 2.4); p.vz = dz / L * (kick === true ? 3 : 2.4); p.atk = null;
       p.fallYaw = Math.atan2(-dx, -dz); p.sayT = 0; p.barT = 4;
       if (p.shopKey) this.deadKeys.add(p.shopKey);
       return 'dead';

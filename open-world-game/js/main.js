@@ -276,7 +276,7 @@ class Game {
       { short: 'נמל תעופה', name: 'נמל התעופה אזורה — טרמינל', icon: '✈', color: '#1f5fa8', x: -300, z: 514 },
       { short: 'מרינה', name: 'מרינה מזרח', icon: '⚓', color: '#0e7c86', x: 2500, z: 510 },
       { short: 'לונה פארק', name: 'לונה פארק המרינה — גלגל ענק ורכבת הרים', icon: '🎡', color: '#d81b60', x: LUNA.x - 22, z: LUNA.z - 2 },
-      { short: 'חנות נשקים', name: 'חנות נשקים — ארסנל הצללים', icon: '🎯', color: '#5b2c6f', ...door(find([[2, 5]], (b) => b.sign === 'ארסנל הצללים')) },
+      { short: 'חנות נשקים', name: 'חנות נשקים', icon: '🎯', color: '#5b2c6f', ...door(find([[2, 5]], (b) => b.sign === 'חנות נשקים')) },
       { short: 'חנות בגדים', name: 'חנות בגדים — מרכז העיר', icon: '👕', color: '#c2185b', ...door(find([[7, 5]], (b) => b.sign === 'חנות בגדים')) },
       { short: 'גלידה', name: 'גלידת שקיעה', icon: '🍦', color: '#f39c12', ...door(find([[7, 3]], (b) => b.sign === 'גלידת שקיעה')) },
       { short: 'ספרייה', name: 'ספריית העיר', icon: '📚', color: '#6d4c41', ...door(find([[2, 3]], (b) => b.sign === 'ספריית העיר')) },
@@ -423,10 +423,11 @@ class Game {
     this.econ.equipped = id && this.econ.weapons[id] ? id : null;
     this.weapons.attachGun(this.player, this.econ.equipped);
     this.player.armed = !!this.econ.equipped;
+    this.player.hold = this.econ.equipped ? WEAPONS[this.econ.equipped].hold : null;
   }
   cycleWeapon() {
     const owned = WEAPON_ORDER.filter((id) => this.econ.weapons[id]);
-    if (!owned.length) { this.toast('אין לך ציוד — אפשר לקנות בחנות "ארסנל הצללים"', 2.5); return; }
+    if (!owned.length) { this.toast('אין לך נשק — אפשר לקנות ב"חנות נשקים"', 2.5); return; }
     const list = [null, ...owned];
     const i = list.indexOf(this.econ.equipped);
     this.equip(list[(i + 1) % list.length]);
@@ -529,7 +530,7 @@ class Game {
       row(`מצנחים (${E.items.parachute})`, 'נפתח לבד בנפילה מגובה', '—', () => null, true);
       if (E.items.flashlight) row('פנס', E.flashlightOn ? 'דולק' : 'כבוי', E.flashlightOn ? 'לכבות' : 'להדליק', () => { E.flashlightOn = !E.flashlightOn; return null; });
       row('ידיים ריקות', '', this.econ.equipped ? 'לבחור' : 'נבחר', () => { this.equip(null); return null; }, !this.econ.equipped);
-      for (const id of WEAPON_ORDER) if (E.weapons[id]) row(WEAPONS[id].name, `${E.weapons[id].ammo} יחידות · פריט משחק בדיוני`, E.equipped === id ? 'נבחר' : 'לבחור', () => { this.equip(id); return null; }, E.equipped === id);
+      for (const id of WEAPON_ORDER) if (E.weapons[id]) row(WEAPONS[id].name, `${E.weapons[id].ammo} יחידות תחמושת`, E.equipped === id ? 'נבחר' : 'לבחור', () => { this.equip(id); return null; }, E.equipped === id);
     };
     el.querySelector('.smsg').textContent = '';
     el.classList.add('show');
@@ -831,6 +832,8 @@ class Game {
       player: p, econ: this.econ, input, camera: this.camera, vehicles: all,
       peds: this.peds.peds.filter((q) => q.state !== 'inside' && !q.car && q.state !== 'pulled' && q.state !== 'thrown'),
       scare: (ped, src, hit) => this.peds.scare(ped, src, hit), hurtPlayer: (n) => this.hurt(n, 'פיצוץ'),
+      hitPed: (ped, dmg) => { const r = this.peds.hit(ped, p, dmg, true); if (r === 'dead') this.combat._drop(ped); },
+      onShot: (W) => this.audio.gunshot?.(W.kind),
       onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); }, message: (m) => this.toast(m, 2),
     });
     this.rig.update(dt, input, p);

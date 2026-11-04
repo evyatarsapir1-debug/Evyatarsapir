@@ -105,7 +105,16 @@ export class Input {
       const down = (e) => { e.preventDefault(); e.stopPropagation(); this.held.add(b); this.pressed.add(b); el.classList.add('down'); this.lastInput = performance.now(); };
       const up = (e) => { e.preventDefault(); this.held.delete(b); el.classList.remove('down'); };
       el.addEventListener('pointerdown', down);
-      el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('pointerleave', up);
+      if (b === 'fire') {
+        // keep your finger on the fire button and slide it to aim while shooting
+        let lx = 0, ly = 0, on = false;
+        el.addEventListener('pointerdown', (e) => { on = true; lx = e.clientX; ly = e.clientY; try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ } });
+        el.addEventListener('pointermove', (e) => { if (!on) return; this.lookDX += (e.clientX - lx) * 1.3; this.lookDY += (e.clientY - ly) * 1.3; lx = e.clientX; ly = e.clientY; });
+        const off = () => { on = false; };
+        el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off);
+      }
+      el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+      if (b !== 'fire') el.addEventListener('pointerleave', up);
     });
   }
 
