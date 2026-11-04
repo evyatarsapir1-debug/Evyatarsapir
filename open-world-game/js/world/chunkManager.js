@@ -550,7 +550,7 @@ function buildCellNear(cd, B, bulbs) {
   if (cd.bridge) {
     const { x0, x1, z } = cd.bridge;
     const L = x1 - x0, cx = (x0 + x1) / 2;
-    B.props.addGeometry(G.boxB, mat(cx, -1.4, z, 0, L, 1.4, 19.4), 0xa7a39b);           // deck body
+    B.props.addGeometry(G.boxB, mat(cx, -1.45, z, 0, L, 1.4, 19.4), 0xa7a39b);          // deck body (top just below the asphalt: no z-fighting)
     for (const s of [-1, 1]) {
       B.tiles.floor(x0, s < 0 ? z - 9.5 : z + ROAD_HALF, x1, s < 0 ? z - ROAD_HALF : z + 9.5, 0.0, 0xd9d4ca, 3); // walkways
       B.props.addGeometry(G.boxB, mat(cx, 0, z + s * 9.7, 0, L, 0.35, 0.4), 0xcfcac0);  // curb wall

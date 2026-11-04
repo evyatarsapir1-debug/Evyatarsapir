@@ -44,6 +44,7 @@ const DISTRICTS = {
   T: 'התחנה המרכזית',
   B: 'טיילת החוף',
   V: 'וילת החוף — הבית שלי',
+  U: 'לונה פארק המרינה',
 };
 
 const SHOP_NAMES = [
@@ -292,6 +293,15 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
       blk.parking.push({ x: ox + 24, z: oz + 18, rot: Math.PI, type: 'luxury', fixed: true, mine: true }, { x: ox + 76, z: oz + 18, rot: Math.PI, type: 'sports', fixed: true, mine: true });
       break;
     }
+    case 'U': { // luna park: the Ferris wheel and the roller coaster are animated objects (js/world/lunapark.js)
+      blk.ground = 'plaza';
+      blk.paths.push({ x: cx, z: cz, w: 6, d: 78 });
+      for (let k = 0; k < 8; k++) PR.push({ kind: 'tree', x: ox + 14 + (k % 2) * 72, z: oz + 16 + Math.floor(k / 2) * 22, s: 0.9 });
+      for (let k = 0; k < 4; k++) PR.push({ kind: 'bench', x: cx + 4.5, z: oz + 26 + k * 14, rot: -Math.PI / 2 });
+      PR.push({ kind: 'parasol', x: cx - 6, z: oz + 18 }, { kind: 'parasol', x: cx + 7, z: oz + 82 });
+      B.push({ x: cx - 6, z: oz + 14, w: 6, d: 4, h: 3.2, style: 'plaster', color: 0xf4d03f, face: 'n', storefront: true, sign: 'גלידת שקיעה' });
+      break;
+    }
     case 'T': {
       blk.ground = 'plaza';
       B.push({ x: cx, z: oz + 70, w: 64, d: 26, h: 16, style: 'glass', color: 0xc9d3db, face: 's', station: true, sign: 'תחנת רכבת מרכזית' });
@@ -303,7 +313,7 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
   }
 
   // bus-stop style benches + trash bins along sidewalks of non-park blocks
-  if (type !== 'P' && type !== 'H' && type !== 'V') {
+  if (type !== 'P' && type !== 'H' && type !== 'V' && type !== 'U') {
     if (rng.chance(0.5)) PR.push({ kind: 'bench', x: cx + rng.float(-25, 25), z: oz + 9, rot: Math.PI });
     PR.push({ kind: 'bin', x: ox + 8.4, z: oz + 32 });
   }

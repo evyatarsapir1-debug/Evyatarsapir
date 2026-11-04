@@ -61,6 +61,7 @@ export class CameraRig {
       if (this.ceiling !== null) { dist = Math.min(dist, 3.2); this.pitch = Math.min(this.pitch, 0.42); }
       tx = player.x; ty = player.y + 1.55; tz = player.z;
       if (player.state === 'sitting') ty -= 0.45;
+      if (player.state === 'riding') { ty -= 0.45; dist = Math.max(dist, 7); lam = 30; this.ceiling = null; }
       // gentle auto-follow while walking
       if (this.idle > 2 && player.speed > 1) this.yaw = dampAngle(this.yaw, player.facing, 0.8, dt);
     }

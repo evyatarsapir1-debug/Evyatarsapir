@@ -50,6 +50,10 @@ export class Player {
     switch (this.state) {
       case 'foot': this._foot(dt, input, camYaw, world); break;
       case 'sitting': this._sitting(dt, input); break;
+      case 'riding':   // luna park ride: position is set by the ride, just sit and look around
+        this.model.animate(dt, { speed: 0, grounded: true, mode: 'sit' });
+        this.object.position.set(this.x, this.y, this.z); this.object.rotation.set(0, this.facing, 0);
+        break;
       case 'entering': this._entering(dt, world); break;
       case 'driving': this._driving(dt, input, world); break;
       case 'exiting': this._exiting(dt, world); break;

@@ -533,6 +533,27 @@ const food = await g(() => {
 check('food: bought food goes into the bag (not eaten at the counter)', food.inBag.icecream >= 1 && food.inBag.falafel >= 1 && food.healthBefore === 50, JSON.stringify(food.inBag));
 check('food: "eat" in the bag heals and plays the eating animation', food.healthAfter === 80 && (food.left.falafel || 0) === food.inBag.falafel - 1 && food.eating && food.state === 'playing', JSON.stringify(food));
 
+// ---------------------------------------------------------------- luna park at the marina
+const luna = await g(() => {
+  const game = __game, L = game.luna, P = game.player, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') return { err: 'not on foot', state: P.state };
+  game.teleport(L.wheelPt.x, L.wheelPt.z, 0, 0.3); step(5);
+  const wPrompt = P.prompt?.text, m0 = game.econ.money;
+  game.input.pressed.add('interact'); step(1);
+  const wPaid = m0 - game.econ.money;
+  let top = 0; step(30 * 36); top = P.y;
+  step(30 * 40);
+  const wEnd = P.state;
+  game.teleport(L.coasterPt.x, L.coasterPt.z, 0, 0.3); step(5);
+  const cPrompt = P.prompt?.text, m1 = game.econ.money;
+  game.input.pressed.add('interact'); step(1);
+  const cPaid = m1 - game.econ.money, cState = P.state;
+  for (let i = 0; i < 30 * 90 && P.state === 'riding'; i++) step(1);
+  return { wPrompt, wPaid, top, wEnd, cPrompt, cPaid, cState, cEnd: P.state };
+});
+check('luna park: Ferris wheel costs ₪10, lifts you high and lets you off', luna.wPaid === 10 && luna.top > 25 && luna.wEnd === 'foot', JSON.stringify(luna));
+check('luna park: roller coaster costs ₪20, full ride then off', luna.cPaid === 20 && luna.cState === 'riding' && luna.cEnd === 'foot', JSON.stringify(luna));
+
 // ---------------------------------------------------------------- traffic drivers + carjacking
 const jack = await g(() => {
   const game = __game, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };

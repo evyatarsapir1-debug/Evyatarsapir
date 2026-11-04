@@ -265,14 +265,31 @@ export function buildVehicleModel(type, color) {
       m(box(0.55, 0.03, 0.03), shared.dark, body, 0, 1.0, 0.45);
       parts.seat.set(0, 0.32, -0.25);
     } else {
-      m(box(0.32, 0.35, 1.2), frameMat, body, 0, 0.62, 0.05);
-      m(box(0.3, 0.12, 0.6), shared.seat, body, 0, 0.85, -0.3);
-      m(box(0.4, 0.22, 0.4), frameMat, body, 0, 0.85, 0.42);
-      m(box(0.7, 0.04, 0.04), shared.chrome, body, 0, 1.05, 0.6);
-      parts.lights.push(m(box(0.16, 0.12, 0.05), shared.head, body, 0, 0.85, 0.66, false));
-      m(box(0.14, 0.08, 0.05), shared.tail, body, 0, 0.8, -0.65, false);
-      m(box(0.26, 0.26, 0.5), shared.dark, body, 0, 0.42, -0.05);
-      parts.seat.set(0, 0.28, -0.3);
+      // sport motorcycle: tank, seat, tail, engine block, exhaust, forks, round headlight, screen, mirrors, fenders
+      const cyl = (r1, r2, h, n = 12) => new THREE.CylinderGeometry(r1, r2, h, n);
+      const rx = (o, a) => { o.rotation.x = a; return o; };
+      const tank = m(new THREE.SphereGeometry(0.22, 14, 10), frameMat, body, 0, 0.93, 0.18); tank.scale.set(0.95, 0.62, 1.35);
+      m(box(0.26, 0.09, 0.56), shared.seat, body, 0, 0.92, -0.3);                       // seat
+      const tail = m(box(0.22, 0.12, 0.34), frameMat, body, 0, 0.99, -0.62); tail.rotation.x = -0.25;   // tail cowl
+      m(box(0.3, 0.32, 0.46), shared.dark, body, 0, 0.55, 0.05);                         // engine
+      for (const sx of [-0.09, 0.09]) rx(m(cyl(0.06, 0.06, 0.24), shared.chrome, body, sx, 0.72, 0.2), 0.35); // cylinders
+      m(box(0.06, 0.1, 0.92), shared.dark, body, 0, 0.66, 0.04);                         // frame spine
+      rx(m(box(0.05, 0.06, 0.62), shared.dark, body, 0.1, 0.4, -0.4), 0.12);             // swing arm
+      rx(m(cyl(0.045, 0.055, 0.8), shared.chrome, body, 0.17, 0.42, -0.32), Math.PI / 2 - 0.12); // exhaust
+      m(cyl(0.06, 0.06, 0.08), shared.dark, body, 0.17, 0.47, -0.74).rotation.x = Math.PI / 2;
+      for (const sx of [-0.07, 0.07]) rx(m(cyl(0.022, 0.022, 0.78), shared.chrome, body, sx, 0.68, 0.62), -0.42); // forks
+      m(box(0.12, 0.06, 0.16), shared.dark, body, 0, 1.0, 0.52);                         // steering head
+      m(box(0.72, 0.035, 0.035), shared.chrome, body, 0, 1.06, 0.48);                    // handlebar
+      for (const sx of [-0.36, 0.36]) m(box(0.035, 0.05, 0.1), shared.dark, body, sx, 1.06, 0.48);   // grips
+      for (const sx of [-0.3, 0.3]) { m(box(0.012, 0.16, 0.012), shared.dark, body, sx, 1.14, 0.48); m(box(0.08, 0.05, 0.02), shared.glass, body, sx, 1.22, 0.49); } // mirrors
+      const hl = m(cyl(0.085, 0.085, 0.07, 16), shared.chrome, body, 0, 0.98, 0.66); hl.rotation.x = Math.PI / 2;
+      parts.lights.push(rx(m(new THREE.CircleGeometry(0.072, 16), shared.head, body, 0, 0.98, 0.7, false), 0));
+      const scr = m(box(0.26, 0.2, 0.012), shared.glass, body, 0, 1.13, 0.6, false); scr.rotation.x = -0.45;
+      rx(m(box(0.12, 0.03, 0.38), frameMat, body, 0, 0.66, 0.72), -0.2);                 // front fender
+      rx(m(box(0.14, 0.03, 0.3), frameMat, body, 0, 0.7, -0.78), 0.5);                   // rear hugger
+      m(box(0.14, 0.06, 0.04), shared.tail, body, 0, 0.98, -0.8, false);                 // tail light
+      for (const sx of [-0.2, 0.2]) m(box(0.08, 0.025, 0.04), shared.chrome, body, sx, 0.4, -0.08);  // foot pegs
+      parts.seat.set(0, 0.3, -0.28);
     }
     parts.seatMode = 'ride';
     for (const [z, front] of [[T.wheelbase / 2, true], [-T.wheelbase / 2, false]]) {

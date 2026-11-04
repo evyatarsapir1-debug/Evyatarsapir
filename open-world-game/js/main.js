@@ -8,6 +8,7 @@ import { Pedestrians } from './npc/pedestrians.js';
 import { InteriorManager } from './world/interiorManager.js';
 import { Economy, fmt, FOODS } from './game/economy.js';
 import { PostFX } from './render/postfx.js';
+import { LunaPark, LUNA } from './world/lunapark.js';
 import { ShopUI, shopKind } from './game/shops.js';
 import { WeaponSystem, WEAPONS, WEAPON_ORDER } from './game/weapons.js';
 import { shared as vehicleMats } from './vehicles/vehicleModels.js';
@@ -83,6 +84,7 @@ class Game {
     this.peds = new Pedestrians(this.scene);
     this.interiors = new InteriorManager(this.scene, this.mats, this.statics);
     this.airport = new AirportManager(this.scene, this.statics, null);
+    this.luna = new LunaPark(this.scene, this.statics);
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());
     this.rig = new CameraRig(this.camera, this.statics);
@@ -273,6 +275,7 @@ class Game {
       { short: 'הבית שלי', name: 'הבית שלי — וילה עם בריכה', icon: '🏠', color: '#e0533b', x: VILLA.door.x, z: VILLA.door.z - 1 },
       { short: 'נמל תעופה', name: 'נמל התעופה אזורה — טרמינל', icon: '✈', color: '#1f5fa8', x: -300, z: 514 },
       { short: 'מרינה', name: 'מרינה מזרח', icon: '⚓', color: '#0e7c86', x: 2500, z: 510 },
+      { short: 'לונה פארק', name: 'לונה פארק המרינה — גלגל ענק ורכבת הרים', icon: '🎡', color: '#d81b60', x: LUNA.x - 22, z: LUNA.z - 2 },
       { short: 'חנות נשקים', name: 'חנות נשקים — ארסנל הצללים', icon: '🎯', color: '#5b2c6f', ...door(find([[2, 5]], (b) => b.sign === 'ארסנל הצללים')) },
       { short: 'חנות בגדים', name: 'חנות בגדים — מרכז העיר', icon: '👕', color: '#c2185b', ...door(find([[7, 5]], (b) => b.sign === 'חנות בגדים')) },
       { short: 'גלידה', name: 'גלידת שקיעה', icon: '🍦', color: '#f39c12', ...door(find([[7, 3]], (b) => b.sign === 'גלידת שקיעה')) },
@@ -746,6 +749,17 @@ class Game {
     };
     this.interiors.update(dt, p);
     p.update(dt, input, this.rig.yaw, world);
+    // luna park rides at the marina
+    if (!p.prompt && p.state === 'foot') {
+      const lp = this.luna.promptFor(p);
+      if (lp) {
+        p.prompt = { key: 'interact', text: lp.text };
+        if (input.wasPressed('interact')) {
+          if (!this.econ.pay(lp.price, lp.ride === 'wheel' ? 'גלגל ענק' : 'רכבת הרים')) this.toast('אין מספיק כסף', 2);
+          else { this.luna.start(lp.ride, p); this.toast(lp.ride === 'wheel' ? '🎡 עלית לגלגל הענק! (₪10)' : '🎢 תחזיק חזק! רכבת ההרים יוצאת (₪20)', 3); }
+        }
+      }
+    }
     // board a passenger jet standing at the airport
     if (!p.prompt && p.state === 'foot') {
       const jet = this.airport.boardable(p);
@@ -796,6 +810,8 @@ class Game {
     this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
       onPlayerHit: (who, n) => { this.hurt(n, 'קטטה'); this.rig.shake = Math.max(this.rig.shake, 0.3); p.combatT = 3; } });
     this.airport.update(dt, this.env.hour, focusX, focusZ, all);
+    const ride = this.luna.update(dt, focusX, focusZ);
+    if (ride?.done) this.toast(ride.done, 3);
     // GPS, missions, phone, radio
     const pp = this.playerPos();
     const g = this.gps.update(dt, pp.x, pp.z);

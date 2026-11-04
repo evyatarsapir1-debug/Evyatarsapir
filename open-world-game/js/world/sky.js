@@ -65,7 +65,7 @@ export class Environment {
     this.sun.castShadow = true;
     const sc = this.sun.shadow.camera;
     sc.left = -70; sc.right = 70; sc.top = 70; sc.bottom = -70; sc.near = 1; sc.far = 400;
-    this.sun.shadow.bias = -0.0004; this.sun.shadow.normalBias = 0.6;
+    this.sun.shadow.bias = -0.0008; this.sun.shadow.normalBias = 1.1;
     scene.add(this.sun, this.sun.target);
     this.sunDir = new THREE.Vector3(0.45, 0.75, 0.35).normalize();
     scene.fog = new THREE.Fog(0xcfe3f2, 150, 520);
@@ -154,6 +154,8 @@ export class Environment {
     this.sun.color.setHex(0xfff1dc).lerp(C(0xff9a5a), dusk * 0.8);
     this.sun.intensity = sunUp ? 2.6 * smoothstep(-0.05, 0.2, elev) * (1 - cl * 0.7) : 0.25 * (1 - cl);
     if (!sunUp) this.sun.color.setHex(0x8fa6d6); // moonlight
+    // low sun / moon: long grazing shadows band and stripe on flat roads -> fade them out smoothly
+    this.sun.shadow.intensity = sunUp ? smoothstep(0.06, 0.3, elev) : 0;
     this.lightDir = sunUp ? this.sunDir : U.moonDir.value;
     this.hemi.intensity = 0.18 + day * 0.95 * (1 - cl * 0.25);
     this.hemi.color.setHex(0xcfe6ff).lerp(C(0x5a6b8f), this.night);

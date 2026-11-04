@@ -13,7 +13,7 @@ import { interiorSpec, garageSpec } from './interiors.js';
 export const WATER_Y = -1.0;
 export const RIDGE = { x0: -60, x1: 1060, z0: -760, z1: -640, h: 42 };
 export const TUNNEL_H = 8, TUNNEL_HALF = 9.5;
-const URBAN = new Set('DSCAHPGMTBLKIV'.split(''));
+const URBAN = new Set('DSCAHPGMTBLKIVU'.split(''));
 const TOWN_NAMES = ['נווה ים', 'כפר אלונים', 'רמת השקד', 'עין הדקל', 'קריית הגפן', 'נאות הברוש', 'גבעת הכלנית', 'כרם התאנה'];
 const COUNTRY_NAMES = ['עמק השקדים', 'שדות הזהב', 'יער האלונים', 'מישור הרוח', 'גבעות הכלנית', 'נחל הצפצפות'];
 const mod = (a, n) => ((a % n) + n) % n;
@@ -64,6 +64,7 @@ export function cellKind(ix, iz) {
       if (d > reg.R || lx < 1 || lx > 8 || lz < 1 || lz > 8) { k = country(); break; }
       if (ix === reg.mall[0] && iz === reg.mall[1]) { k = 'L'; break; }
       if (ix === reg.garage[0] && iz === reg.garage[1]) { k = 'K'; break; }
+      if (rx === 2 && rz === 0 && ix === 25 && iz === 5) { k = 'U'; break; }   // marina luna park
       if (d < 1.2) k = h < 60 ? 'C' : h < 80 ? 'A' : 'S';
       else if (d < 2.2) k = h < 35 ? 'C' : h < 65 ? 'A' : h < 78 ? 'P' : h < 88 ? 'G' : 'M';
       else k = h < 55 ? 'H' : h < 80 ? 'A' : h < 90 ? 'P' : 'I';
