@@ -135,6 +135,7 @@ export class Input {
     if (k.has('KeyA') || k.has('ArrowLeft')) x -= 1;
     if (k.has('KeyD') || k.has('ArrowRight')) x += 1;
     if (x || y) { const L = Math.hypot(x, y); x /= L; y /= L; }
+    this.keyX = x; this.keyY = y;
     this.moveX = x || this.joyX; this.moveY = y || this.joyY;
   }
   // Called at the end of each frame

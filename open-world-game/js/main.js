@@ -433,7 +433,7 @@ class Game {
     this.vehicles.adopt(v);
     world.vehicles.push(v);
     this.player.enterVehicle(v, world);
-    this.toast('עלית למטוס — גז להאצה, "משוך" להמראה במהירות 210+ קמ״ש', 4);
+    this.toast('בתא הטייס: "גז" מעלה את המנוע, ג׳ויסטיק למטה = המראה (מעל 210 קמ״ש), למעלה = ירידה, ימינה/שמאלה = פנייה', 6);
     return v;
   }
   // carjacking: the car leaves traffic / airport service and becomes a normal vehicle the player can keep
@@ -873,7 +873,7 @@ class Game {
     if (v) {
       sp.classList.add('show');
       $('speedVal').textContent = Math.round(Math.abs(v.speed) * 3.6);
-      $('vehName').textContent = v.isAir ? `${v.T.name} · גובה ${Math.round(v.y)} מ׳` : v.T.name;
+      $('vehName').textContent = v.isPlane ? `גובה ${Math.round(v.y)} מ׳ · מנוע ${Math.round((v.throttleSet || 0) * 100)}%` : v.isAir ? `${v.T.name} · גובה ${Math.round(v.y)} מ׳` : v.T.name;
       $('dmgFill').style.width = v.damage + '%';
     } else sp.classList.remove('show');
     // touch controls by context

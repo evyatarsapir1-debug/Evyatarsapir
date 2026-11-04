@@ -294,7 +294,7 @@ export class Player {
         this.facing = dampAngle(this.facing, Math.atan2(dx, dz), 12, dt);
         this.model.animate(dt, { speed: sp, grounded: true, mode: 'foot' });
       } else {
-        s.phase = v.isTwoWheel ? 'sit' : 'open'; s.t = 0;
+        s.phase = v.isTwoWheel ? 'sit' : v.isPlane ? 'board' : 'open'; s.t = 0;
         s.fromX = this.x; s.fromZ = this.z; s.fromY = this.y;
       }
       this.y = heightAt(this.x, this.z, this.y + 0.3);
@@ -313,6 +313,10 @@ export class Player {
       this.facing = dampAngle(this.facing, v.heading - Math.PI / 2 + pull * 0.9, 10, dt);
       this.model.animate(dt, { speed: 0, grounded: true, mode: 'foot', doorReach: k < 0.55, attack: k > 0.45 && k < 0.8 ? { type: 'jabL', t: (k - 0.45) * 1.2, m: { dur: 0.42 } } : null });
       if (s.t > 0.9) { s.phase = 'sit'; s.t = 0; s.fromX = this.x; s.fromZ = this.z; s.fromY = this.y; v.jacking = false; }
+    } else if (s.phase === 'board') {
+      // through the passenger door straight into the cockpit (no floating up the side of the jet)
+      this.facing = v.heading;
+      this._attach(v); s.phase = 'close'; s.t = 0;
     } else if (s.phase === 'sit') {
       const k = Math.min(1, s.t / 0.55);
       v.object.updateMatrixWorld();
@@ -332,14 +336,16 @@ export class Player {
 
   _attach(v) {
     this.attached = true;
-    v.object.add(this.object);
+    (v.parts.body || v.object).add(this.object);
     this.object.position.copy(v.parts.seat);
+    if (v.isPlane) this.object.visible = false;   // you are inside the cockpit
     this.object.rotation.set(0, 0, 0);
     this.model.body.scale.y = this.model.body.scale.y; // keep appearance scale
   }
   _detach() {
     if (!this.attached) return;
     this.attached = false;
+    this.object.visible = true;
     this.scene.add(this.object);
   }
 
@@ -348,7 +354,13 @@ export class Player {
     const throttle = input.isHeld('gas') ? 1 : input.isHeld('brake') ? -1 : input.moveY;
     const ctl = { throttle, steer: input.moveX, handbrake: input.isHeld('handbrake'), lift: (input.isHeld('up') ? 1 : 0) - (input.isHeld('down') || input.isHeld('run') ? 1 : 0) };
     if (v.isHeli) ctl.handbrake = false;
-    if (v.isPlane) ctl.lift = (input.isHeld('up') || input.isHeld('jump') ? 1 : 0) - (input.isHeld('down') ? 1 : 0);
+    if (v.isPlane) {
+      // like a real plane: joystick forward = nose down, joystick back = nose up, sideways = bank & turn.
+      // Throttle is a lever: gas pushes it up, brake pulls it down (it stays where you leave it).
+      const jy = Math.abs(input.joyY) > 0.12 ? input.joyY : 0;
+      ctl.lift = clamp(-jy + (input.isHeld('up') || input.isHeld('jump') ? 1 : 0) - (input.isHeld('down') ? 1 : 0), -1, 1);
+      ctl.throttle = input.isHeld('gas') ? 1 : input.isHeld('brake') ? -1 : input.keyY || 0;
+    }
     this.controls = ctl;
     v.update(dt, ctl, world.statics, world.vehicles);
     this.x = v.x; this.z = v.z; this.y = v.y;
@@ -410,8 +422,8 @@ export class Player {
         this._detach();
         s.fromX = w.x; s.fromY = w.y; s.fromZ = w.z; this.facing = v.heading;
       }
-      const k = Math.min(1, s.t / 0.5);
-      const gy = Math.max(heightAt(s.spot.x, s.spot.z, s.fromY + 0.6), v.roofY ?? -100);
+      const k = v.isPlane ? 1 : Math.min(1, s.t / 0.5);   // planes: step out of the door onto the ground
+      const gy = v.isPlane ? heightAt(s.spot.x, s.spot.z, v.y + 1) : Math.max(heightAt(s.spot.x, s.spot.z, s.fromY + 0.6), v.roofY ?? -100);
       this.x = s.fromX + (s.spot.x - s.fromX) * k;
       this.z = s.fromZ + (s.spot.z - s.fromZ) * k;
       this.y = s.fromY + (gy - s.fromY) * k;

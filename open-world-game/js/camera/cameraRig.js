@@ -84,7 +84,7 @@ export class CameraRig {
       player.object.visible = false;
       return;
     }
-    player.object.visible = true;
+    player.object.visible = !(v && v.isPlane);   // the pilot sits inside the closed cockpit
 
     const cp = Math.cos(this.pitch);
     const dirX = -Math.sin(this.yaw) * cp, dirY = Math.sin(this.pitch), dirZ = -Math.cos(this.yaw) * cp;

@@ -54,7 +54,8 @@ export class Vehicle {
   }
   seatWorld(out) {
     const p = this.parts.seat;
-    return out.set(p.x, p.y, p.z).applyMatrix4(this.object.matrixWorld);
+    this.object.updateMatrixWorld();
+    return out.set(p.x, p.y, p.z).applyMatrix4((this.parts.body || this.object).matrixWorld);
   }
 
   // controls: { throttle -1..1, steer -1..1 (positive = right), handbrake bool, lift -1..1 }
@@ -163,13 +164,16 @@ export class Vehicle {
     const thr = this.driver ? (ctl.throttle || 0) : 0;
     const lift = this.driver ? (ctl.lift || 0) : 0;
     let v = this.speed;
-    // engines
-    this.thrust = damp(this.thrust || 0, Math.max(0, thr), 0.9, dt);
+    // throttle lever (0..100%): gas moves it up, brake moves it down; the engines spool towards it
+    this.throttleSet = clamp((this.throttleSet || 0) + thr * 0.5 * dt, 0, 1);
+    if (!this.driver) this.throttleSet = 0;
+    this.thrust = damp(this.thrust || 0, this.throttleSet, 0.9, dt);
     v += T.accel * this.thrust * dt;
     v -= v * Math.abs(v) * (T.accel / (T.maxSpeed * T.maxSpeed)) * dt;
     if (onGround) {
-      if (thr < 0) v = v > 0.3 ? Math.max(0, v - T.brake * 2.2 * -thr * dt) : Math.max(-3, v - 1.5 * dt);
-      else if (thr === 0) v -= Math.sign(v) * Math.min(Math.abs(v), 0.6 * dt);
+      // wheel brakes once the throttle is at idle and you keep pulling back
+      if (thr < 0 && this.throttleSet === 0) v = v > 0.3 ? Math.max(0, v - T.brake * 2.2 * -thr * dt) : Math.max(-3, v - 1.5 * dt);
+      else if (this.throttleSet < 0.05) v -= Math.sign(v) * Math.min(Math.abs(v), 0.6 * dt);
       if (ctl.handbrake) v -= Math.sign(v) * Math.min(Math.abs(v), 14 * dt);
       // nose-wheel steering, less effective at speed
       const steer = (ctl.steer || 0) * T.steerMax / (1 + Math.abs(v) * 0.06);
