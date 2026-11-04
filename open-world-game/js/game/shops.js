@@ -1,7 +1,7 @@
 // Shops: every enterable shop has a counter with a shopkeeper. Walk up to the counter and press E (or tap the button)
 // to open the store. Catalogue depends on the kind of shop (from its sign).
 import { WEAPONS, WEAPON_ORDER } from './weapons.js';
-import { fmt } from './economy.js';
+import { fmt, FOODS } from './economy.js';
 import { TOP_STYLES, TOP_NAMES, BOTTOM_STYLES, BOTTOM_NAMES, HAIR_STYLES, HAIR_NAMES, HAIR_COLORS, CLOTH_COLORS, SHOE_COLORS } from '../character/characterModel.js';
 
 const KINDS = [
@@ -70,20 +70,31 @@ function catalogue(kind, ctx) {
       break;
     }
     case 'barber':
-      for (const st of HAIR_STYLES) out.push({ id: `hair-${st}`, name: `תספורת: ${HAIR_NAMES[st]}`, price: 90, buy: wear({ hairStyle: st }, HAIR_NAMES[st]) });
-      HAIR_COLORS.forEach((c, i) => out.push({ id: `hairc-${i}`, name: 'צביעת שיער', swatch: c, price: 140, buy: wear({ hairColor: i }, 'צבע שיער חדש') }));
+      for (const st of HAIR_STYLES) out.push({ id: `hair-${st}`, name: `תספורת: ${HAIR_NAMES[st]}`, price: 90, patch: { hairStyle: st }, buy: wear({ hairStyle: st }, HAIR_NAMES[st]) });
+      HAIR_COLORS.forEach((c, i) => out.push({ id: `hairc-${i}`, name: 'צביעת שיער', swatch: c, price: 140, patch: { hairColor: i }, buy: wear({ hairColor: i }, 'צבע שיער חדש') }));
       break;
-    case 'food':
-      out.push({ id: 'coffee', name: 'קפה ומאפה', desc: '+15 בריאות', price: 28, buy: () => { econ.heal(15); return 'טעים! +15 בריאות'; } });
-      out.push({ id: 'meal', name: 'ארוחה מלאה', desc: '+45 בריאות', price: 65, buy: () => { econ.heal(45); return 'שבע ומרוצה. +45 בריאות'; } });
-      out.push({ id: 'feast', name: 'מגש משפחתי', desc: 'בריאות מלאה', price: 140, buy: () => { econ.heal(100); return 'בריאות מלאה!'; } });
-      out.push({ id: 'snack', name: 'חטיף לדרך', desc: 'נכנס לתיק (+20 בריאות כשאוכלים)', price: 18, buy: () => { econ.items.snacks++; return 'חטיף נוסף לתיק'; } });
+    case 'food': {
+      // every place sells its own food; it goes into the bag and you eat it from there
+      const n = ctx.name || '';
+      const menu = /גלידת/.test(n) ? [['icecream', 18], ['icebox', 32], ['shake', 24]]
+        : /פלאפל/.test(n) ? [['falafel', 25], ['falafelhalf', 16], ['fries', 12], ['drink', 8]]
+        : /פיצה/.test(n) ? [['pizza', 14], ['pizzabox', 60], ['drink', 8]]
+        : /בורגר/.test(n) ? [['burger', 45], ['fries', 12], ['shake', 24]]
+        : /סושי/.test(n) ? [['sushi', 55], ['drink', 8]]
+        : /קפה|מאפיית/.test(n) ? [['coffee', 14], ['croissant', 12], ['cake', 22]]
+        : [['sandwich', 22], ['meal', 65], ['drink', 8], ['snack', 18]];
+      for (const [id, price] of menu) {
+        const F = FOODS[id];
+        out.push({ id: `food-${id}`, name: `${F.icon} ${F.name}`, desc: `+${F.heal} בריאות · נכנס לתיק (יש לך ${econ.items.food[id] || 0})`, price,
+          buy: () => { econ.addFood(id); return `${F.icon} ${F.name} נוסף לתיק — פותחים את התיק ולוחצים "לאכול"`; } });
+      }
       break;
+    }
     case 'equipment':
       out.push({ id: 'flashlight', name: 'פנס', desc: 'מדליק אור קדימה בלילה (L / כפתור "פנס")', price: 220, owned: econ.items.flashlight, buy: () => { econ.items.flashlight = true; return 'קנית פנס. לחץ L כדי להדליק'; } });
       out.push({ id: 'parachute', name: 'מצנח', desc: 'נפתח לבד כשנופלים מגובה (גג, מסוק)', price: 900, buy: () => { econ.items.parachute++; return 'מצנח נוסף לתיק'; } });
       out.push({ id: 'repair', name: 'ערכת תיקון לרכב', desc: 'מתקנת את הרכב שאתה נוהג בו (מהתיק)', price: 600, buy: () => { econ.items.repairKit++; return 'ערכת תיקון נוספה לתיק'; } });
-      out.push({ id: 'snack2', name: 'בקבוק מים וחטיף', desc: 'נכנס לתיק', price: 20, buy: () => { econ.items.snacks++; return 'נוסף לתיק'; } });
+      out.push({ id: 'snack2', name: '🍫 חטיף ובקבוק מים', desc: 'נכנס לתיק', price: 20, buy: () => { econ.addFood('snack'); econ.addFood('drink'); return 'נוסף לתיק'; } });
       break;
     case 'mechanic': {
       const v = game.myVehicleNear(45);
@@ -142,7 +153,7 @@ export class ShopUI {
     const g = this.game, econ = g.econ;
     this.title.textContent = `${this.name} · ${KIND_NAMES[this.kind]}`;
     this.money.textContent = `ביתרה: ${fmt(econ.money)}`;
-    const items = catalogue(this.kind, { econ, player: g.player, game: g });
+    const items = catalogue(this.kind, { econ, player: g.player, game: g, name: this.name });
     this.list.innerHTML = '';
     for (const it of items) {
       const row = document.createElement('div'); row.className = 'srow' + (this.trying === it.id ? ' trying' : '') + (it.patch && this.tryOn ? ' can-try' : '');

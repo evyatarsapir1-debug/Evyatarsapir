@@ -518,6 +518,19 @@ const tryon = await g(() => {
 check('clothes store: hats ₪60/₪100 and shoes ₪120/₪250', tryon.hats.length >= 6 && tryon.hats.every((p) => p === 60 || p === 100) && new Set(tryon.hats).size === 2 && tryon.shoes.length >= 6 && tryon.shoes.every((p) => p === 120 || p === 250) && new Set(tryon.shoes).size === 2, JSON.stringify({ hats: tryon.hats, shoes: tryon.shoes }));
 check('clothes store: tap an item to try it on (free), buy keeps it, it is in the home wardrobe', tryon.preview === 'fedora' && tryon.paidForPreview === 0 && tryon.bought === 'cap' && tryon.afterClose === 'cap' && tryon.inWardrobe && tryon.state === 'playing', JSON.stringify(tryon));
 
+// ---------------------------------------------------------------- food goes into the bag, eat it from the bag
+const food = await g(() => {
+  const game = __game; game.econ.health = 50;
+  game.openShop('food', 'גלידת שקיעה'); document.querySelectorAll('#shopPanel .sbuy')[0].click(); game.shop.close();
+  game.openShop('food', 'פלאפל הכיכר'); document.querySelectorAll('#shopPanel .sbuy')[0].click(); game.shop.close();
+  const inBag = { ...game.econ.items.food }, h0 = game.econ.health;
+  game.openBag();
+  [...document.querySelectorAll('#bagPanel .srow')].find((r) => r.textContent.includes('פלאפל')).querySelector('.sbuy').click();
+  return { inBag, healthBefore: h0, healthAfter: game.econ.health, left: { ...game.econ.items.food }, eating: game.player.eatT > 0, state: game.state };
+});
+check('food: bought food goes into the bag (not eaten at the counter)', food.inBag.icecream >= 1 && food.inBag.falafel >= 1 && food.healthBefore === 50, JSON.stringify(food.inBag));
+check('food: "eat" in the bag heals and plays the eating animation', food.healthAfter === 80 && (food.left.falafel || 0) === food.inBag.falafel - 1 && food.eating && food.state === 'playing', JSON.stringify(food));
+
 // ---------------------------------------------------------------- traffic drivers + carjacking
 const jack = await g(() => {
   const game = __game, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };

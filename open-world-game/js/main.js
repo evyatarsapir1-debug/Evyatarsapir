@@ -6,7 +6,7 @@ const _navDir = new THREE.Vector3();
 import { heightAt, surfaces } from './world/terrain.js';
 import { Pedestrians } from './npc/pedestrians.js';
 import { InteriorManager } from './world/interiorManager.js';
-import { Economy, fmt } from './game/economy.js';
+import { Economy, fmt, FOODS } from './game/economy.js';
 import { ShopUI, shopKind } from './game/shops.js';
 import { WeaponSystem, WEAPONS, WEAPON_ORDER } from './game/weapons.js';
 import { shared as vehicleMats } from './vehicles/vehicleModels.js';
@@ -351,7 +351,7 @@ class Game {
     switch (id) {
       case 'roni': line ||= 'מה קורה? הכל רגוע פה. תתקשר כשבא לך לצאת.'; break;
       case 'mom': line ||= 'חמוד! אכלת משהו היום? תקפוץ לבקר.'; acts.push({ text: 'אני בסדר, אמא', run: () => 'טוב, תשמור על עצמך ❤️' }); break;
-      case 'falafel': line ||= 'פלאפל הכיכר, שלום!'; acts.push({ text: 'הזמנה לתיק (₪25)', run: () => { if (!this.econ.pay(25, 'פלאפל')) return 'אין מספיק כסף'; this.econ.items.snacks++; return 'נוסף לתיק. בתיאבון!'; } }); break;
+      case 'falafel': line ||= 'פלאפל הכיכר, שלום!'; acts.push({ text: 'הזמנה לתיק (₪25)', run: () => { if (!this.econ.pay(25, 'פלאפל')) return 'אין מספיק כסף'; this.econ.addFood('falafel'); return 'פלאפל בפיתה נוסף לתיק. בתיאבון!'; } }); break;
       case 'mechanic': {
         line = 'מאיה מהמוסך. איך אפשר לעזור?';
         const v = this.player.lastVehicle;
@@ -504,7 +504,19 @@ class Game {
         r.appendChild(b); list.appendChild(r);
       };
       el.querySelector('.smoney').textContent = `${fmt(E.money)} · בריאות ${Math.round(E.health)}`;
-      row(`חטיפים (${E.items.snacks})`, '+20 בריאות', 'לאכול', () => { E.items.snacks--; E.heal(20); return 'ננשנש. +20 בריאות'; }, E.items.snacks < 1 || E.health >= 100);
+      // food bought in shops: eat it from the bag
+      const foods = Object.entries(E.items.food || {}).filter(([, n]) => n > 0);
+      if (!foods.length) row('🍽️ אין אוכל בתיק', 'קונים בגלידה, בפלאפל, בפיצה, בבית קפה…', '—', () => null, true);
+      for (const [id, n] of foods) {
+        const F = FOODS[id]; if (!F) continue;
+        row(`${F.icon} ${F.name} ×${n}`, `+${F.heal} בריאות`, 'לאכול', () => {
+          const eaten = E.eat(id); if (!eaten) return null;
+          p.eating = eaten; p.eatT = 2.2;
+          this.save(); this.closeBag();
+          this.toast(`${eaten.icon} אכלת ${eaten.name} · +${eaten.heal} בריאות`, 2.2);
+          return null;
+        });
+      }
       const v = p.state === 'driving' ? p.vehicle : this.myVehicleNear(8);
       row(`ערכות תיקון (${E.items.repairKit})`, v ? `ל${v.T.name} (נזק ${Math.round(v.damage)}%)` : 'צריך להיות ליד הרכב שלך', 'לתקן', () => { E.items.repairKit--; v.repair(); return 'הרכב תוקן'; }, E.items.repairKit < 1 || !v);
       row(`מצנחים (${E.items.parachute})`, 'נפתח לבד בנפילה מגובה', '—', () => null, true);

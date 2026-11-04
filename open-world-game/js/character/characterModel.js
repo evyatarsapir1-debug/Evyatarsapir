@@ -76,6 +76,7 @@ export class CharacterModel {
     for (const s of [-1, 1]) this.eyes.push(this._mesh(new THREE.SphereGeometry(0.016, 8, 6), M.eye, head, s * 0.04, 0.025, 0.098));
     this.hairGroup = this._pivot(head, 0, 0, 0);
     this.hatGroup = this._pivot(head, 0, 0, 0);
+    this.foodMat = new THREE.MeshStandardMaterial({ roughness: 0.7 });
     // arms
     this.arms = [];
     for (const s of [-1, 1]) {
@@ -85,6 +86,15 @@ export class CharacterModel {
       const lower = this._mesh(cap(0.048, 0.2), M.skin, elbow, 0, -0.13, 0);
       const hand = this._mesh(new THREE.SphereGeometry(0.052, 8, 6), M.skin, elbow, 0, -0.28, 0.01);
       this.arms.push({ sh, upper, elbow, lower, hand, s });
+      if (s === 1) {
+        // food held while eating (shape changes with what you eat)
+        this.food = this._pivot(elbow, 0, -0.3, 0.07);
+        this.foodBall = this._mesh(new THREE.SphereGeometry(0.055, 10, 8), this.foodMat || (this.foodMat = new THREE.MeshStandardMaterial({ roughness: 0.7 })), this.food, 0, 0.05, 0);
+        this.foodCone = this._mesh(new THREE.ConeGeometry(0.04, 0.12, 10), new THREE.MeshStandardMaterial({ color: 0xd9a35c, roughness: 0.8 }), this.food, 0, -0.03, 0);
+        this.foodCone.rotation.x = Math.PI;
+        this.foodBox = this._mesh(new THREE.BoxGeometry(0.13, 0.07, 0.1), this.foodMat, this.food, 0, 0.02, 0);
+        this.food.visible = false;
+      }
     }
     // legs
     this.legs = [];
@@ -245,6 +255,11 @@ export class CharacterModel {
         target.elbowL = -0.6; target.elbowR = -0.6;
       }
       if (s.doorReach) { target.armR = -1.2; target.elbowR = -0.2; }
+      if (s.eat) {
+        // bring the food to the mouth, take a bite, lower a little, repeat
+        const bite = Math.sin(performance.now() * 0.009) * 0.18;
+        target.armR = -1.35 + bite; target.elbowR = -2.05 - bite * 0.5; target.armL = -0.25; target.elbowL = -0.4; target.armSide = 0.1;
+      }
       if (s.aim) { target.armR = s.aim > 1 ? -1.5 : -0.5; target.elbowR = s.aim > 1 ? -0.05 : -0.6; if (s.aim > 1) { target.armL = -1.3; target.elbowL = -0.5; } }
       if (s.attack || (s.stance && speed < 2.5)) {
         // fighting stance: guard up, knees soft, weight forward
@@ -307,6 +322,10 @@ export class CharacterModel {
     this.legs[0].hip.rotation.x = t.legL; this.legs[1].hip.rotation.x = t.legR;
     this.legs[0].knee.rotation.x = t.kneeL; this.legs[1].knee.rotation.x = t.kneeR;
     this.arms[0].sh.rotation.x = t.armL; this.arms[1].sh.rotation.x = t.armR;
+    if (this.food) {
+      this.food.visible = !!s.eat;
+      if (s.eat) { this.foodMat.color.setHex(s.eat.color ?? 0xe2c28a); const cone = s.eat.icon === '🍦'; this.foodBall.visible = cone || s.eat.icon === '🧆'; this.foodCone.visible = cone; this.foodBox.visible = !this.foodBall.visible; }
+    }
     this.arms[0].sh.rotation.z = -t.armSide; this.arms[1].sh.rotation.z = t.armSide;
     this.arms[0].elbow.rotation.x = t.elbowL; this.arms[1].elbow.rotation.x = t.elbowR;
     this.head.rotation.x = -t.spine * 0.6;
