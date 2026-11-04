@@ -230,7 +230,7 @@ body.navon #elevPanel { top: calc(max(10px, env(safe-area-inset-top)) + 52px); }
 .tbtns { position: absolute; right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); display: none; gap: 8px;
   grid-auto-rows: min-content; align-items: end; justify-items: center; }
 .tbtns.show { display: grid; }
-.tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "cyc . ." "fire light ." "jump run ."; }
+.tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "cyc . ." "light fire ." "jump run ."; }
 .tbtns.drive { grid-template-columns: 58px 58px 48px; grid-template-areas: ". cam horn" "brake gas hb"; }
 .tbtns.heli { grid-template-columns: 58px 58px 48px; grid-template-areas: ". . cam" "brake gas ."; }
 .tbtns.plane { grid-template-columns: 58px 58px 48px; grid-template-areas: "dn up cam" "brake gas ."; }
@@ -297,13 +297,13 @@ body.touch #weaponHud { bottom: 70px; }
 .npctag .st { font-size: 10px; font-weight: 800; color: #fff; background: #0008; padding: 1px 6px; border-radius: 6px; }
 /* attack button a little further right */
 /* punch button: pinned to the very right edge of the screen, just above the jump button */
-#tFire { position: fixed; right: max(6px, calc(env(safe-area-inset-right, 0px) - 38px)); bottom: calc(max(8px, env(safe-area-inset-bottom)) + 78px); transform: none; }
+/* punch button: right above the run button */
+#tFire { justify-self: center; transform: none; }
 /* short landscape screens: smaller punch + jump so the punch never reaches the phone button */
 @media (max-height: 360px) {
-  #tFire { width: 50px; height: 50px; bottom: calc(max(8px, env(safe-area-inset-bottom)) + 66px); }
+  #tFire { width: 50px; height: 50px; }
   .tbtns.foot .tbtn.big { width: 60px; height: 60px; }
 }
-.tbtns.foot { grid-template-rows: auto 56px auto; }
 .tbtns.foot [data-btn="cycle"] { justify-self: start; transform: translateX(1px); margin-bottom: 2px; }
 
 /* never let the page zoom (iOS zooms into text fields under 16px and keeps the zoom) */
