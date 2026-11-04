@@ -76,6 +76,21 @@ export class GPS {
     for (let i = bi; i < pts.length - 1; i++) L += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
     return L;
   }
+  // the point the navigation arrow aims at: ~25 m ahead along the route (or the destination itself)
+  aimPoint(px, pz) {
+    if (!this.dest) return null;
+    if (!this.route) return [this.dest.x, this.dest.z];
+    const pts = this.route.points;
+    let bi = 0, bd = Infinity;
+    for (let i = 0; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - px, pts[i][1] - pz); if (d < bd) { bd = d; bi = i; } }
+    let acc = 0;
+    for (let i = bi; i < pts.length - 1; i++) {
+      const seg = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+      if (acc + seg >= 25) { const t = (25 - acc) / (seg || 1); return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t]; }
+      acc += seg;
+    }
+    return [this.dest.x, this.dest.z];
+  }
   update(dt, px, pz) {
     if (!this.dest) return null;
     this.beam.material.opacity = 0.25 + Math.sin(performance.now() * 0.004) * 0.1;

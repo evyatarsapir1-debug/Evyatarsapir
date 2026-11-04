@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import * as WG from './world/worldGen.js';
 const { districtAt } = WG;
+const _navDir = new THREE.Vector3();
 import { heightAt, surfaces } from './world/terrain.js';
 import { Pedestrians } from './npc/pedestrians.js';
 import { InteriorManager } from './world/interiorManager.js';
@@ -865,10 +866,24 @@ class Game {
       ob.textContent = st ? st.text : ''; ob.classList.toggle('show', !!st);
       const gh = $('gpsHud');
       if (this.gps.dest) {
-        const M = this.missions;
-        gh.firstChild.textContent = `${this.gps.dest.name || 'יעד'} · ${(this.gps.remaining(v ? v.x : p.x, v ? v.z : p.z) / 1000).toFixed(2)} ק״מ${M.timer !== null ? ` · ${Math.ceil(M.timer)} שנ׳` : ''}`;
-        gh.classList.add('show');
-      } else gh.classList.remove('show');
+        const M = this.missions, px = v ? v.x : p.x, pz = v ? v.z : p.z;
+        const rem = this.gps.remaining(px, pz);
+        // arrival estimate from a smoothed travel speed (walking / driving floor so it never shows "forever")
+        const sp = v ? Math.abs(v.speed) : Math.hypot(p.vx || 0, p.vz || 0);
+        this._navSpeed = (this._navSpeed ?? sp) * 0.9 + sp * 0.1;
+        const eta = rem / Math.max(this._navSpeed, v ? (v.isAir ? 40 : 9) : 1.6);
+        const etaTxt = eta < 60 ? `${Math.max(1, Math.round(eta / 10) * 10)} שנ׳` : `${Math.round(eta / 60)} דק׳`;
+        gh.querySelector('.gdist').textContent = rem >= 1000 ? `${(rem / 1000).toFixed(1)} ק״מ` : `${Math.round(rem / 10) * 10} מ׳`;
+        gh.querySelector('.geta').textContent = `· ${etaTxt}`;
+        gh.querySelector('.gname').textContent = `${this.gps.dest.name || 'יעד'}${M.timer !== null ? ` · נשארו ${Math.ceil(M.timer)} שנ׳` : ''}`;
+        // arrow: direction of the route ahead relative to where the camera looks
+        const aim = this.gps.aimPoint(px, pz);
+        this.camera.getWorldDirection(_navDir);
+        let rel = Math.atan2(aim[0] - px, aim[1] - pz) - Math.atan2(_navDir.x, _navDir.z);
+        rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+        gh.querySelector('.garrow svg').style.transform = `rotate(${-rel}rad)`;
+        gh.classList.add('show'); document.body.classList.add('navon');
+      } else { gh.classList.remove('show'); document.body.classList.remove('navon'); }
     }
     // district name
     this._dT = (this._dT || 0) + dt;

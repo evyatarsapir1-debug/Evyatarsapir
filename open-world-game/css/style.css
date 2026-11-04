@@ -124,10 +124,22 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 /* phone */
 #phoneBtn { position: absolute; top: max(112px, calc(env(safe-area-inset-top) + 100px)); right: 12px; width: 44px; height: 44px; border-radius: 50%; border: none; background: #0007; pointer-events: auto; padding: 9px; }
 #phoneBadge { position: absolute; top: -2px; left: -2px; min-width: 18px; height: 18px; border-radius: 9px; background: #ff3b30; color: #fff; font-size: 11px; font-style: normal; font-weight: 800; display: none; align-items: center; justify-content: center; padding: 0 4px; }
-#gpsHud { position: absolute; top: max(244px, calc(env(safe-area-inset-top) + 232px)); left: 12px; max-width: 220px; font-size: 12px; font-weight: 700; background: #3b1d5acc; border-radius: 10px; padding: 3px 4px 3px 8px; display: none; align-items: center; gap: 6px; }
+/* navigation: arrow + metres + time to arrive, at the top centre */
+#gpsHud { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 10px;
+  background: #2a1450e6; border: 1.5px solid #b35cff; border-radius: 16px; padding: 6px 8px 6px 14px; box-shadow: 0 4px 14px #0007; white-space: nowrap; }
 #gpsHud.show { display: flex; }
-#gpsHud .gtxt { flex: 1; text-align: center; }
-#gpsCancel { pointer-events: auto; flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid #fff9; background: #c0392bcc; color: #fff; font: inherit; font-size: 13px; font-weight: 800; padding: 0; cursor: pointer; }
+#gpsHud .garrow { width: 46px; height: 46px; border-radius: 50%; background: #b35cff; display: flex; align-items: center; justify-content: center; flex: none; }
+#gpsHud .garrow svg { width: 30px; height: 30px; fill: #fff; }
+#gpsHud .ginfo { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+#gpsHud .gmain { display: flex; gap: 8px; align-items: baseline; }
+#gpsHud .gdist { font-size: 21px; font-weight: 900; color: #fff; }
+#gpsHud .geta { font-size: 15px; font-weight: 800; color: #ffd27a; }
+#gpsHud .gname { font-size: 11px; opacity: .85; max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+#gpsCancel { pointer-events: auto; flex: none; width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid #fff9; background: #c0392bcc; color: #fff; font: inherit; font-size: 14px; font-weight: 800; padding: 0; cursor: pointer; }
+/* keep other top-centre messages below the navigation */
+body.navon #prompt { top: calc(max(10px, env(safe-area-inset-top)) + 70px); }
+body.navon #objective { top: calc(max(10px, env(safe-area-inset-top)) + 122px); }
+body.navon #elevPanel { top: calc(max(10px, env(safe-area-inset-top)) + 70px); }
 #objective { position: absolute; top: max(64px, calc(env(safe-area-inset-top) + 52px)); left: 50%; transform: translateX(-50%); max-width: min(520px, 70vw); text-align: center; font-size: 14px; font-weight: 700;
   background: #0009; border-right: 3px solid #ff9f0a; border-radius: 8px; padding: 5px 12px; display: none; }
 #objective.show { display: block; }
@@ -267,7 +279,6 @@ body.touch #weaponHud { bottom: 70px; }
   .pscreen { padding: 8px 6px; }
   .pwidget { margin-bottom: 8px; }
   .pclock { font-size: 34px !important; }
-  #gpsHud { top: max(196px, calc(env(safe-area-inset-top) + 196px)); }
 }
 
 /* fight system: status bar + speech bubble above people (no gore, just a clear meter) */
