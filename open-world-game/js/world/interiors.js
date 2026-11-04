@@ -528,7 +528,7 @@ export const FLOOR_H = 3.2;
 function apartmentSpec(b, F, spec, piece, lamp, furn) {
   const C = spec.colliders, y0 = CURB_H, L = F.L, D = F.D, hl = L / 2;
   const usable = b.tower && b.setback ? b.h * 0.62 : b.h;
-  const nF = Math.max(2, Math.min(b.tower ? 15 : 12, Math.floor((usable - 0.5) / FLOOR_H)));
+  const nF = Math.max(2, Math.min(6, Math.floor((usable - 0.5) / FLOOR_H))); // every elevator serves up to 6 floors (ק + 5)
   const topY = y0 + nF * FLOOR_H;
   spec.door = { face: b.face, w: 2.2, h: 2.7 };
   spec.doors = []; spec.floorRanges = [];
@@ -598,7 +598,7 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
   };
   for (let k = 0; k < nF; k++) {
     const y = floors[k], yb = y + FLOOR_H - 0.25;
-    const office = b.tower && nF > 6 && k >= 1 && k <= 2;   // towers: offices low down, homes above
+    const office = b.tower && nF >= 5 && k === 1;   // towers: an office floor low down, homes above
     const fr = mark();
     // slab of this floor (k>0) with the shaft opening, plus the corridor floor tint
     if (k > 0) {
