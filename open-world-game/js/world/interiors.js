@@ -6,7 +6,7 @@ import { CURB_H, faceVector } from './layout.js';
 
 const T = 0.3; // wall thickness
 const CAFE = ['קפה', 'גלידת', 'מאפיית', 'פיצה', 'בורגר', 'סושי', 'פלאפל', 'מסעדת', 'יין'];
-const CLOTHES = ['אופנת', 'בגדי', 'נעלי', 'תכשיטי', 'משקפי', 'מספרת'];
+const CLOTHES = ['חנות בגדים', 'אופנת', 'בגדי', 'נעלי', 'תכשיטי', 'משקפי', 'מספרת'];
 
 // local frame of a building relative to its door face:
 //  a = lateral coordinate (-L/2..L/2), b = depth from the inner face of the front wall (0..D)
@@ -191,6 +191,90 @@ function villaSpec(b, F, spec, piece, lamp, furn, C, y0) {
   for (const a of [-7, 0, 6]) for (const d of [3, 9]) lamp(a, d, top - 0.03);
 }
 
+// A real clothes store: racks of hanging clothes, a shoe wall, hat stands, mannequins, a table of folded
+// shirts and fitting rooms. All boxes in the shop's local frame (a = across, d = depth from the door).
+const GARMENT = [0xc0392b, 0x2e86c1, 0xf2f2f2, 0x1d1d1f, 0x27ae60, 0xf1c40f, 0x8e44ad, 0xe67e22, 0x34495e, 0xd35480, 0x95a5a6, 0x6e4b3a, 0x1f2d4d, 0xc8b48a];
+function clothesStore(F, spec, C, y0, L, D, hl, cw, furn) {
+  const box = (a0, a1, d0, d1, ya, yb, color, mat = 'prop') => spec.boxes.push(boxFromRect(F.rect(a0, a1, d0, d1), y0 + ya, y0 + yb, color, mat));
+  const solid = (a0, a1, d0, d1, h) => C.push(colFromRect(F.rect(a0, a1, d0, d1), y0, y0 + h));
+  let k = 0;
+  const dEnd = D - 1.8;                                         // racks stop before the fitting rooms
+  // ---- shoe wall (left wall): four shelves of shoe pairs
+  for (const sh of [0.25, 0.7, 1.15, 1.6]) box(-hl, -hl + 0.38, 1.0, dEnd, sh, sh + 0.03, 0xe8e2d6);
+  box(-hl, -hl + 0.04, 1.0, dEnd, 0, 2.0, 0xd8cfc0);
+  for (const sh of [0.25, 0.7, 1.15, 1.6]) for (let d = 1.25; d < dEnd - 0.2; d += 0.42) {
+    const c = GARMENT[(k++ * 5) % GARMENT.length], boot = k % 5 === 0;
+    for (const off of [-0.06, 0.06]) {
+      box(-hl + 0.05, -hl + 0.33, d + off - 0.045, d + off + 0.045, sh + 0.03, sh + (boot ? 0.2 : 0.11), c);
+      box(-hl + 0.05, -hl + 0.34, d + off - 0.047, d + off + 0.047, sh + 0.03, sh + 0.05, boot ? 0x2a1d14 : 0xf4f4f4);
+    }
+  }
+  solid(-hl, -hl + 0.4, 1.0, dEnd, 2.0);
+  // ---- clothes racks (rails with hangers), left half of the room so the walk to the counter stays clear
+  for (let a = -hl + 1.5; a < -0.9; a += 1.45) {
+    const d0 = 1.4, d1 = dEnd - 0.3;
+    for (const d of [d0, d1]) box(a - 0.02, a + 0.02, d - 0.02, d + 0.02, 0, 1.6, 0xb8bec4, 'metal');
+    box(a - 0.25, a + 0.25, d0 - 0.15, d0 + 0.15, 0, 0.03, 0x8a9096, 'metal'); box(a - 0.25, a + 0.25, d1 - 0.15, d1 + 0.15, 0, 0.03, 0x8a9096, 'metal');
+    box(a - 0.015, a + 0.015, d0, d1, 1.56, 1.6, 0xc9ced3, 'metal');
+    for (let d = d0 + 0.12; d < d1 - 0.08; d += 0.11) {
+      const c = GARMENT[(k++ * 5 + 3) % GARMENT.length], pants = (k % 6) === 0, coat = (k % 9) === 0;
+      box(a - 0.008, a + 0.008, d - 0.008, d + 0.008, 1.5, 1.57, 0x3b3b3b);                    // hook
+      box(a - 0.2, a + 0.2, d - 0.01, d + 0.01, 1.47, 1.5, 0x6b4a2f);                           // hanger
+      const yb = 1.47, ya = pants ? 0.55 : coat ? 0.6 : 0.85;
+      box(a - (pants ? 0.17 : 0.23), a + (pants ? 0.17 : 0.23), d - 0.02, d + 0.02, ya, yb, c);
+      if (!pants) box(a - 0.27, a + 0.27, d - 0.018, d + 0.018, yb - 0.32, yb - 0.04, c);       // shoulders/sleeves
+    }
+    solid(a - 0.28, a + 0.28, d0 - 0.15, d1 + 0.15, 1.6);
+  }
+  // ---- table of folded t-shirts by the entrance (right)
+  const ta0 = Math.min(hl - 1.0, 1.0), ta1 = Math.min(hl - 0.3, 2.4);
+  if (ta1 - ta0 > 0.8) {
+    box(ta0, ta1, 1.0, 1.9, 0.72, 0.78, 0xd9c6a5); box(ta0 + 0.05, ta1 - 0.05, 1.05, 1.85, 0, 0.72, 0xc7b18c);
+    for (let a = ta0 + 0.25; a < ta1 - 0.2; a += 0.38) for (const d of [1.22, 1.62]) {
+      const n = 3 + ((k++) % 4);
+      for (let i = 0; i < n; i++) box(a - 0.15, a + 0.15, d - 0.13, d + 0.13, 0.78 + i * 0.045, 0.78 + i * 0.045 + 0.04, GARMENT[(k + i * 3) % GARMENT.length]);
+    }
+    solid(ta0, ta1, 1.0, 1.9, 0.8);
+  }
+  // ---- hat stands (right wall, by the window) with hats on pegs
+  const ha = hl - 0.25;
+  for (let d = 2.4; d < Math.min(D - 3.4, 6.5); d += 0.55) for (const hy of [1.25, 1.65]) {
+    const c = GARMENT[(k++ * 3) % GARMENT.length], fed = k % 3 === 0;
+    box(ha - 0.02, ha + 0.25, d - 0.015, d + 0.015, hy - 0.02, hy, 0x8a9096, 'metal');
+    box(ha - 0.28, ha - 0.02, d - 0.15, d + 0.15, hy, hy + 0.015, c);                          // brim
+    box(ha - 0.22, ha - 0.08, d - 0.08, d + 0.08, hy + 0.015, hy + (fed ? 0.13 : 0.1), c);   // crown
+    if (fed) box(ha - 0.225, ha - 0.075, d - 0.085, d + 0.085, hy + 0.02, hy + 0.045, 0x1d1d1f);
+  }
+  box(hl - 0.04, hl, 2.2, Math.min(D - 3.2, 6.7), 0.9, 2.0, 0xd8cfc0);
+  // ---- mannequins in the shop window wearing outfits
+  const manq = (a, d, top, bottom, hat) => {
+    box(a - 0.2, a + 0.2, d - 0.2, d + 0.2, 0, 0.03, 0x555a60, 'metal');
+    box(a - 0.02, a + 0.02, d - 0.02, d + 0.02, 0.03, 0.15, 0x8a9096, 'metal');
+    for (const s of [-1, 1]) box(a + s * 0.09 - 0.06, a + s * 0.09 + 0.06, d - 0.07, d + 0.07, 0.15, 0.95, bottom);
+    box(a - 0.19, a + 0.19, d - 0.11, d + 0.11, 0.95, 1.5, top);
+    for (const s of [-1, 1]) box(a + s * 0.24 - 0.045, a + s * 0.24 + 0.045, d - 0.05, d + 0.05, 0.95, 1.48, top);
+    box(a - 0.04, a + 0.04, d - 0.04, d + 0.04, 1.5, 1.56, 0xe9e4dc);
+    box(a - 0.08, a + 0.08, d - 0.085, d + 0.085, 1.56, 1.78, 0xe9e4dc);
+    if (hat) { box(a - 0.15, a + 0.15, d - 0.15, d + 0.15, 1.76, 1.775, hat); box(a - 0.09, a + 0.09, d - 0.09, d + 0.09, 1.775, 1.88, hat); }
+    solid(a - 0.25, a + 0.25, d - 0.25, d + 0.25, 1.8);
+  };
+  manq(-hl + 0.75, 0.6, 0x1d1d1f, 0x1d1d1f, 0x1d1d1f);          // black suit + fedora
+  if (hl > 2.6) manq(-hl + 1.65, 0.6, 0xc0392b, 0x2e86c1, null); // red tee + jeans
+  if (hl > 3.2) manq(hl - 0.75, 0.6, 0xf1c40f, 0xc8b48a, 0x2e86c1);
+  // ---- fitting rooms at the back-left (two cubicles with curtains)
+  const fa0 = -hl, fw = Math.min(1.2, (L - cw - 2.2) / 2);
+  if (fw > 0.8) for (let i = 0; i < 2; i++) {
+    const a0 = fa0 + i * fw, a1 = a0 + fw;
+    box(a1 - 0.04, a1, D - 1.5, D, 0, 2.1, 0xe8e2d6);
+    box(a0 + 0.04, a1 - 0.04, D - 1.52, D - 1.48, 0.25, 2.05, i ? 0x7a1f2b : 0x1f4e79);
+    box(a0 + 0.04, a1 - 0.04, D - 1.53, D - 1.47, 2.05, 2.09, 0xc9ced3, 'metal');
+    box(a0 + 0.2, a1 - 0.2, D - 0.06, D - 0.02, 0.4, 1.9, 0xcfe3ef, 'glass');
+  }
+  // ---- entrance mat, plant
+  box(-0.9, 0.9, 0.1, 1.0, 0, 0.012, 0x3a3f45);
+  for (const [a, d] of [[hl - 0.35, D - 0.35]]) { box(a - 0.2, a + 0.2, d - 0.2, d + 0.2, 0, 0.4, 0xb5653d); box(a - 0.32, a + 0.32, d - 0.32, d + 0.32, 0.4, 1.2, 0x3f7a32); }
+}
+
 export function interiorSpec(b) {
   if (b._spec) return b._spec;
   const F = frame(b);
@@ -226,6 +310,8 @@ export function interiorSpec(b) {
         piece(F, spec, 'chair', a, dd - 0.8, y0, '+d', 0x2f2f2f, false);
         piece(F, spec, 'chair', a, dd + 0.8, y0, '-d', 0x2f2f2f, false);
       }
+    } else if (isClothes && /חנות בגדים|אופנת|בגדי/.test(b.sign || '')) {
+      clothesStore(F, spec, C, y0, L, D, hl, cw, furn);
     } else if (isClothes) {
       for (let dd = 2; dd < D - 3; dd += 2.4) {
         furn(-hl + 0.4, -hl + 0.7, dd, dd + 1.8, y0 + 1.5, y0 + 1.6, 0x888888, false, 'metal');
@@ -355,7 +441,7 @@ export function interiorSpec(b) {
     furn(-hl, -1.8, dm - 0.1, dm, ym, ym + 1.0, 0xbfd9e6, true, 'glass');
     furn(1.8, hl, dm - 0.1, dm, ym, ym + 1.0, 0xbfd9e6, true, 'glass');
     // shop units along the back wall on both levels, with signs
-    const names = ['אופנת אזורה', 'נעלי הצעד', 'אלקטרו פלוס', 'תכשיטי אור', 'צעצועי קשת', 'ספרים ועוד', 'בורגר חוף', 'גלידת שקיעה'];
+    const names = ['חנות בגדים', 'נעלי הצעד', 'אלקטרו פלוס', 'תכשיטי אור', 'צעצועי קשת', 'ספרים ועוד', 'בורגר חוף', 'גלידת שקיעה'];
     let k = 0;
     for (const [ya, yb] of [[y0, y0 + H1 - 0.4], [ym, top - 1]]) {
       for (let a = -hl + 1; a + 7 < hl; a += 8.5) {
@@ -422,7 +508,7 @@ function terminalSpec(b, F, spec, piece, lamp, furn) {
     wp(ac, 20);
   };
   shop(-45, 'דיוטי פרי', [0xc0392b, 0x8e44ad, 0x2e86c1]);
-  shop(-20, 'אופנת אזורה', [0x27ae60, 0xf1c40f, 0xe67e22]);
+  shop(-20, 'חנות בגדים', [0x27ae60, 0xf1c40f, 0xe67e22]);
   // restrooms (real room with a door and stalls)
   const ra0 = 52, ra1 = 68;
   const wallR = (a0, a1, d0, d1) => { const r = F.rect(a0, a1, d0, d1); spec.boxes.push(boxFromRect(r, y0, y0 + 3.2, 0xd5e1ea, 'wall')); C.push(colFromRect(r, y0, y0 + 3.2)); };

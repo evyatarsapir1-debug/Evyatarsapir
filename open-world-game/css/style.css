@@ -120,6 +120,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 .sw2 { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff6; flex: none; }
 .sbuy { font: inherit; font-weight: 800; min-width: 86px; padding: 8px 10px; border-radius: 10px; border: none; background: linear-gradient(90deg, #ff6a3d, #ff9a3d); color: #fff; cursor: pointer; font-variant-numeric: tabular-nums; }
 .sbuy:disabled { background: #ffffff22; color: #fff8; cursor: default; }
+/* clothes / wardrobe / barber: panel at the side, see yourself in the free space; tap a row to try it on */
+#shopPanel.side { justify-content: flex-start; background: transparent; }
+#shopPanel.side .creator-panel { margin: 0 max(12px, env(safe-area-inset-left)); width: min(400px, 52vw); max-height: calc(100vh - 24px); }
+.srow.can-try { cursor: pointer; border-radius: 10px; padding-inline: 6px; }
+.srow.can-try:hover { background: #ffffff0d; }
+.srow.trying { background: #ff8a3d2e; outline: 1.5px solid #ff8a3d; }
+.srow.can-try .sname b::after { content: ' 👁'; font-size: 11px; opacity: .6; }
 
 /* phone */
 #phoneBtn { position: absolute; top: max(112px, calc(env(safe-area-inset-top) + 100px)); right: 12px; width: 44px; height: 44px; border-radius: 50%; border: none; background: #0007; pointer-events: auto; padding: 9px; }

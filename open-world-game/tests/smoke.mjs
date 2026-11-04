@@ -252,7 +252,7 @@ await shot('10-apartment-corridor');
 const shopRes = await g(() => {
   const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
   const out = {};
-  for (const [cell, sign] of [[[7, 5], 'אופנת אזורה'], [[2, 5], 'ארסנל הצללים'], [[7, 6], 'פלאפל הכיכר']]) {
+  for (const [cell, sign] of [[[7, 5], 'חנות בגדים'], [[2, 5], 'ארסנל הצללים'], [[7, 6], 'פלאפל הכיכר']]) {
     const b = __wg.cellData(cell[0], cell[1]).buildings.find((q) => q.sign === sign);
     const c = __wg.specOf(b).counter;
     game.teleport(c.pt[0], c.pt[1], c.yaw + Math.PI);
@@ -271,7 +271,7 @@ const shopRes = await g(() => {
   out.weapon = game.econ.equipped;
   return out;
 });
-check('clothing store: buy and wear', shopRes['אופנת אזורה'].open && shopRes['אופנת אזורה'].paid > 0 && shopRes['אופנת אזורה'].changedClothes, JSON.stringify(shopRes['אופנת אזורה']));
+check('clothing store: buy and wear', shopRes['חנות בגדים'].open && shopRes['חנות בגדים'].paid > 0 && shopRes['חנות בגדים'].changedClothes, JSON.stringify(shopRes['חנות בגדים']));
 check('fictional gear store: buy an item', shopRes['ארסנל הצללים'].paid > 0 && !!shopRes.weapon, `${shopRes['ארסנל הצללים'].paid}₪, equipped ${shopRes.weapon}`);
 check('food shop: buy food', shopRes['פלאפל הכיכר'].paid > 0 && shopRes['פלאפל הכיכר'].closed);
 const fire = await g(() => {
@@ -481,7 +481,7 @@ const home = await g(() => {
   let wardrobe = null;
   if (V) { const w = V.spec.wardrobe; game.teleport(w.pt[0], w.pt[1], 0, w.y + 0.3); step(10); wardrobe = game.player.prompt?.text; }
   const m0 = game.econ.money;
-  game.openShop('clothes', 'אופנת אזורה');
+  game.openShop('clothes', 'חנות בגדים');
   const prices = [...document.querySelectorAll('#shopPanel .srow')].map((r) => [r.querySelector('b').textContent, r.querySelector('.sbuy').textContent]);
   const own0 = game.econ.wardrobe.length;
   const btn = [...document.querySelectorAll('#shopPanel .srow')].find((r) => r.querySelector('b').textContent.includes('חליפה') && r.querySelector('.sbuy').textContent !== 'ללבוש')?.querySelector('.sbuy');
@@ -495,6 +495,28 @@ check('map: airport, marina, weapons, ice cream, library, clothes and my home ar
 check('my home: villa with an interior, a swimmable pool and a wardrobe', home.villa && home.swimming && home.wardrobe === 'ארון בגדים', JSON.stringify({ villa: home.villa, swim: home.swimming, wardrobe: home.wardrobe, here: home.here }));
 check('clothes shop: suits ₪2,200–2,500, t-shirts ₪100/₪200, shorts ₪80/₪120', price('חליפה').length >= 4 && price('חליפה').every((p) => p >= 2200 && p <= 2500) && new Set(price('חולצה קצרה')).size === 2 && price('חולצה קצרה').every((p) => p === 100 || p === 200) && price('מכנס קצר').every((p) => p === 80 || p === 120), JSON.stringify(home.prices.slice(0, 16)));
 check('clothes shop: buying a suit dresses you and saves it in the wardrobe', home.paid >= 2200 && home.top === 'suit' && home.owned === 1, JSON.stringify({ paid: home.paid, top: home.top, owned: home.owned }));
+
+// ---------------------------------------------------------------- clothes store: try on before buying, hats + shoes
+const tryon = await g(() => {
+  const game = __game, m0 = game.econ.money, app0 = JSON.stringify(game.player.model.app);
+  game.openShop('clothes', 'חנות בגדים');
+  const rows = [...document.querySelectorAll('#shopPanel .srow')];
+  const priceOf = (txt) => rows.filter((r) => r.querySelector('b').textContent.includes(txt) && r.querySelector('.sbuy').textContent !== 'ללבוש').map((r) => +r.querySelector('.sbuy').textContent.replace(/[^\d]/g, ''));
+  const hats = [...priceOf('כובע מצחייה'), ...priceOf('כובע טמבל'), ...priceOf('כובע גרב'), ...priceOf('כובע לבד')];
+  const shoes = [...priceOf('נעלי ספורט'), ...priceOf('נעלי עור'), ...priceOf('מגפונים')];
+  rows.find((r) => r.textContent.includes('כובע לבד')).click();
+  const preview = game.player.model.app.hat, paidForPreview = m0 - game.econ.money;
+  rows.find((r) => r.textContent.includes('כובע מצחייה') && r.querySelector('.sbuy').textContent !== 'ללבוש').querySelector('.sbuy').click();
+  const bought = game.player.model.app.hat;
+  game.shop.close();
+  const afterClose = game.player.model.app.hat;
+  game.openShop('wardrobe', 'הבית שלי');
+  const inWardrobe = [...document.querySelectorAll('#shopPanel .srow')].some((r) => r.textContent.includes('כובע מצחייה'));
+  game.shop.close();
+  return { hats, shoes, preview, paidForPreview, bought, afterClose, inWardrobe, state: game.state };
+});
+check('clothes store: hats ₪60/₪100 and shoes ₪120/₪250', tryon.hats.length >= 6 && tryon.hats.every((p) => p === 60 || p === 100) && new Set(tryon.hats).size === 2 && tryon.shoes.length >= 6 && tryon.shoes.every((p) => p === 120 || p === 250) && new Set(tryon.shoes).size === 2, JSON.stringify({ hats: tryon.hats, shoes: tryon.shoes }));
+check('clothes store: tap an item to try it on (free), buy keeps it, it is in the home wardrobe', tryon.preview === 'fedora' && tryon.paidForPreview === 0 && tryon.bought === 'cap' && tryon.afterClose === 'cap' && tryon.inWardrobe && tryon.state === 'playing', JSON.stringify(tryon));
 
 // ---------------------------------------------------------------- traffic drivers + carjacking
 const jack = await g(() => {

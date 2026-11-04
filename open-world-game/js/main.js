@@ -270,7 +270,7 @@ class Game {
       { short: 'נמל תעופה', name: 'נמל התעופה אזורה — טרמינל', icon: '✈', color: '#1f5fa8', x: -300, z: 514 },
       { short: 'מרינה', name: 'מרינה מזרח', icon: '⚓', color: '#0e7c86', x: 2500, z: 510 },
       { short: 'חנות נשקים', name: 'חנות נשקים — ארסנל הצללים', icon: '🎯', color: '#5b2c6f', ...door(find([[2, 5]], (b) => b.sign === 'ארסנל הצללים')) },
-      { short: 'חנות בגדים', name: 'חנות בגדים — אופנת אזורה', icon: '👕', color: '#c2185b', ...door(find([[7, 5]], (b) => b.sign === 'אופנת אזורה')) },
+      { short: 'חנות בגדים', name: 'חנות בגדים — מרכז העיר', icon: '👕', color: '#c2185b', ...door(find([[7, 5]], (b) => b.sign === 'חנות בגדים')) },
       { short: 'גלידה', name: 'גלידת שקיעה', icon: '🍦', color: '#f39c12', ...door(find([[7, 3]], (b) => b.sign === 'גלידת שקיעה')) },
       { short: 'ספרייה', name: 'ספריית העיר', icon: '📚', color: '#6d4c41', ...door(find([[2, 3]], (b) => b.sign === 'ספריית העיר')) },
     ].filter((L) => Number.isFinite(L.x));
@@ -452,8 +452,31 @@ class Game {
     }
     return best;
   }
-  openShop(kind, name) { this.state = 'shop'; this.shop.show(kind, name); }
-  closeShop() { if (this.state === 'shop') { this.state = 'playing'; this.input.endFrame(); this.clock.getDelta(); } }
+  openShop(kind, name) {
+    this.state = 'shop'; this.shop.show(kind, name);
+    // fitting room: the character turns around to face you so you can see what you try on
+    if (this.shop.tryOn) { this._fit = { facing: this.player.facing, yaw: this.player.facing + Math.PI }; this.player.facing += Math.PI; }
+  }
+  closeShop() {
+    if (this.state !== 'shop') return;
+    if (this._fit) { this.player.facing = this._fit.facing; this.player.object.rotation.y = this.player.facing; this._fit = null; }
+    this.state = 'playing'; this.input.endFrame(); this.clock.getDelta();
+  }
+  _fittingFrame(dt) {
+    const p = this.player, f = p.facing;
+    p.model.animate(dt, { speed: 0, grounded: true, mode: 'foot' });
+    p.object.position.set(p.x, p.y, p.z); p.object.rotation.y = f;
+    this.camera.position.set(p.x + Math.sin(f) * 2.5, p.y + 1.3, p.z + Math.cos(f) * 2.5);
+    this.camera.lookAt(p.x, p.y + 0.95, p.z);
+    const r = document.querySelector('#shopPanel .creator-panel')?.getBoundingClientRect();
+    const W = innerWidth, H = innerHeight;
+    let cx = W / 2;
+    if (r && r.width) { const lf = r.left, rf = W - r.right; if (Math.max(lf, rf) > 120) cx = rf >= lf ? (r.right + W) / 2 : r.left / 2; }
+    if (Math.abs(cx - W / 2) > 2) this.camera.setViewOffset(W, H, -(cx - W / 2), 0, W, H); else if (this.camera.view?.enabled) this.camera.clearViewOffset();
+    if (!this.creatorLight) { this.creatorLight = new THREE.PointLight(0xfff4e6, 0, 12, 1.6); this.scene.add(this.creatorLight); }
+    this.creatorLight.intensity = 30;
+    this.creatorLight.position.set(p.x + Math.sin(f + 0.5) * 1.8, p.y + 2.2, p.z + Math.cos(f + 0.5) * 1.8);
+  }
   hurt(n, why) {
     if (n <= 0) return;
     this.econ.hurt(n);
@@ -592,6 +615,7 @@ class Game {
     this.fpsAvg = this.fpsAvg * 0.95 + (1 / Math.max(dt, 0.001)) * 0.05;
     if (this.state === 'menu' || this.state === 'exit') this._menuFrame(dt);
     else if (this.state === 'creator') this._creatorFrame(dt);
+    else if (this.state === 'shop' && this.shop.tryOn) this._fittingFrame(dt);
     else if (this.state === 'playing') this._playFrame(dt);
     this._lights();
     this.renderer.render(this.scene, this.camera);

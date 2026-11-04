@@ -11,6 +11,11 @@ export const TOP_STYLES = ['tshirt', 'jacket', 'tank', 'hoodie', 'suit'];
 export const TOP_NAMES = { tshirt: 'חולצת טי', jacket: 'ז׳קט', tank: 'גופייה', hoodie: 'קפוצ׳ון', suit: 'חליפה' };
 export const BOTTOM_STYLES = ['jeans', 'shorts', 'skirt', 'pants'];
 export const BOTTOM_NAMES = { jeans: 'ג׳ינס', shorts: 'מכנס קצר', skirt: 'חצאית', pants: 'מכנס בד' };
+export const HAT_STYLES = ['none', 'cap', 'beanie', 'fedora', 'bucket'];
+export const HAT_NAMES = { none: 'בלי כובע', cap: 'כובע מצחייה', beanie: 'כובע גרב', fedora: 'כובע לבד', bucket: 'כובע טמבל' };
+export const SHOE_STYLES = ['sneaker', 'boot', 'formal'];
+export const SHOE_NAMES = { sneaker: 'נעלי ספורט', boot: 'מגפונים', formal: 'נעלי עור' };
+export const SHOE_COLORS = [0xf2f2f2, 0x1d1d1f, 0xc0392b, 0x2e86c1, 0x6e4b3a, 0x95a5a6, 0xf1c40f, 0x27ae60, 0xd35480];
 export const CLOTH_COLORS = [0xffffff, 0x1d1d1f, 0xc0392b, 0x2e86c1, 0x27ae60, 0xf1c40f, 0x8e44ad, 0xe67e22, 0x34495e, 0x95a5a6, 0x2c3e50, 0x16a085, 0xd35480, 0x6e4b3a,
   0xc8b48a, 0x6d1a2a, 0x3d4148, 0x1f2d4d, 0xf3efe6]; // 14 beige, 15 bordeaux, 16 charcoal, 17 navy, 18 cream
 
@@ -33,6 +38,9 @@ export class CharacterModel {
       top: new THREE.MeshStandardMaterial({ roughness: 0.85 }),
       bottom: new THREE.MeshStandardMaterial({ roughness: 0.9 }),
       shoes: new THREE.MeshStandardMaterial({ roughness: 0.6 }),
+      sole: new THREE.MeshStandardMaterial({ roughness: 0.8, color: 0xf4f4f4 }),
+      hat: new THREE.MeshStandardMaterial({ roughness: 0.8 }),
+      hatBand: new THREE.MeshStandardMaterial({ roughness: 0.6, color: 0x1d1d1f }),
       eye: new THREE.MeshBasicMaterial({ color: 0x111111 }),
     };
     this._build();
@@ -67,6 +75,7 @@ export class CharacterModel {
     this.eyes = [];
     for (const s of [-1, 1]) this.eyes.push(this._mesh(new THREE.SphereGeometry(0.016, 8, 6), M.eye, head, s * 0.04, 0.025, 0.098));
     this.hairGroup = this._pivot(head, 0, 0, 0);
+    this.hatGroup = this._pivot(head, 0, 0, 0);
     // arms
     this.arms = [];
     for (const s of [-1, 1]) {
@@ -85,7 +94,10 @@ export class CharacterModel {
       const knee = this._pivot(hip, 0, -0.43, 0);
       const lower = this._mesh(cap(0.065, 0.3), M.bottom, knee, 0, -0.2, 0);
       const foot = this._mesh(new THREE.BoxGeometry(0.1, 0.07, 0.25), M.shoes, knee, 0, -0.44, 0.05);
-      this.legs.push({ hip, upper, knee, lower, foot, s });
+      const sole = this._mesh(new THREE.BoxGeometry(0.106, 0.026, 0.262), M.sole, knee, 0, -0.482, 0.052);
+      const shaft = this._mesh(new THREE.CylinderGeometry(0.074, 0.07, 0.2, 10), M.shoes, knee, 0, -0.34, 0);
+      const lace = this._mesh(new THREE.BoxGeometry(0.06, 0.012, 0.1), M.sole, knee, 0, -0.402, 0.1);
+      this.legs.push({ hip, upper, knee, lower, foot, sole, shaft, lace, s });
     }
     this.skirt = this._mesh(new THREE.CylinderGeometry(0.17, 0.27, 0.36, 12, 1, true), M.bottom, hips, 0, -0.15, 0);
     this.skirt.material = M.bottom;
@@ -138,6 +150,33 @@ export class CharacterModel {
     }
   }
 
+  _hat(style) {
+    const g = this.hatGroup, M = this.mats;
+    while (g.children.length) { const c = g.children.pop(); c.geometry.dispose(); }
+    const add = (geo, mat, x, y, z, rx = 0) => { const m = this._mesh(geo, mat, g, x, y, z); m.rotation.x = rx; return m; };
+    switch (style) {
+      case 'cap':
+        add(new THREE.SphereGeometry(0.134, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), M.hat, 0, 0.015, -0.005).scale.set(0.95, 0.95, 1.02);
+        add(new THREE.CylinderGeometry(0.11, 0.115, 0.012, 16, 1, false, -Math.PI * 0.45, Math.PI * 0.9), M.hat, 0, 0.03, 0.06, 0.12).scale.set(1, 1, 1.25);
+        add(new THREE.SphereGeometry(0.012, 6, 4), M.hat, 0, 0.142, -0.005);
+        break;
+      case 'beanie':
+        add(new THREE.SphereGeometry(0.136, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), M.hat, 0, 0.02, -0.005).scale.set(0.96, 1.12, 1.04);
+        add(new THREE.CylinderGeometry(0.133, 0.133, 0.045, 16, 1, true), M.hat, 0, 0.0, -0.005).scale.set(0.96, 1, 1.04);
+        break;
+      case 'fedora':
+        add(new THREE.CylinderGeometry(0.205, 0.205, 0.012, 24), M.hat, 0, 0.06, -0.005);
+        add(new THREE.CylinderGeometry(0.098, 0.118, 0.13, 18), M.hat, 0, 0.13, -0.005).scale.set(0.95, 1, 1.05);
+        add(new THREE.CylinderGeometry(0.119, 0.12, 0.028, 18), M.hatBand, 0, 0.08, -0.005).scale.set(0.96, 1, 1.06);
+        break;
+      case 'bucket':
+        add(new THREE.CylinderGeometry(0.115, 0.128, 0.11, 18), M.hat, 0, 0.1, -0.005).scale.set(0.95, 1, 1.05);
+        add(new THREE.CylinderGeometry(0.13, 0.19, 0.05, 20, 1, true), M.hat, 0, 0.03, -0.005);
+        break;
+      default: break;
+    }
+  }
+
   setAppearance(app) {
     this.app = { ...app };
     const M = this.mats;
@@ -145,8 +184,14 @@ export class CharacterModel {
     M.hair.color.setHex(HAIR_COLORS[app.hairColor] ?? HAIR_COLORS[0]);
     M.top.color.setHex(CLOTH_COLORS[app.topColor] ?? 0x2e86c1);
     M.bottom.color.setHex(CLOTH_COLORS[app.bottomColor] ?? 0x34495e);
-    M.shoes.color.setHex(app.shoes === 1 ? 0x1d1d1f : 0xf2f2f2);
+    M.shoes.color.setHex(SHOE_COLORS[app.shoes] ?? SHOE_COLORS[0]);
     this._hair(app.hairStyle);
+    M.hat.color.setHex(CLOTH_COLORS[app.hatColor] ?? 0x1d1d1f);
+    if (this._hatKey !== app.hat) { this._hatKey = app.hat; this._hat(app.hat); }
+    this.hairGroup.visible = !(app.hat === 'beanie' || app.hat === 'bucket') || app.hairStyle === 'long' || app.hairStyle === 'ponytail';
+    const shoeStyle = app.shoeStyle || 'sneaker';
+    M.sole.color.setHex(shoeStyle === 'sneaker' ? 0xf4f4f4 : 0x2a1d14);
+    M.shoes.roughness = shoeStyle === 'formal' ? 0.3 : 0.6;
     const top = app.top;
     for (const a of this.arms) {
       a.upper.material = top === 'tank' ? M.skin : M.top;
@@ -161,6 +206,7 @@ export class CharacterModel {
       l.lower.material = b === 'shorts' || b === 'skirt' ? M.skin : M.bottom;
     }
     this.skirt.visible = b === 'skirt';
+    for (const l of this.legs) { l.shaft.visible = shoeStyle === 'boot'; l.lace.visible = shoeStyle === 'sneaker'; }
     const h = clamp(app.height || 1, 0.85, 1.15), w = clamp(app.build || 1, 0.8, 1.25);
     this.body.scale.set(w, h, w);
     this.torso.scale.set(1.18 * w, 1, 0.75 * (0.9 + w * 0.1));
