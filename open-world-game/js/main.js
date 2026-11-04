@@ -57,6 +57,9 @@ class Game {
     this.fpsAvg = 60;
     this.audio = new GameAudio();
     addEventListener('resize', () => this.resize());
+    // block pinch / double-tap zoom of the whole page (Safari ignores user-scalable=no)
+    for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+    window.visualViewport?.addEventListener('resize', () => { if (this.state === 'playing') window.scrollTo(0, 0); });
     this.resize();
   }
 
@@ -389,6 +392,8 @@ class Game {
   startPlaying() {
     this.state = 'playing';
     showScreen(null);
+    // drop focus from the name field and undo any scroll the keyboard caused, so the HUD fits the screen again
+    document.activeElement?.blur?.(); window.scrollTo(0, 0);
     $('hud').classList.remove('hidden');
     $('touch').classList.toggle('hidden', !this.input.isTouch);
     document.body.classList.toggle('touch', this.input.isTouch);

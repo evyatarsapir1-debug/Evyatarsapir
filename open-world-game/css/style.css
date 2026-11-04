@@ -36,7 +36,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 .creator-panel h3 { margin: 12px 0 4px; font-size: 15px; color: #ffb37a; }
 .creator-panel ul { margin: 0; padding-inline-start: 18px; line-height: 1.7; font-size: 14px; }
 .creator-panel label { display: flex; gap: 10px; align-items: center; margin: 8px 0; }
-.creator-panel input[type=text], .creator-panel input:not([type]), .creator-panel select { font: inherit; background: #ffffff14; color: #fff; border: 1px solid #ffffff33; border-radius: 8px; padding: 6px 10px; flex: 1; }
+.creator-panel input[type=text], .creator-panel input:not([type]), .creator-panel select { font: inherit; font-size: 16px; background: #ffffff14; color: #fff; border: 1px solid #ffffff33; border-radius: 8px; padding: 6px 10px; flex: 1; }
 .creator-panel select option { color: #000; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 9px 0; font-size: 15px; }
 .row > span { white-space: nowrap; opacity: .9; }
@@ -280,3 +280,11 @@ body.touch #weaponHud { bottom: 70px; }
 /* attack button a little further right */
 #tFire { justify-self: start; transform: translateX(6px); }
 .tbtns.foot [data-btn="cycle"] { justify-self: start; transform: translateX(1px); margin-bottom: 2px; }
+
+/* never let the page zoom (iOS zooms into text fields under 16px and keeps the zoom) */
+input, select, textarea { font-size: 16px; }
+html, body { touch-action: manipulation; }
+/* very short landscape screens: no room above the punch button, so the gear button sits left of the phone button */
+@media (max-height: 355px) {
+  .tbtns.foot [data-btn="cycle"] { position: fixed; top: calc(max(12px, env(safe-area-inset-top)) + 100px); right: calc(max(12px, env(safe-area-inset-right)) + 54px); transform: none; margin: 0; }
+}
