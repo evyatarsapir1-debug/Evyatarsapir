@@ -37,7 +37,7 @@ export class CameraRig {
       const L = v.T.L;
       dist = clamp(this.dist, 2.2, 14) * 0.6 + L * 0.9 + 2.2;
       if (v.isHeli) dist += 4;
-      if (v.isPlane) dist = clamp(this.dist, 2.2, 14) * 0.8 + 30;
+      if (v.isPlane) dist = clamp(this.dist, 2.2, 14) * 0.8 + (v.T.fighter ? 13 : 30);
       tx = v.x; ty = v.y + v.T.H * 0.85 + 0.6; tz = v.z;
       // auto-align behind the vehicle when the player is not looking around
       const moving = Math.abs(v.speed) > 1.5;
@@ -98,7 +98,7 @@ export class CameraRig {
       player.object.visible = false;
       return;
     }
-    player.object.visible = !(v && v.isPlane);   // the pilot sits inside the closed cockpit
+    player.object.visible = !(v && (v.isPlane || v.T.enclosed));   // the pilot sits inside the closed cockpit
 
     const cp = Math.cos(this.pitch);
     const dirX = -Math.sin(this.yaw) * cp, dirY = Math.sin(this.pitch), dirZ = -Math.cos(this.yaw) * cp;

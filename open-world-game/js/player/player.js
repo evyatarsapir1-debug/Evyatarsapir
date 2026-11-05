@@ -119,7 +119,8 @@ export class Player {
     this.nearJack = this.nearVehicle ? null : this._findJackable(world.vehicles);
     this.nearSeat = this.nearVehicle || this.nearJack ? null : this._findSeat(world);
     if (this.nearVehicle) {
-      this.prompt = { key: 'vehicle', text: `היכנס: ${this.nearVehicle.T.name}` };
+      const nv = this.nearVehicle;
+      this.prompt = { key: 'vehicle', text: `היכנס: ${nv.T.name}`, label: nv.isPlane ? 'היכנס למטוס' : nv.T.tank ? 'היכנס לטנק' : nv.isBoat ? 'עלה לסירה' : undefined };
       if (input.wasPressed('vehicle') || input.wasPressed('interact')) this.enterVehicle(this.nearVehicle, world);
     } else if (this.nearJack) {
       this.prompt = { key: 'vehicle', text: `חטוף: ${this.nearJack.T.name}`, label: 'הוצא את הנהג' };
@@ -342,7 +343,7 @@ export class Player {
     this.attached = true;
     (v.parts.body || v.object).add(this.object);
     this.object.position.copy(v.parts.seat);
-    if (v.isPlane) this.object.visible = false;   // you are inside the cockpit
+    if (v.isPlane || v.T.enclosed) this.object.visible = false;   // you are inside the cockpit / the tank
     this.object.rotation.set(0, 0, 0);
     this.model.body.scale.y = this.model.body.scale.y; // keep appearance scale
   }

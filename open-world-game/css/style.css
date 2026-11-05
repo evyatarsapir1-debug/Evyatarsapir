@@ -231,7 +231,7 @@ body.navon #elevPanel { top: calc(max(10px, env(safe-area-inset-top)) + 52px); }
   grid-auto-rows: min-content; align-items: end; justify-items: center; }
 .tbtns.show { display: grid; }
 .tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "cyc aim ." "light fire ." "jump run ."; }
-.tbtns.drive { grid-template-columns: 58px 58px 48px; grid-template-areas: ". cam horn" "brake gas hb"; }
+.tbtns.drive { grid-template-columns: 58px 58px 48px; grid-template-areas: "can cam horn" "brake gas hb"; }
 .tbtns.heli { grid-template-columns: 58px 58px 48px; grid-template-areas: ". . cam" "brake gas ."; }
 .tbtns.plane { grid-template-columns: 58px 58px 48px; grid-template-areas: "dn up cam" "brake gas ."; }
 .tbtn { pointer-events: auto; width: 56px; height: 56px; border-radius: 50%; border: 1.5px solid #ffffff4d; background: #00000038; color: #ffffffe6;

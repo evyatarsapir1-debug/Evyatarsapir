@@ -226,6 +226,7 @@ export class WeaponSystem {
   // trigger held / pressed this frame
   update(dt, ctx) {
     const { player, econ, input, camera } = ctx;
+    this.lastCtx = ctx;
     this.cool -= dt;
     const id = econ.equipped;
     const canUse = id && player.state === 'foot' && econ.weapons[id];

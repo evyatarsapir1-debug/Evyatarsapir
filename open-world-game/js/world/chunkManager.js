@@ -104,6 +104,39 @@ function addProp(pb, p, lampB) {
       pb.addGeometry(G.cyl, mat(p.x1 - 0.5, p.y + 0.25, p.z - 1.1, 0, 0.18, 0.5, 0.18), 0x333333);
       break;
     }
+    case 'fence': {
+      // chain-link fence: posts every 3 m, mesh panel, barbed wire on top
+      const L = Math.hypot(p.x1 - p.x0, p.z1 - p.z0), ry = Math.atan2(p.x1 - p.x0, p.z1 - p.z0), cx = (p.x0 + p.x1) / 2, cz = (p.z0 + p.z1) / 2;
+      pb.addGeometry(G.box, mat(cx, y + 1.3, cz, ry, 0.04, 2.6, L), 0x8d9396);
+      pb.addGeometry(G.box, mat(cx, y + 2.75, cz, ry, 0.12, 0.1, L), 0x5d6366);
+      for (let t = 0; t <= L; t += 3) { const k = t / (L || 1); pb.addGeometry(G.box, mat(p.x0 + (p.x1 - p.x0) * k, y + 1.45, p.z0 + (p.z1 - p.z0) * k, ry, 0.1, 2.9, 0.1), 0x4a4f52); }
+      break;
+    }
+    case 'watchtower': {
+      for (const sx of [-1.6, 1.6]) for (const sz of [-1.6, 1.6]) pb.addGeometry(G.box, mat(p.x + sx, y + 3.5, p.z + sz, 0, 0.22, 7, 0.22), 0x5b5f4a);
+      pb.addGeometry(G.box, mat(p.x, y + 7.1, p.z, 0, 4.2, 0.2, 4.2), 0x6b6f58);                     // platform
+      for (const [dx, dz, w, d] of [[0, -2, 4.2, 0.1], [0, 2, 4.2, 0.1], [-2, 0, 0.1, 4.2], [2, 0, 0.1, 4.2]]) pb.addGeometry(G.box, mat(p.x + dx, y + 7.7, p.z + dz, 0, w, 1.1, d), 0x6b6f58);
+      for (const sx of [-1.9, 1.9]) for (const sz of [-1.9, 1.9]) pb.addGeometry(G.box, mat(p.x + sx, y + 8.9, p.z + sz, 0, 0.12, 1.4, 0.12), 0x4a4f3a);
+      pb.addGeometry(G.box, mat(p.x, y + 9.7, p.z, 0, 4.8, 0.2, 4.8), 0x4a4f3a);                     // roof
+      (lampB || pb).addGeometry(G.box, mat(p.x, y + 9.45, p.z + 2.3, 0, 0.4, 0.3, 0.3), 0xffffff);   // searchlight
+      break;
+    }
+    case 'barrier':
+      pb.addGeometry(G.box, mat(p.x - 6.5, y + 0.55, p.z, 0, 0.5, 1.1, 0.5), 0xc0392b);
+      pb.addGeometry(G.box, mat(p.x - 0.5, y + 1.0, p.z, 0, 12, 0.12, 0.12), 0xf2f2f2);
+      for (let k = 0; k < 6; k++) pb.addGeometry(G.box, mat(p.x - 5.5 + k * 2, y + 1.0, p.z, 0, 0.9, 0.13, 0.13), 0xc0392b);
+      pb.addGeometry(G.box, mat(p.x + 6.5, y + 0.4, p.z, 0, 0.3, 0.8, 0.3), 0x555555);
+      break;
+    case 'flagpole':
+      pb.addGeometry(G.cyl, mat(p.x, y + 5, p.z, 0, 0.12, 10, 0.12), 0xdddddd);
+      pb.addGeometry(G.box, mat(p.x + 0.9, y + 9.2, p.z, 0, 1.6, 1.0, 0.03), 0xf2f2f2);
+      pb.addGeometry(G.box, mat(p.x + 0.9, y + 9.55, p.z, 0, 1.6, 0.14, 0.035), 0x1f5fa8);
+      pb.addGeometry(G.box, mat(p.x + 0.9, y + 8.85, p.z, 0, 1.6, 0.14, 0.035), 0x1f5fa8);
+      break;
+    case 'windsock':
+      pb.addGeometry(G.cyl, mat(p.x, y + 3, p.z, 0, 0.1, 6, 0.1), 0xdddddd);
+      pb.addGeometry(G.cone, mat(p.x + 1.2, y + 5.8, p.z, 0, 0.6, 2.2, 0.6, 0, -Math.PI / 2), 0xff7a1a);
+      break;
     case 'towel': {
       const r = p.rot || 0;
       pb.addGeometry(G.box, mat(p.x, y + 0.012, p.z, r, 1.0, 0.02, 2.0), p.color);

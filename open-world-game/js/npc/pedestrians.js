@@ -163,9 +163,9 @@ export class Pedestrians {
     // beachgoers in swimwear on the city beach near the player
     for (const [i, j] of cells || []) {
       const cd = cellData(i, j);
-      for (const b of cd.beachSpots || []) {
-        if (Math.hypot(b.x - player.x, b.z - player.z) > 130) continue;
-        want.set(b.key, { x: b.x, z: b.z, y: b.y, yaw: b.yaw, state: b.state, swim: true, pts: b.pts, seats: [] });
+      for (const b of [...(cd.beachSpots || []), ...(cd.peopleSpots || [])]) {
+        if (Math.hypot(b.x - player.x, b.z - player.z) > (b.outfit === 'soldier' ? 260 : 130)) continue;
+        want.set(b.key, { x: b.x, z: b.z, y: b.y, yaw: b.yaw, state: b.state, swim: !b.outfit, soldier: b.outfit === 'soldier', pts: b.pts, seats: [] });
       }
     }
     for (const L of places || []) {
@@ -197,6 +197,12 @@ export class Pedestrians {
       if (this.peds.length >= MAX) break;
       if (this.deadKeys.has(k) || this.peds.some((p) => p.shopKey === k)) continue;
       const p = this._add({ x: w.x, z: w.z, y: w.y, state: w.state, shopKey: k, pts: w.pts, seats: w.seats, suitcase: !!w.suitcase });
+      if (w.soldier) {
+        // soldier: olive uniform, helmet (the short-hair cap in olive), dark boots
+        Object.assign(p.app, { shirt: 0x4b5320, pants: 0x4b5320, shoes: 0x1f1f1f, hair: 0x3f4a2c, long: false, bald: false, soldier: true });
+        p.phone = false; p.suitcase = false; p.walkSpeed = 1.3; p.timer = this.rng.float(0, 4);
+        this._colors();
+      }
       if (w.swim) { p.app.swim = true; p.app.swimColor = [0xe74c3c, 0x2e86c1, 0xf1c40f, 0x1abc9c, 0xe84393, 0x2d3436, 0xff7f50][this.rng.int(0, 6)]; p.phone = false; p.suitcase = false; if (w.state === 'swimmer') { p.fixedY = null; } this._colors(); }
       p.yaw = w.yaw; p.phone = !!w.phone;
       p.homeSpot = { x: w.x, z: w.z, y: w.y, yaw: w.yaw, state: w.state };
@@ -325,7 +331,7 @@ export class Pedestrians {
     if (p.hitT > 0) p.hitT -= dt;
     if (p.sayT > 0) p.sayT -= dt;
     if (p.barT > 0) p.barT -= dt;
-    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'driving', 'pulled', 'thrown', 'dead', 'swimmer', 'sunbathe', 'beachsit'].includes(p.state)) {
+    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'driving', 'pulled', 'thrown', 'dead', 'swimmer', 'sunbathe', 'beachsit', 'guard'].includes(p.state)) {
       for (const v of vehicles) {
         const sp = Math.hypot(v.vx, v.vz);
         if (sp < 4 || Math.abs(v.x - p.x) > 12 || Math.abs(v.z - p.z) > 12 || v.y - p.y > 3) continue;
@@ -354,6 +360,7 @@ export class Pedestrians {
       case 'resident':
         pose = 'sit'; speed = 0;
         break;
+      case 'guard': speed = 0; pose = Math.sin(time * 0.25 + p.x * 0.7) > 0.55 ? 'talk' : 'idle'; if (p.homeSpot) p.yaw = dampAngle(p.yaw, p.homeSpot.yaw, 4, dt); break;
       case 'sunbathe': speed = 0; pose = 'sunbathe'; p.y = damp(p.y, p.homeSpot?.y ?? p.y, 8, dt); break;
       case 'beachsit': speed = 0; pose = 'beachsit'; break;
       case 'swimmer': {
@@ -374,8 +381,9 @@ export class Pedestrians {
         goal = p.pts[p.wi]; speed = p.walkSpeed * 0.9;
         if (p.timer > 0) { speed = 0; pose = p.phone ? 'phone' : 'idle'; goal = null; break; }
         if (Math.hypot(goal[0] - p.x, goal[1] - p.z) < 0.8) {
-          const seats = (p.seats || []).filter((st) => Math.hypot(st.x - p.x, st.z - p.z) < 14 && !this.peds.some((o) => o !== p && o.seat === st));
+          const seats = p.app.soldier ? [] : (p.seats || []).filter((st) => Math.hypot(st.x - p.x, st.z - p.z) < 14 && !this.peds.some((o) => o !== p && o.seat === st));
           if (seats.length && this.rng.chance(0.55)) { p.seat = this.rng.pick(seats); p.state = 'toSeat'; }
+          else if (p.app.soldier) { p.timer = this.rng.float(1, 3); p.wi = (p.wi + 1) % p.pts.length; }   // patrol: corner to corner
           else { p.timer = this.rng.float(3, 9); p.wi = this.rng.int(0, p.pts.length - 1); p.phone = this.rng.chance(0.3); }
         }
         break;

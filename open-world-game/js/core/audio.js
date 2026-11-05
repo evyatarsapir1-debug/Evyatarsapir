@@ -37,7 +37,7 @@ export class GameAudio {
     } else {
       const s = Math.min(1, Math.abs(vehicle.speed) / vehicle.T.maxSpeed);
       const gear = (s * 5) % 1;
-      const base = vehicle.T.kind === 'moto' ? 70 : vehicle.T.bus || vehicle.T.truck ? 32 : 45;
+      const base = vehicle.isPlane ? 120 + (vehicle.thrust || 0) * 160 : vehicle.T.tank ? 26 : vehicle.T.mil ? 34 : vehicle.T.kind === 'moto' ? 70 : vehicle.T.bus || vehicle.T.truck ? 32 : 45;
       this.engOsc.frequency.setTargetAtTime(base + gear * base * 1.4 + s * base, t, 0.05);
       this.engOsc2.frequency.setTargetAtTime((base + gear * base * 1.4 + s * base) / 2, t, 0.05);
       this.engFilter.frequency.setTargetAtTime(300 + Math.abs(throttle) * 900, t, 0.1);

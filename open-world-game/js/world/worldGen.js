@@ -27,6 +27,7 @@ export function regionInfo(rx, rz) {
   const rng = new RNG(hash2(rx, rz, 21));
   let type;
   if (rx === 0 && rz === 0) type = 'azura';
+  else if (rx === -1 && rz === -1) type = 'base';
   else if (rx === 1) type = 'bay';
   else if (rx === -1 && rz === 0) type = 'airport';
   else if ((rx === 0 || rx === -1) && rz === -1) type = 'country';
@@ -48,7 +49,7 @@ export function regionInfo(rx, rz) {
 
 // The world is the city and what belongs to it: Azura (0,0), the airport (-1,0), the bay with its beach and bridge (1,0)
 // and the marina island with the luna park (2,0). Everything else is open sea you can swim and sail in.
-export const isLandRegion = (rx, rz) => rz === 0 && rx >= -1 && rx <= 2;
+export const isLandRegion = (rx, rz) => (rz === 0 && rx >= -1 && rx <= 2) || (rx === -1 && rz === -1);   // + the military base north of the airport
 const kindCache = new Map();
 export function cellKind(ix, iz) {
   const key = ix * 1000003 + iz;
@@ -64,6 +65,7 @@ export function cellKind(ix, iz) {
     case 'azura': k = blockType(ix, iz); break;
     case 'bay': k = lx === 0 ? 'Y' : lx === 9 ? 'Z' : 'Q'; break;
     case 'airport': k = 'X'; break;
+    case 'base': k = 'N'; break;
     case 'town': {
       const d = Math.hypot(ix + 0.5 - reg.cx, iz + 0.5 - reg.cz);
       if (d > reg.R || lx < 1 || lx > 8 || lz < 1 || lz > 8) {
@@ -88,7 +90,9 @@ const isWaterCell = (ix, iz) => cellKind(ix, iz) === 'Q';
 
 // --------------------------------------------------------------------------- road lattice
 // segH(gx,gz): road along z = gz*100 from x = gx*100 to (gx+1)*100
+const inBase = (ix, iz) => ix >= -10 && ix <= -1 && iz >= -10 && iz <= -1;
 export function segH(gx, gz) {
+  if (inBase(gx, gz) && inBase(gx, gz - 1)) return false;          // inside the base: its own roads / taxiways
   if (isUrban(gx, gz - 1) || isUrban(gx, gz)) return true;
   if ((isWaterCell(gx, gz - 1) || isWaterCell(gx, gz)) && !isBridgeLine(gx, gz)) return false;   // no roads into the sea
   if (mod(gz, 5) === 0) {
@@ -101,6 +105,7 @@ export function segH(gx, gz) {
 }
 // segV(gx,gz): road along x = gx*100 from z = gz*100 to (gz+1)*100
 export function segV(gx, gz) {
+  if (inBase(gx, gz) || inBase(gx - 1, gz)) return gx === -5 && gz >= -2;   // access road: airport road -> base gate
   if (isWaterCell(gx - 1, gz) && isWaterCell(gx, gz)) return false;
   if ((isWaterCell(gx - 1, gz) || isWaterCell(gx, gz)) && !(isUrban(gx - 1, gz) || isUrban(gx, gz))) return false; // no roads along open water
   if (isUrban(gx - 1, gz) || isUrban(gx, gz)) return true;
@@ -199,6 +204,7 @@ export function districtAt(x, z) {
     return mod(z, 500) < 12 || mod(z, 500) > 488 ? 'גשר המפרץ' : 'מפרץ אזורה';
   }
   if (reg.type === 'airport') return 'נמל התעופה אזורה';
+  if (reg.type === 'base') return 'בסיס צבאי';
   if (reg.type === 'azura') {
     if (z > 1003 && x > 380 && x < 620) return 'התחנה המרכזית';
     return DISTRICT_NAMES[cellKind(ix, iz)] || 'אזורה סיטי';
@@ -241,6 +247,54 @@ export const AIRPORT_AREAS = {
 };
 export const AIRPORT_GARAGE = { x: -150, z: 565, w: 64, d: 44, levels: 4, levelH: 3.15 };
 
+// --------------------------------------------------------------------------- military base (x -1000..0, z -1000..0)
+// Gate on the access road (x=-500) from the airport road (z=0); runway along z=-720; hangars, HQ, control centre,
+// barracks, garages, watchtowers, fence; fighter jets, tanks, APCs, jeeps and trucks; soldiers on guard and patrol.
+export const BASE = { x0: -960, x1: -40, z0: -960, z1: -40, gateX: -500, runwayZ: -720, runway: [-920, -740, -80, -700] };
+const BASE_ITEMS = (() => {
+  const b = [
+    { x: -420, z: -150, w: 30, d: 20, h: 10, style: 'concrete', color: 0x8a8f6a, face: 'w', sign: 'מפקדה', interior: 'hall', mil: true },
+    { x: -420, z: -235, w: 20, d: 16, h: 14, style: 'concrete', color: 0x7d8466, face: 'w', sign: 'מרכז שליטה', interior: 'hall', mil: true },
+    { x: -600, z: -150, w: 40, d: 16, h: 9.6, style: 'concrete', color: 0x9a9a7a, face: 'e', sign: 'מגורי חיילים', interior: 'apartment', mil: true },
+    { x: -600, z: -235, w: 40, d: 16, h: 9.6, style: 'concrete', color: 0x9a9a7a, face: 'e', sign: 'מגורי חיילים', interior: 'apartment', mil: true },
+    { x: -300, z: -360, w: 44, d: 20, h: 8, style: 'industrial', color: 0x6f7560, face: 's', sign: 'מוסך צבאי', mil: true },
+    { x: -800, z: -470, w: 54, d: 40, h: 16, style: 'industrial', color: 0x7a7f6c, face: 'n', sign: 'האנגר', mil: true },
+    { x: -680, z: -470, w: 54, d: 40, h: 16, style: 'industrial', color: 0x7a7f6c, face: 'n', sign: 'האנגר', mil: true },
+    { x: -538, z: -100, w: 8, d: 6, h: 3.4, style: 'concrete', color: 0xd8d2bd, face: 'e', mil: true },   // gate house
+  ];
+  const p = [];
+  for (const [x, z] of [[-950, -50], [-50, -50], [-950, -950], [-50, -950], [-500, -950], [-950, -500], [-50, -500], [-560, -52]]) p.push({ kind: 'watchtower', x, z });
+  p.push({ kind: 'barrier', x: -500, z: -40 }, { kind: 'helipad', x: -200, z: -560 }, { kind: 'flagpole', x: -455, z: -150 });
+  p.push({ kind: 'windsock', x: -100, z: -760 });
+  for (let x = -900; x <= -100; x += 50) for (const z of [-744, -696]) p.push({ kind: 'rlight', x, z, y: 0 });
+  const parking = [
+    { x: -805, z: -525, rot: Math.PI, type: 'fighter' }, { x: -680, z: -525, rot: Math.PI, type: 'fighter' }, { x: -560, z: -525, rot: Math.PI, type: 'fighter' },
+    { x: -330, z: -300, rot: 0, type: 'tank' }, { x: -312, z: -300, rot: 0, type: 'tank' }, { x: -294, z: -300, rot: 0, type: 'tank' },
+    { x: -270, z: -300, rot: 0, type: 'apc' }, { x: -254, z: -300, rot: 0, type: 'apc' },
+    { x: -470, z: -120, rot: 0, type: 'mjeep' }, { x: -470, z: -110, rot: 0, type: 'mjeep' }, { x: -470, z: -100, rot: 0, type: 'mjeep' },
+    { x: -230, z: -400, rot: Math.PI / 2, type: 'mtruck' }, { x: -230, z: -415, rot: Math.PI / 2, type: 'mtruck' },
+    { x: -200, z: -560, rot: 0, type: 'heli' },
+  ].map((q) => ({ ...q, fixed: true }));
+  // soldiers: gate guards, guards by the buildings, chatting pairs, patrols along the fence and the hangars
+  const people = [
+    { x: -512, z: -46, yaw: 0, state: 'guard' }, { x: -488, z: -46, yaw: 0, state: 'guard' },
+    { x: -403, z: -142, yaw: -Math.PI / 2, state: 'guard' }, { x: -403, z: -228, yaw: -Math.PI / 2, state: 'guard' },
+    { x: -560, z: -192, yaw: Math.PI / 2, state: 'guard' }, { x: -557, z: -192, yaw: -Math.PI / 2, state: 'guard' },
+    { x: -330, z: -320, yaw: 0.3, state: 'guard' }, { x: -326, z: -318, yaw: Math.PI + 0.3, state: 'guard' },
+    { x: -740, z: -520, yaw: Math.PI, state: 'guard' },
+    { x: -480, z: -60, state: 'wander', pts: [[-480, -60], [-120, -60], [-120, -300], [-480, -300]] },
+    { x: -900, z: -100, state: 'wander', pts: [[-900, -100], [-900, -420], [-620, -420], [-620, -100]] },
+    { x: -760, z: -540, state: 'wander', pts: [[-860, -545], [-520, -545], [-520, -560], [-860, -560]] },
+    { x: -360, z: -180, state: 'wander', pts: [[-380, -180], [-470, -180], [-470, -260], [-380, -260]] },
+    { x: -250, z: -330, state: 'wander', pts: [[-340, -330], [-220, -330], [-220, -280], [-340, -280]] },
+  ];
+  return { b, p, parking, people };
+})();
+export const BASE_AREAS = {
+  runway: BASE.runway, apron: [-880, -560, -470, -500], taxi: [-900, -700, -870, -560], taxi2: [-140, -700, -110, -560],
+  roadIn: [-506, -330, -494, -40], roadE: [-494, -205, -120, -195], roadH: [-506, -330, -200, -320], lotT: [-345, -312, -240, -288],
+  lotJ: [-478, -128, -462, -92], heliPad: [-215, -575, -185, -545], hq: [-440, -168, -404, -132],
+};
 const FEATURED = [
   { x: -85, z: 625, rot: 0, type: 'heli' },
   { x: -85, z: 655, rot: Math.PI / 2, type: 'heli' },
@@ -286,7 +340,7 @@ function generateCell(ix, iz) {
 
   // special areas that cross cells
   const cellRect = [ox, oz, ox + P, oz + P];
-  if (kind !== 'Q' && oz < RIDGE.z1 && oz + P > RIDGE.z0 && ox < RIDGE.x1 && ox + P > RIDGE.x0) {
+  if (kind !== 'Q' && kind !== 'N' && oz < RIDGE.z1 && oz + P > RIDGE.z0 && ox < RIDGE.x1 && ox + P > RIDGE.x0) {
     d.ridge = { x0: Math.max(ox, RIDGE.x0), x1: Math.min(ox + P, RIDGE.x1), z0: Math.max(oz, RIDGE.z0), z1: Math.min(oz + P, RIDGE.z1) };
     d.keepOut.push([RIDGE.x0 - 8, RIDGE.z0 - 8, RIDGE.x1 + 8, RIDGE.z1 + 8]);
   }
@@ -316,6 +370,28 @@ function generateCell(ix, iz) {
     for (const r of Object.values(AIRPORT_AREAS)) d.keepOut.push(r);
     d.keepOut.push([-640, 506, -20, 600]);
     if (!d.apron.length && oz < 900) addTrees(d, rng, rng.int(2, 8));
+  } else if (kind === 'N') {
+    const BI = BASE_ITEMS, inCell = (q) => q.x >= ox && q.x < ox + P && q.z >= oz && q.z < oz + P;
+    for (const b of BI.b) if (inCell(b)) B.push({ ...b });
+    for (const p of BI.p) if (inCell(p)) PR.push({ ...p });
+    for (const q of BI.parking) if (inCell(q)) d.parking.push({ ...q });
+    d.peopleSpots = BI.people.map((q, i) => ({ ...q, key: `base:${i}`, y: 0, yaw: q.yaw ?? 0, outfit: 'soldier' })).filter(inCell);
+    for (const [name, r] of Object.entries(BASE_AREAS)) {
+      const x0 = Math.max(ox, r[0]), z0 = Math.max(oz, r[1]), x1 = Math.min(ox + P, r[2]), z1 = Math.min(oz + P, r[3]);
+      if (x1 > x0 && z1 > z0) d.apron.push({ name, rect: [x0, z0, x1, z1] });
+    }
+    // perimeter fence (split per cell), gap at the gate
+    const F = BASE, seg = (x0, z0, x1, z1) => { if (x1 - x0 > 0.5 || z1 - z0 > 0.5) { PR.push({ kind: 'fence', x0, z0, x1, z1 }); } };
+    const cx0 = Math.max(ox, F.x0), cx1 = Math.min(ox + P, F.x1), cz0 = Math.max(oz, F.z0), cz1 = Math.min(oz + P, F.z1);
+    if (cx1 > cx0) {
+      if (F.z0 >= oz && F.z0 < oz + P) seg(cx0, F.z0, cx1, F.z0);
+      if (F.z1 >= oz && F.z1 < oz + P) { seg(cx0, F.z1, Math.min(cx1, F.gateX - 12), F.z1); seg(Math.max(cx0, F.gateX + 12), F.z1, cx1, F.z1); }
+    }
+    if (cz1 > cz0) {
+      if (F.x0 >= ox && F.x0 < ox + P) seg(F.x0, cz0, F.x0, cz1);
+      if (F.x1 >= ox && F.x1 < ox + P) seg(F.x1, cz0, F.x1, cz1);
+    }
+    if (!d.apron.length) addTrees(d, rng, rng.int(0, 3));
   } else if (kind === 'Y' || kind === 'Z') {
     const west = kind === 'Y';
     const X = (x) => (west ? x : 3000 - x);
@@ -488,6 +564,9 @@ export function propColliders(p, out) {
     case 'bench': out.push(makeBox(p.x, p.z, 0.85, 0.3, p.rot || 0, 0, 0.9)); break;
     case 'bin': out.push(makeCircle(p.x, p.z, 0.3, 0, 1)); break;
     case 'hedge': out.push(makeBox(p.x, p.z, p.w / 2, p.d / 2, 0, 0, 1.5)); break;
+    case 'fence': out.push(makeBox((p.x0 + p.x1) / 2, (p.z0 + p.z1) / 2, Math.max(0.1, (p.x1 - p.x0) / 2), Math.max(0.1, (p.z1 - p.z0) / 2), 0, 0, 3)); break;
+    case 'watchtower': for (const sx of [-1.6, 1.6]) for (const sz of [-1.6, 1.6]) out.push(makeCircle(p.x + sx, p.z + sz, 0.2, 0, 7)); break;
+    case 'flagpole': out.push(makeCircle(p.x, p.z, 0.15, 0, 10)); break;
     case 'lounger': out.push(makeBox(p.x, p.z, 0.35, 0.95, p.rot || 0, 0, 0.6)); break;
     case 'parasol': out.push(makeCircle(p.x, p.z, 0.12, 0, 2.4)); break;
     case 'container': out.push(makeBox(p.x, p.z, 3.0, 1.2, p.rot || 0, 0, 2.6)); break;

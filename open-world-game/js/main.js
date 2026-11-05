@@ -10,6 +10,7 @@ import { Economy, fmt, FOODS } from './game/economy.js';
 import { PostFX } from './render/postfx.js';
 import { LunaPark, LUNA } from './world/lunapark.js';
 import { BoatTraffic } from './world/boats.js';
+import { Military } from './world/military.js';
 import { ShopUI, shopKind } from './game/shops.js';
 import { WeaponSystem, WEAPONS, WEAPON_ORDER } from './game/weapons.js';
 import { shared as vehicleMats } from './vehicles/vehicleModels.js';
@@ -87,6 +88,7 @@ class Game {
     this.airport = new AirportManager(this.scene, this.statics, null);
     this.luna = new LunaPark(this.scene, this.statics);
     this.boats = new BoatTraffic(this.scene, this.statics);
+    this.military = new Military(this.scene, this.statics);
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());
     this.rig = new CameraRig(this.camera, this.statics);
@@ -277,6 +279,7 @@ class Game {
       { short: 'הבית שלי', name: 'הבית שלי — וילה עם בריכה', icon: '🏠', color: '#e0533b', x: VILLA.door.x, z: VILLA.door.z - 1 },
       { short: 'נמל תעופה', name: 'נמל התעופה אזורה — טרמינל', icon: '✈', color: '#1f5fa8', x: -300, z: 514 },
       { short: 'מרינה', name: 'מרינה מזרח', icon: '⚓', color: '#0e7c86', x: 2500, z: 510 },
+      { short: 'בסיס צבאי', name: 'בסיס צבאי — שער הכניסה', icon: '🪖', color: '#4b5320', x: -500, z: -20 },
       { short: 'לונה פארק', name: 'לונה פארק המרינה — גלגל ענק ורכבת הרים', icon: '🎡', color: '#d81b60', x: LUNA.x - 22, z: LUNA.z - 2 },
       { short: 'חנות נשקים', name: 'חנות נשקים', icon: '🎯', color: '#5b2c6f', ...door(find([[2, 5]], (b) => b.sign === 'חנות נשקים')) },
       { short: 'חנות בגדים', name: 'חנות בגדים — מרכז העיר', icon: '👕', color: '#c2185b', ...door(find([[7, 5]], (b) => b.sign === 'חנות בגדים')) },
@@ -745,7 +748,7 @@ class Game {
     if (aimingNow) p.aimT = Math.max(p.aimT || 0, 0.25);
     this.rig.aimMode = aimingNow ? (this.econ.equipped === 'nz' ? 'scope' : 'aim') : null;
     if (input.wasPressed('light')) { if (this.econ.items.flashlight) this.econ.flashlightOn = !this.econ.flashlightOn; else this.toast('אין לך פנס — אפשר לקנות בחנות ציוד', 2); }
-    input.fireByMouse = p.state !== 'foot' ? false : this.econ.equipped ? 'hold' : 'tap';
+    input.fireByMouse = p.state === 'driving' && p.vehicle?.T.tank ? 'hold' : p.state !== 'foot' ? false : this.econ.equipped ? 'hold' : 'tap';
 
     const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list];
     const pedObs = this.peds.obstacles();
@@ -847,6 +850,7 @@ class Game {
       onRecoil: (k) => { this.rig.pitch -= k; },
       onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); }, message: (m) => this.toast(m, 2),
     });
+    this.military.update(dt, { player: p, input, camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.rig.update(dt, input, p);
     // flashlight
     const fl = this.flashlight, on = this.econ.items.flashlight && this.econ.flashlightOn && p.state !== 'driving';
@@ -921,7 +925,8 @@ class Game {
       if (p.prompt?.key === 'interact') { const t = p.prompt.text + (p.prompt.seat ? ` · ${p.prompt.seat}` : ''); if ($('tInteract').textContent !== t) $('tInteract').textContent = t; }
       $('tVehicle').classList.toggle('show', p.prompt?.key === 'vehicle' && !v);
       { const t = p.prompt?.label || 'היכנס לרכב'; if ($('tVehicle').textContent !== t) $('tVehicle').textContent = t; }
-      { const t = v?.isPlane ? 'צא מהמטוס' : 'צא מהרכב'; if ($('tExit').textContent !== t) $('tExit').textContent = t; }
+      { const t = v?.isPlane ? 'צא מהמטוס' : v?.T.tank ? 'צא מהטנק' : v?.isBoat ? 'רד מהסירה' : 'צא מהרכב'; if ($('tExit').textContent !== t) $('tExit').textContent = t; }
+      $('tCannon').classList.toggle('show', !!v?.T.tank);
       $('tExit').classList.toggle('show', !!v && !v.isHeli && p.prompt?.key === 'vehicle');
       $('tExitHeli').classList.toggle('show', !!v && v.isHeli && p.prompt?.key === 'vehicle');
       $('runBtn').classList.toggle('on', p.sprint);

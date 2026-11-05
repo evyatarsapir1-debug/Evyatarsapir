@@ -189,12 +189,13 @@ export class Vehicle {
     } else {
       // pitch with the climb/descend controls, otherwise ease back towards gentle level flight
       const p0 = -this.pitch;
-      let pt = clamp(p0 + lift * 0.5 * dt, -0.3, 0.27);
+      const ag = T.agility || 1;
+      let pt = clamp(p0 + lift * 0.5 * ag * dt, -0.3 - (ag - 1) * 0.2, 0.27 + (ag - 1) * 0.25);
       if (!lift) pt = damp(pt, clamp(pt, -0.05, 0.08), 0.6, dt);
       this.pitch = -pt;
       // bank and turn
-      this.roll = damp(this.roll, -(ctl.steer || 0) * 0.62, 2.2, dt);
-      this.heading += Math.tan(this.roll) * 19 / Math.max(25, v) * dt;
+      this.roll = damp(this.roll, -(ctl.steer || 0) * (0.62 + (ag - 1) * 0.35), 2.2 * ag, dt);
+      this.heading += Math.tan(this.roll) * 19 * ag / Math.max(25, v) * dt;
       this.steer = 0;
       // gravity along the flight path, lift vs. stall
       v -= Math.sin(pt) * 9.8 * 0.55 * dt;
@@ -392,6 +393,12 @@ export class Vehicle {
     o.position.set(this.x, this.y, this.z);
     o.rotation.set(0, this.heading, 0);
     this.parts.body.rotation.set(this.pitch, 0, this.roll);
+    if (this.isPlane && this.parts.flame) {
+      // afterburner glow grows with the engine
+      const th = this.thrust || 0, f = this.parts.flame;
+      f.visible = th > 0.05; f.scale.set(0.8 + th * 0.4, 0.8 + th * 0.4, 0.4 + th * 2.4 * (0.9 + Math.random() * 0.2));
+      f.children[0].material.opacity = 0.35 + th * 0.55;
+    }
     if (this.isPlane) {
       const g = this.parts.jetMesh;
       const want = this.airborne && this.y - heightAt(this.x, this.z, this.y) > 25 ? this.parts.cleanGeo : this.parts.gearGeo;

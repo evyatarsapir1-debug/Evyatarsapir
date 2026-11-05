@@ -580,6 +580,45 @@ check('boats stay in the water (stop at the shore)', beach.shoreX > 1060, `stopp
 check('boats and jet skis with drivers cruise the bay', beach.aiBoats >= 4 && beach.aiDrivers >= 4, JSON.stringify({ ai: beach.aiBoats, drivers: beach.aiDrivers }));
 await g(() => { const game = __game, P = game.player; if (P.vehicle) { P.vehicle.vx = P.vehicle.vz = 0; P.vehicle.speed = 0; game.input.pressed.add('vehicle'); for (let i = 0; i < 40; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } } });
 
+// ---------------------------------------------------------------- military base: soldiers, tank with cannon, fighter jet, patrols
+const mil = await g(() => {
+  const game = __game, P = game.player, I = game.input, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { if (P.vehicle) { P.vehicle.vx = P.vehicle.vz = 0; P.vehicle.speed = 0; } I.pressed.add('vehicle'); step(40); }
+  game.teleport(-450, -200, 0, 0.3); step(60);
+  let buildings = 0; for (let i = -10; i < 0; i++) for (let j = -10; j < 0; j++) buildings += __wg.cellData(i, j).buildings.length;
+  const soldiers = game.peds.peds.filter((q) => q.app.soldier).length;
+  game.teleport(-312, -286, 0, 0.3); step(40);
+  const tank = game.vehicles.all().find((v) => v.T.tank);
+  if (!tank) return { buildings, soldiers, err: 'no tank' };
+  const dp = tank.doorPoint(); game.teleport(dp.x, dp.z, 0, 0.3); step(5);
+  const tLabel = P.prompt?.label; I.pressed.add('vehicle'); step(80);
+  const inTank = P.state === 'driving' && P.vehicle === tank;
+  const t0 = tank.parts.turret.rotation.y;
+  step(60, () => { game.rig.yaw = tank.heading + 1.2; game.rig.idle = 0; });
+  const turned = Math.abs(tank.parts.turret.rotation.y - t0);
+  const ex0 = game.weapons.fx.length; I.pressed.add('fire'); step(1); const shells = game.military.shells.length; step(60);
+  const boom = game.weapons.fx.length > ex0 || game.military.puffs.length > 5;
+  tank.vx = tank.vz = 0; tank.speed = 0; I.pressed.add('vehicle'); step(40);
+  game.teleport(-690, -510, 0, 0.3); step(40);
+  const jet = game.vehicles.all().find((v) => v.T.fighter);
+  if (!jet) return { buildings, soldiers, tLabel, inTank, turned, shells, boom, err: 'no jet' };
+  const jp = jet.doorPoint(); game.teleport(jp.x, jp.z, 0, 0.3); step(5);
+  const jLabel = P.prompt?.label; I.pressed.add('vehicle'); step(60);
+  const inJet = P.state === 'driving' && P.vehicle === jet;
+  jet.x = -900; jet.z = -720; jet.heading = Math.PI / 2; jet.speed = 0;
+  I.held.add('gas'); step(90); I.held.delete('gas');
+  step(30 * 9, () => { I.joyY = jet.speed > 55 ? -0.8 : 0; });
+  I.joyY = 0;
+  const alt = jet.y, kmh = jet.speed * 3.6;
+  jet.x = -500; jet.z = -720; jet.y = 0; jet.vy = 0; jet.speed = 0; jet.pitch = 0; jet.roll = 0; jet.throttleSet = 0; jet.thrust = 0; jet.airborne = false; step(5);
+  I.pressed.add('vehicle'); step(40);
+  return { buildings, soldiers, tLabel, inTank, turned, shells, boom, jLabel, inJet, alt, kmh, patrol: game.military.patrol.length, onFoot: P.state };
+});
+check('military base: buildings and soldiers on guard / patrol', mil.buildings >= 7 && mil.soldiers >= 6, JSON.stringify({ b: mil.buildings, s: mil.soldiers }));
+check('tank: "enter tank", turret follows the camera, the cannon fires and explodes', mil.tLabel === 'היכנס לטנק' && mil.inTank && mil.turned > 0.3 && mil.shells === 1 && mil.boom, JSON.stringify(mil));
+check('fighter jet: "board plane", take off from the base runway and fly', mil.jLabel === 'היכנס למטוס' && mil.inJet && mil.alt > 80 && mil.kmh > 300 && mil.onFoot === 'foot', JSON.stringify(mil));
+check('fighter jets patrol over the city', mil.patrol >= 4, `${mil.patrol} jets`);
+
 // ---------------------------------------------------------------- traffic drivers + carjacking
 const jack = await g(() => {
   const game = __game, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };

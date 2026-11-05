@@ -166,7 +166,7 @@ export class MiniMap {
       if (sx > 0 && sy > 0 && sx < c.width && sy < c.height) { g.strokeStyle = '#fff'; g.lineWidth = 3; g.strokeText(t, sx, sy); g.fillText(t, sx, sy); }
     };
     label('אזורה סיטי', 500, 470); label('מפרץ אזורה', 1500, 250);
-    label('הים', 500, -350); label('הים', 500, 1350);
+    label('בסיס צבאי', -500, -500); label('הים', 500, -350); label('הים', 500, 1350);
     drawLandmarks(g, this.landmarks || [], (x, z) => W2(x, z), 15 * devicePixelRatio, true);
   }
 }

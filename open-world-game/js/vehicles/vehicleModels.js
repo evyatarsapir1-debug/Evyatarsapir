@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GeoBuilder } from '../world/geoBuilder.js';
 import { airlinerGeometry, JET_MAT, LIVERIES, FY } from '../world/airliner.js';
+import { fighterGeometry, FIGHTER_MAT, FIGHTER_FY, afterburner } from './fighterModel.js';
 
 export const shared = {
   tire: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 }),
@@ -113,15 +114,98 @@ function buildJet(color) {
   };
 }
 
+function buildFighter(color) {
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const col = color ?? 0x6f7a80;
+  const mesh = new THREE.Mesh(fighterGeometry(col, true), FIGHTER_MAT); mesh.castShadow = true; body.add(mesh);
+  const flame = afterburner(); flame.scale.set(1, 1, 0.01); flame.visible = false; body.add(flame);
+  return {
+    root: g, body, paint: new THREE.MeshStandardMaterial({ color: col }), baseColor: new THREE.Color(col), wheels: [], door: null, rotor: null, tailRotor: null, panels: {}, lights: [],
+    seat: new THREE.Vector3(0, FIGHTER_FY - 0.1, 3.2), doorZ: 3.2, seatMode: 'drive', doorSide: 1, glassParts: [], wheelR: 0.35,
+    jetMesh: mesh, gearGeo: mesh.geometry, cleanGeo: fighterGeometry(col, false), flame, lod: null, shared: true,
+  };
+}
+
+// Military ground vehicles (olive, matte): tank with a turret that turns, 8-wheel APC, jeep, covered truck.
+function milModel(T, parts, g, body, paint) {
+  const L = T.L, W = T.W, H = T.H;
+  paint.roughness = 0.85; paint.metalness = 0.15;
+  const olive = paint, dark = new THREE.MeshStandardMaterial({ color: 0x2a2d24, roughness: 0.9 });
+  const track = new THREE.MeshStandardMaterial({ color: 0x1d1e1a, roughness: 0.95 });
+  const canvas = new THREE.MeshStandardMaterial({ color: 0x6b6a4a, roughness: 1 });
+  if (T.mil === 'tank') {
+    // hull, sloped glacis, tracks with road wheels, side skirts, turret with long barrel, hatch, smoke launchers
+    m(box(W - 0.9, 0.9, L - 0.8), olive, body, 0, 1.15, 0);
+    const gl = m(box(W - 0.9, 0.12, 1.6), olive, body, 0, 1.38, L / 2 - 0.9); gl.rotation.x = -0.35;
+    for (const sx of [-1, 1]) {
+      m(box(0.7, 0.9, L), track, body, sx * (W / 2 - 0.35), 0.48, 0);
+      m(box(0.75, 0.55, L - 0.6), olive, body, sx * (W / 2 - 0.35), 1.15, 0);          // skirt
+      for (let k = 0; k < 6; k++) parts.wheels.push(wheel(g, sx * (W / 2 - 0.35), 0.42, -L / 2 + 1.0 + k * (L - 2) / 5, 0.36, 0.5, false));
+    }
+    m(box(W - 0.6, 0.12, 0.9), dark, body, 0, 1.62, -L / 2 + 0.6);                     // engine deck grille
+    const turret = new THREE.Group(); turret.position.set(0, 1.62, -0.3); body.add(turret);
+    m(box(2.5, 0.75, 3.2), olive, turret, 0, 0.38, 0);
+    const front = m(box(2.3, 0.6, 0.9), olive, turret, 0, 0.36, 1.9); front.rotation.x = 0.2;
+    const mantlet = m(box(0.8, 0.5, 0.5), olive, turret, 0, 0.38, 2.1);
+    const barrel = new THREE.Group(); barrel.position.set(0, 0.4, 2.2); turret.add(barrel);
+    m(new THREE.CylinderGeometry(0.11, 0.13, 4.6, 12).rotateX(Math.PI / 2), olive, barrel, 0, 0, 2.3);
+    m(new THREE.CylinderGeometry(0.17, 0.17, 0.5, 12).rotateX(Math.PI / 2), dark, barrel, 0, 0, 2.6);   // fume extractor
+    m(new THREE.CylinderGeometry(0.15, 0.15, 0.25, 12).rotateX(Math.PI / 2), dark, barrel, 0, 0, 4.55); // muzzle
+    m(new THREE.CylinderGeometry(0.35, 0.35, 0.12, 14), olive, turret, -0.5, 0.82, -0.5);              // hatch
+    m(new THREE.CylinderGeometry(0.035, 0.035, 2.2, 6), dark, turret, 0.9, 1.6, -1.2);                 // antenna
+    for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) m(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 8).rotateX(Math.PI / 2 - 0.4), dark, turret, sx * (1.05 + k * 0.08), 0.65, 1.0 - k * 0.15);
+    m(box(1.6, 0.5, 0.6), olive, turret, 0, 0.35, -1.85);                                               // bustle
+    parts.turret = turret; parts.barrel = barrel; parts.muzzleZ = 4.7;
+    parts.seat.set(0, 1.1, 0); parts.wheelR = 0.36;
+    for (const sx of [-1, 1]) parts.lights.push(m(box(0.2, 0.12, 0.08), shared.head, body, sx * (W / 2 - 0.9), 1.45, L / 2 - 0.3, false));
+  } else if (T.mil === 'apc') {
+    m(box(W, 1.3, L - 0.6), olive, body, 0, 1.35, -0.2);
+    const nose = m(box(W, 0.12, 1.8), olive, body, 0, 1.55, L / 2 - 0.95); nose.rotation.x = -0.6;
+    m(box(W - 0.3, 0.1, L - 1.6), olive, body, 0, 2.05, -0.5);
+    m(box(0.9, 0.5, 1.0), olive, body, 0.3, 2.35, 0.3);                                  // small turret
+    m(new THREE.CylinderGeometry(0.05, 0.05, 1.3, 8).rotateX(Math.PI / 2), dark, body, 0.3, 2.45, 1.2);
+    for (const sx of [-1, 1]) m(box(0.06, 0.25, 0.6), shared.glass, body, sx * (W / 2 + 0.01), 1.75, L / 2 - 1.9, false);
+    m(box(1.2, 1.1, 0.06), dark, body, 0, 1.35, -L / 2 + 0.08);                          // rear door
+    for (let k = 0; k < 4; k++) for (const sx of [-1, 1]) parts.wheels.push(wheel(g, sx * (W / 2 - 0.25), 0.55, L / 2 - 1.3 - k * 1.35, 0.55, 0.42, k < 2));
+    for (const sx of [-1, 1]) parts.lights.push(m(box(0.25, 0.14, 0.06), shared.head, body, sx * (W / 2 - 0.4), 1.4, L / 2 - 0.25, false));
+    parts.seat.set(0.5, 1.2, L / 2 - 1.6); parts.wheelR = 0.55;
+  } else if (T.mil === 'jeep') {
+    m(box(W, 0.8, L), olive, body, 0, 0.95, 0);
+    m(box(W * 0.98, 0.08, L * 0.32), olive, body, 0, 1.38, L * 0.32);
+    m(box(W * 0.9, 0.5, 0.05), shared.glass, body, 0, 1.6, L * 0.12, false).rotation.x = -0.25;
+    m(box(W * 0.94, 0.05, L * 0.55), canvas, body, 0, 2.0, -L * 0.18);                  // soft top
+    for (const sx of [-1, 1]) for (const sz of [0.12, -0.45]) m(box(0.05, 0.65, 0.05), dark, body, sx * W * 0.45, 1.67, L * sz);
+    m(new THREE.CylinderGeometry(0.36, 0.36, 0.22, 14).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), track, body, 0, 1.15, -L / 2 - 0.1); // spare wheel
+    m(box(W * 0.5, 0.35, 0.05), dark, body, 0, 0.95, L / 2 + 0.02);
+    for (const sx of [-1, 1]) parts.lights.push(m(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 10).rotateX(Math.PI / 2), shared.head, body, sx * W * 0.33, 1.15, L / 2 + 0.03, false));
+    for (const [sx, z, f] of [[-1, T.wheelbase / 2, true], [1, T.wheelbase / 2, true], [-1, -T.wheelbase / 2, false], [1, -T.wheelbase / 2, false]]) parts.wheels.push(wheel(g, sx * (W / 2 - 0.12), 0.42, z, 0.42, 0.3, f));
+    parts.seat.set(W * 0.22, 0.75, 0.0); parts.wheelR = 0.42;
+  } else {
+    // covered truck
+    m(box(W, 1.6, 2.2), olive, body, 0, 1.75, L / 2 - 1.1);
+    m(box(W - 0.1, 0.7, 0.05), shared.glass, body, 0, 2.15, L / 2 + 0.01, false);
+    m(box(W, 0.3, L - 2.2), dark, body, 0, 1.1, -1.1);
+    const tarp = m(new THREE.CylinderGeometry(W / 2, W / 2, L - 2.4, 16, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2), canvas, body, 0, 2.1, -1.2);
+    m(box(W, 1.0, L - 2.4), canvas, body, 0, 1.75, -1.2);
+    for (const sx of [-1, 1]) parts.lights.push(m(box(0.25, 0.14, 0.06), shared.head, body, sx * (W / 2 - 0.3), 1.2, L / 2 + 0.01, false));
+    for (const [sx, z, f] of [[-1, T.wheelbase / 2, true], [1, T.wheelbase / 2, true], [-1, -T.wheelbase / 2, false], [1, -T.wheelbase / 2, false], [-1, -T.wheelbase / 2 - 1.3, false], [1, -T.wheelbase / 2 - 1.3, false]]) parts.wheels.push(wheel(g, sx * (W / 2 - 0.15), 0.52, z, 0.52, 0.35, f));
+    parts.seat.set(0.55, 1.35, L / 2 - 1.1); parts.wheelR = 0.52;
+  }
+  parts.panels.front = m(box(W * 0.8, 0.2, 0.12), dark, body, 0, 0.7, L / 2 + 0.02);
+  parts.panels.rear = m(box(W * 0.8, 0.2, 0.12), dark, body, 0, 0.7, -L / 2 - 0.02);
+}
+
 export function buildVehicleModel(type, color) {
-  if (type.kind === 'plane') return buildJet(color);
+  if (type.kind === 'plane') return type.fighter ? buildFighter(color) : buildJet(color);
   const T = type, g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
   const paint = new THREE.MeshStandardMaterial({ color, metalness: 0.55, roughness: 0.32, envMapIntensity: 1.1 });
   const parts = { root: g, body, paint, baseColor: new THREE.Color(color), wheels: [], door: null, rotor: null, tailRotor: null, panels: {}, lights: [], seat: new THREE.Vector3(), seatMode: 'drive', doorSide: 1, glassParts: [] };
   const L = T.L, W = T.W, H = T.H;
 
-  if (T.kind === 'car') {
+  if (T.mil) {
+    milModel(T, parts, g, body, paint);
+  } else if (T.kind === 'car') {
     const r = T.bus || T.truck ? 0.5 : (T.offroad ? 0.42 : 0.34);
     const clear = r * 0.55;
     const wb = T.wheelbase;
