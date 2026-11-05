@@ -734,7 +734,13 @@ class Game {
     if (input.wasPressed('camera')) this.rig.toggleMode();
     if (input.wasPressed('bag')) { this.openBag(); input.endFrame(); return; }
     if (input.wasPressed('phone')) this.phone.toggle();
-    if (input.wasPressed('cycle')) this.cycleWeapon();
+    if (input.wasPressed('cycle')) { this.cycleWeapon(); this.aiming = false; }
+    // aim button (touch: tap to toggle, keyboard Z) or hold the right mouse button
+    if (input.wasPressed('aim')) this.aiming = !this.aiming;
+    if (!(this.econ.equipped && p.state === 'foot')) this.aiming = false;
+    const aimingNow = !!(this.econ.equipped && p.state === 'foot' && (this.aiming || input.mouseAim) && !WEAPONS[this.econ.equipped].thrown && !WEAPONS[this.econ.equipped].placed);
+    if (aimingNow) p.aimT = Math.max(p.aimT || 0, 0.25);
+    this.rig.aimMode = aimingNow ? (this.econ.equipped === 'nz' ? 'scope' : 'aim') : null;
     if (input.wasPressed('light')) { if (this.econ.items.flashlight) this.econ.flashlightOn = !this.econ.flashlightOn; else this.toast('אין לך פנס — אפשר לקנות בחנות ציוד', 2); }
     input.fireByMouse = p.state !== 'foot' ? false : this.econ.equipped ? 'hold' : 'tap';
 
@@ -834,6 +840,7 @@ class Game {
       scare: (ped, src, hit) => this.peds.scare(ped, src, hit), hurtPlayer: (n) => this.hurt(n, 'פיצוץ'),
       hitPed: (ped, dmg) => { const r = this.peds.hit(ped, p, dmg, true); if (r === 'dead') this.combat._drop(ped); },
       onShot: (W) => this.audio.gunshot?.(W.kind),
+      onRecoil: (k) => { this.rig.pitch -= k; },
       onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); }, message: (m) => this.toast(m, 2),
     });
     this.rig.update(dt, input, p);
@@ -892,6 +899,8 @@ class Game {
     const wid = this.econ.equipped;
     $('weaponHud').textContent = wid && p.state === 'foot' ? `${WEAPONS[wid].name} · ${this.econ.weapons[wid].ammo}` : '';
     $('hud').classList.toggle('armed', !!wid && p.state === 'foot');
+    $('hud').classList.toggle('aiming', this.rig.aimMode === 'aim');
+    $('hud').classList.toggle('scoped', this.rig.aimMode === 'scope' && this.rig.scopeK > 0.6);
     // speedometer
     const sp = $('speedo');
     if (v) {
@@ -915,6 +924,7 @@ class Game {
       $('tFire').classList.toggle('show', mode === 'foot' && p.state === 'foot');
       const fl = this.econ.equipped ? 'ירי' : 'אגרוף'; if ($('tFire').textContent !== fl) $('tFire').textContent = fl;
       $('tLight').classList.toggle('show', !!this.econ.items.flashlight);
+      { const can = !!wid && p.state === 'foot' && !WEAPONS[wid].thrown && !WEAPONS[wid].placed; $('tAim').classList.toggle('show', can); $('tAim').classList.toggle('on', !!this.aiming); const t = wid === 'nz' ? 'כוונת' : 'כוון'; if ($('tAim').textContent !== t) $('tAim').textContent = t; }
       $('joyHint').style.display = this.input.joy.id === null && !v && this.playTime < 30 ? 'block' : 'none';
     }
     // minimap

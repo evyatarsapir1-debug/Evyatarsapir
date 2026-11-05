@@ -24,7 +24,7 @@ export class CameraRig {
   toggleMode() { this.mode = this.mode === 'chase' ? 'first' : 'chase'; }
 
   update(dt, input, player) {
-    const sens = 0.0042 * this.sensitivity;
+    const sens = 0.0042 * this.sensitivity * (this.camera.fov / 62);   // slower look when zoomed in
     const dx = input.lookDX, dy = input.lookDY * (this.invertY ? -1 : 1);
     if (dx || dy) this.idle = 0; else this.idle += dt;
     this.yaw -= dx * sens;
@@ -64,10 +64,14 @@ export class CameraRig {
       if (player.state === 'riding') { ty -= 0.45; dist = Math.max(dist, 7); lam = 30; this.ceiling = null; }
       // aiming a weapon: over-the-right-shoulder camera, the body turns with the crosshair
       this.aimK = damp(this.aimK || 0, player.armed && player.aimT > 0 && player.state === 'foot' ? 1 : 0, 8, dt);
+      this.scopeK = damp(this.scopeK || 0, this.aimMode === 'scope' ? 1 : 0, 10, dt);
+      const fovWant = this.aimMode === 'scope' ? 14 : this.aimMode === 'aim' ? 44 : 62;
+      if (Math.abs(this.camera.fov - fovWant) > 0.05) { this.camera.fov = damp(this.camera.fov, fovWant, 10, dt); this.camera.updateProjectionMatrix(); }
       if (this.aimK > 0.01) {
         const k = this.aimK, rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw);
-        tx += rx * 0.55 * k; tz += rz * 0.55 * k; ty += 0.1 * k;
-        dist = dist + (Math.min(dist, 2.6) - dist) * k;
+        const zoomed = this.aimMode === 'aim';
+        tx += rx * (zoomed ? 0.85 : 0.55) * k; tz += rz * (zoomed ? 0.85 : 0.55) * k; ty += 0.15 * k;
+        dist = dist + (Math.min(dist, zoomed ? 3.6 : 2.6) - dist) * k;
         if (player.aimT > 0) { player.facing = dampAngle(player.facing, this.yaw, 18, dt); player.aimPitch = clamp(-(this.pitch - 0.15) * 0.9, -0.8, 0.9); }
         lam = 24;
       }
@@ -117,6 +121,14 @@ export class CameraRig {
       this.shake = Math.max(0, this.shake - dt * 2.5);
       const s = this.shake * 0.25;
       px += (Math.random() - 0.5) * s; py += (Math.random() - 0.5) * s; pz += (Math.random() - 0.5) * s;
+    }
+    if (!v && this.scopeK > 0.5 && player.state === 'foot') {
+      const cp2 = Math.cos(this.pitch);
+      const ex2 = player.x + Math.sin(this.yaw) * 0.3, ey2 = player.y + 1.62, ez2 = player.z + Math.cos(this.yaw) * 0.3;
+      cam.position.set(ex2, ey2, ez2);
+      cam.lookAt(ex2 + Math.sin(this.yaw) * cp2 * 10, ey2 - Math.sin(this.pitch - 0.15) * 10, ez2 + Math.cos(this.yaw) * cp2 * 10);
+      player.object.visible = false;
+      return;
     }
     cam.position.set(px, py, pz);
     cam.lookAt(T.x, T.y, T.z);

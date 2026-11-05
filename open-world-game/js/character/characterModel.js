@@ -262,7 +262,7 @@ export class CharacterModel {
       }
       if (s.aim) {
         // aim > 1: weapon up and pointed where the camera looks (pitch follows the crosshair); 1: low ready
-        const up = s.aim > 1, ap = up ? (s.aimPitch || 0) : 0;
+        const up = s.aim > 1, ap = (up ? (s.aimPitch || 0) : 0) + (s.recoil || 0) * 0.35;
         if (s.hold === 'rifle' || s.hold === 'heavy') {
           // two hands: right hand on the grip, left hand forward under the fore-end, stock at the shoulder
           // forearm (gun) direction = armR + elbowR: about -1.57 means level with the ground

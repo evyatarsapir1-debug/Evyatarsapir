@@ -275,6 +275,44 @@ function clothesStore(F, spec, C, y0, L, D, hl, cw, furn) {
   for (const [a, d] of [[hl - 0.35, D - 0.35]]) { box(a - 0.2, a + 0.2, d - 0.2, d + 0.2, 0, 0.4, 0xb5653d); box(a - 0.32, a + 0.32, d - 0.32, d + 0.32, 0.4, 1.2, 0x3f7a32); }
 }
 
+// Weapons shop: the back wall behind the seller is a display — pegboard with rifles, pistols and boxes on shelves.
+function gunWall(F, spec, y0, H, hl, D, cw) {
+  const box = (a0, a1, d0, d1, ya, yb, color, mat = 'prop') => spec.boxes.push(boxFromRect(F.rect(a0, a1, d0, d1), y0 + ya, y0 + yb, color, mat));
+  const a0 = Math.max(-hl + 0.3, hl - cw - 2.2), a1 = hl - 0.15, dw = D - 0.03;   // right half of the back wall
+  const top = Math.min(H - 0.25, 2.9);
+  box(a0 - 0.08, a1, dw - 0.05, dw, 0.85, top + 0.08, 0x3a2f26);                     // dark wood frame
+  box(a0, a1 - 0.05, dw - 0.06, dw - 0.05, 0.92, top, 0xa08a6c);                      // pegboard
+  for (const y of [1.4, 1.95, 2.5]) { if (y > top - 0.15) continue; box(a0, a1 - 0.05, dw - 0.09, dw - 0.06, y - 0.02, y, 0x8a9096, 'metal'); }
+  const steel = 0x24272b, poly = 0x1b1d20, wood = 0x6b4a2f;
+  // rifles lying horizontally on pegs (barrel to the left), each: stock, receiver, magazine, barrel, scope sometimes
+  let row = 0;
+  for (const y of [1.2, 1.75, 2.3]) {
+    if (y > top - 0.2) continue;
+    for (let a = a0 + 0.15; a + 1.0 < a1; a += 1.15) {
+      const sn = (row + Math.round(a * 3)) % 3 === 0, z0 = dw - 0.11, z1 = dw - 0.07;
+      box(a + 0.62, a + 0.95, z0, z1, y - 0.06, y + 0.03, sn ? wood : poly);            // stock
+      box(a + 0.32, a + 0.62, z0, z1, y - 0.04, y + 0.04, steel);                         // receiver
+      box(a + 0.42, a + 0.5, z0, z1, y - 0.16, y - 0.04, poly);                           // magazine
+      box(a + 0.55, a + 0.6, z0, z1, y - 0.12, y - 0.04, poly);                           // grip
+      box(a + 0.1, a + 0.32, z0, z1, y - 0.03, y + 0.03, sn ? wood : poly);              // handguard
+      box(a - 0.05, a + 0.1, z0 + 0.01, z1 - 0.01, y - 0.01, y + 0.01, steel);           // barrel
+      if (sn) box(a + 0.3, a + 0.56, z0 + 0.005, z1 - 0.005, y + 0.05, y + 0.09, 0x111111); // scope
+      for (const pa of [a + 0.2, a + 0.75]) box(pa - 0.01, pa + 0.01, dw - 0.07, dw - 0.05, y - 0.08, y - 0.06, 0xc9ced3, 'metal'); // pegs
+    }
+    row++;
+  }
+  // pistols on the lowest strip
+  for (let a = a0 + 0.2; a + 0.25 < a1; a += 0.42) {
+    const y = 1.0, z0 = dw - 0.1, z1 = dw - 0.07;
+    box(a, a + 0.2, z0, z1, y, y + 0.045, steel);                                         // slide
+    box(a + 0.13, a + 0.19, z0, z1, y - 0.1, y, poly);                                    // grip
+  }
+  // ammo boxes and a price sign on top
+  for (let a = a0 + 0.1; a + 0.3 < a1; a += 0.5) box(a, a + 0.32, dw - 0.3, dw - 0.06, top + 0.08, top + 0.22, [0x6b7a3a, 0x8a3b2e, 0x2e4a6b][Math.floor(a * 7) % 3 & 3 % 3] || 0x6b7a3a);
+  box(a0 + 0.2, Math.min(a1 - 0.2, a0 + 1.6), dw - 0.12, dw - 0.1, 0.55, 0.8, 0xc0392b);  // red sign strip
+  spec.lamps.push(...[0.3, 0.7].map((k) => { const [x, z] = F.pt(a0 + (a1 - a0) * k, dw - 0.6); return { x, z, y: y0 + H - 0.03 }; }));
+}
+
 export function interiorSpec(b) {
   if (b._spec) return b._spec;
   const F = frame(b);
@@ -301,6 +339,7 @@ export function interiorSpec(b) {
     spec.counter = { pt: F.pt(hl - cw / 2 - 0.6, D - 2.9), keeper: F.pt(hl - cw / 2 - 0.6, D - 1.0), yaw: Math.atan2(F.fx, F.fz), y: y0 };
     furn(hl - cw - 0.6, hl - 0.6, D - 2.2, D - 1.5, y0, y0 + 1.05, 0x7a5233);
     furn(hl - cw - 0.6, hl - 0.6, D - 2.25, D - 1.45, y0 + 1.05, y0 + 1.1, 0xd8d2c8, false);
+    if (/חנות נשקים/.test(b.sign || '')) gunWall(F, spec, y0, H, hl, D, cw);
     if (isCafe) {
       const n = Math.max(1, Math.min(4, Math.floor((L - 2) / 2.6)));
       for (let i = 0; i < n; i++) for (const dd of [2.2, 4.6]) {

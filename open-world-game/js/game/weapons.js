@@ -33,6 +33,42 @@ export class WeaponSystem {
     this.smokeMat = new THREE.MeshLambertMaterial({ color: 0x555555, transparent: true, depthWrite: false });
     this.sphere = new THREE.SphereGeometry(1, 14, 10);
     this.gunMeshes = {};
+    // realistic shot effects: glowing tracer streaks, ejected brass, impact sparks, bullet holes, muzzle smoke
+    this.tracerGeo = new THREE.CylinderGeometry(1, 1, 1, 5, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
+    this.addMat = new THREE.MeshBasicMaterial({ color: 0xffe3a0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.brassGeo = new THREE.CylinderGeometry(0.006, 0.006, 0.024, 6);
+    this.brassMat = new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.9, roughness: 0.3 });
+    this.holeGeo = new THREE.CircleGeometry(0.035, 8);
+    this.holeMat = new THREE.MeshBasicMaterial({ color: 0x15130f, transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+    this.sparkGeo = new THREE.BoxGeometry(0.012, 0.012, 0.06);
+    this.casings = []; this.holes = []; this.sparks = [];
+  }
+
+  // brass shell flying out of the right side of the gun
+  _eject(player) {
+    if (!this.gunInner) return;
+    const p = new THREE.Vector3(0, -0.25, 0.05).applyMatrix4(this.gunInner.matrixWorld);
+    const fx = Math.sin(player.facing), fz = Math.cos(player.facing), rx = -fz, rz = fx;
+    const m = new THREE.Mesh(this.brassGeo, this.brassMat); m.position.copy(p); this.scene.add(m);
+    this.casings.push({ obj: m, v: new THREE.Vector3(rx * (1.6 + Math.random()) - fx * 0.4, 2 + Math.random(), rz * (1.6 + Math.random()) - fz * 0.4), spin: new THREE.Vector3(Math.random() * 20, Math.random() * 20, 0), t: 4 });
+    if (this.casings.length > 40) { const c = this.casings.shift(); this.scene.remove(c.obj); }
+  }
+  // what the bullet hits: hole (walls, ground, cars), sparks, dust
+  _impact(point, dir, hard) {
+    const n = dir.clone().negate();
+    const hole = new THREE.Mesh(this.holeGeo, this.holeMat.clone());
+    hole.position.copy(point).addScaledVector(n, 0.02); hole.lookAt(point.clone().addScaledVector(n, 1));
+    this.scene.add(hole); this.holes.push({ obj: hole, t: 25 });
+    if (this.holes.length > 50) { const h = this.holes.shift(); this.scene.remove(h.obj); }
+    const k = hard ? 7 : 4;
+    for (let i = 0; i < k; i++) {
+      const sp = new THREE.Mesh(this.sparkGeo, this.addMat.clone());
+      sp.material.color.setHex(hard ? 0xffd27a : 0xd8cfb8);
+      sp.position.copy(point).addScaledVector(n, 0.05);
+      const v = n.clone().multiplyScalar(2 + Math.random() * 3).add(new THREE.Vector3((Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4));
+      sp.lookAt(sp.position.clone().add(v)); this.scene.add(sp);
+      this.sparks.push({ obj: sp, v, t: 0.25 + Math.random() * 0.2 });
+    }
   }
 
   // realistic hand-held model in the player's right hand (barrel along +z from the hand at y = -0.3)
@@ -132,12 +168,16 @@ export class WeaponSystem {
   }
 
   _tracer(a, b, color) {
-    const g = new THREE.BufferGeometry().setFromPoints([a, b]);
-    const m = this.tracerMat.clone(); m.color.setHex(color);
-    const line = new THREE.Line(g, m);
-    this.scene.add(line);
-    this.tracers.push({ obj: line, t: 0.06 });
-    this._spark(b, 0xfff1c0, 0.08, 0.1);
+    // a short glowing streak that races from the muzzle to the target
+    const len = a.distanceTo(b);
+    const m = new THREE.Mesh(this.tracerGeo, this.addMat.clone()); m.material.color.setHex(color);
+    m.position.copy(a); m.lookAt(b); m.scale.set(0.012, 0.012, Math.min(len, 6));
+    this.scene.add(m);
+    this.tracers.push({ obj: m, t: 0.08, a: a.clone(), b: b.clone(), len, streak: true });
+    // muzzle smoke wisp
+    const sm = new THREE.Mesh(this.sphere, this.smokeMat.clone()); sm.material.color.setHex(0xbdb8ae);
+    sm.position.copy(a); sm.scale.setScalar(0.05); this.scene.add(sm);
+    this.fx.push({ obj: sm, t: 0.7, life: 0.7, grow: 0.35, rise: 0.25, type: 'smoke' });
     // dust puff where the bullet hits
     const s = new THREE.Mesh(this.sphere, this.smokeMat.clone()); s.material.color.setHex(0x9a958c);
     s.position.copy(b); s.scale.setScalar(0.12); this.scene.add(s);
@@ -202,7 +242,7 @@ export class WeaponSystem {
           player.firing = 0.35; player.aimT = 2.5;
           camera.getWorldDirection(_d);
           // gentle aim assist (touch screens): snap to a person right next to the crosshair
-          if (!W.thrown && !W.placed) {
+          if (!W.thrown && !W.placed && !W.explosive && W.kind !== 'long') {   // no assist for the launcher or the scoped rifle
             let best = 0.12, tgt = null;
             for (const ped of ctx.peds) {
               if (ped.state === 'dead') continue;
@@ -232,10 +272,13 @@ export class WeaponSystem {
             const muzzle = new THREE.Vector3();
             if (this.gunInner) { this.gunInner.updateWorldMatrix(true, false); muzzle.set(0, -0.262, this.gunMuzzle || 0.3).applyMatrix4(this.gunInner.matrixWorld); } else muzzle.copy(origin);
             this._tracer(muzzle, r.point, 0xffd9a0);
+            if (!W.explosive) { this._eject(player); if (!r.ped) this._impact(r.point, _d, !!r.vehicle); }
+            player.recoil = W.kind === 'long' ? 1 : W.kind === 'pistol' ? 0.55 : 0.35;
             if (this.muzzleFlash) { this.muzzleFlash.visible = true; this.muzzleFlash.rotation.z = Math.random() * 3; this.muzzleFlash.scale.setScalar(0.8 + Math.random() * 0.5); this._mfT = 0.05; }
             this.flash.position.copy(muzzle); this.flash.intensity = 18; this._flashT = 0.06;
             ctx.onShot?.(W);
             ctx.onShake?.(W.kind === 'long' ? 0.18 : W.kind === 'rifle' ? 0.06 : 0.1);
+            ctx.onRecoil?.(W.kind === 'long' ? 0.05 : W.kind === 'pistol' ? 0.025 : 0.012);
             if (W.explosive) this.explode(r.point, W.explosive, W.damage, ctx);
             else if (r.vehicle) { r.vehicle.addDamage(W.damage, -_d.x, -_d.z); if (r.vehicle.damage >= 100) r.vehicle.wreck?.(); }
             if (r.ped) ctx.hitPed?.(r.ped, W.pedDmg || 4);
@@ -246,6 +289,7 @@ export class WeaponSystem {
     }
     if (player.firing > 0) player.firing -= dt;
     if (player.aimT > 0) player.aimT -= dt;
+    if (player.recoil > 0) player.recoil = Math.max(0, player.recoil - dt * 6);
     if (player.throwT > 0) player.throwT -= dt;
     if (canUse && input.isHeld('fire')) player.aimT = Math.max(player.aimT || 0, 0.6);
     if (this._mfT > 0) { this._mfT -= dt; if (this._mfT <= 0 && this.muzzleFlash) this.muzzleFlash.visible = false; }
@@ -274,7 +318,15 @@ export class WeaponSystem {
       if (pr.fuse <= 0) { this.scene.remove(pr.obj); this.explode(pr.obj.position.clone(), pr.W.explosive, pr.W.damage, ctx); this.projectiles.splice(i, 1); }
     }
     for (let i = this.tracers.length - 1; i >= 0; i--) {
-      const t = this.tracers[i]; t.t -= dt; t.obj.material.opacity = Math.max(0, t.t / 0.09);
+      const t = this.tracers[i]; t.t -= dt;
+      if (t.streak) {
+        const k = 1 - Math.max(0, t.t) / 0.08;                     // 0 -> 1 as the bullet travels
+        t.obj.position.lerpVectors(t.a, t.b, Math.min(1, k * 1.15)); t.obj.lookAt(t.b);
+        t.obj.material.opacity = Math.max(0, t.t / 0.08);
+        if (t.t <= 0) { this.scene.remove(t.obj); this.tracers.splice(i, 1); }
+        continue;
+      }
+      t.obj.material.opacity = Math.max(0, t.t / 0.09);
       if (t.t <= 0) { this.scene.remove(t.obj); t.obj.geometry.dispose(); this.tracers.splice(i, 1); }
     }
     for (let i = this.fx.length - 1; i >= 0; i--) {
@@ -285,6 +337,22 @@ export class WeaponSystem {
       if (f.rise) f.obj.position.y += f.rise * dt;
       if (f.t <= 0) { this.scene.remove(f.obj); this.fx.splice(i, 1); }
     }
+    // brass casings, sparks, bullet holes
+    for (let i = this.casings.length - 1; i >= 0; i--) {
+      const c = this.casings[i]; c.t -= dt;
+      if (c.v) {
+        c.v.y -= 15 * dt; c.obj.position.addScaledVector(c.v, dt);
+        c.obj.rotation.x += c.spin.x * dt; c.obj.rotation.y += c.spin.y * dt;
+        const gy = heightAt(c.obj.position.x, c.obj.position.z, c.obj.position.y + 0.2) + 0.006;
+        if (c.obj.position.y < gy) { c.obj.position.y = gy; if (Math.abs(c.v.y) > 1.2) { c.v.y = -c.v.y * 0.35; c.v.x *= 0.5; c.v.z *= 0.5; } else { c.v = null; c.obj.rotation.set(0, Math.random() * 6, Math.PI / 2); } }
+      }
+      if (c.t <= 0) { this.scene.remove(c.obj); this.casings.splice(i, 1); }
+    }
+    for (let i = this.sparks.length - 1; i >= 0; i--) {
+      const sp = this.sparks[i]; sp.t -= dt; sp.v.y -= 9 * dt; sp.obj.position.addScaledVector(sp.v, dt); sp.obj.material.opacity = Math.max(0, sp.t * 3);
+      if (sp.t <= 0) { this.scene.remove(sp.obj); this.sparks.splice(i, 1); }
+    }
+    for (let i = this.holes.length - 1; i >= 0; i--) { const h = this.holes[i]; h.t -= dt; if (h.t < 3) h.obj.material.opacity = Math.max(0, h.t / 3) * 0.85; if (h.t <= 0) { this.scene.remove(h.obj); this.holes.splice(i, 1); } }
     if (this._flashT > 0) { this._flashT -= dt; this.flash.intensity = Math.max(0, this._flashT / 0.25) * 60; }
   }
 }

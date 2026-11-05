@@ -22,7 +22,7 @@ export class Input {
     const keyMap = {
       KeyE: 'interact', KeyF: 'vehicle', KeyC: 'camera', KeyH: 'horn', KeyM: 'map', Escape: 'pause', KeyP: 'pause',
       Space: 'jump', ShiftLeft: 'run', ShiftRight: 'run', KeyQ: 'down', KeyR: 'up', Tab: 'map',
-      KeyG: 'cycle', KeyI: 'bag', KeyL: 'light', KeyT: 'fire', KeyN: 'phone',
+      KeyG: 'cycle', KeyI: 'bag', KeyL: 'light', KeyT: 'fire', KeyN: 'phone', KeyZ: 'aim',
     };
     addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
@@ -40,7 +40,10 @@ export class Input {
     const c = this.canvas;
     let mouseDown = false, lx = 0, ly = 0;
     let downX = 0, downY = 0;
-    c.addEventListener('mousedown', (e) => { mouseDown = true; lx = downX = e.clientX; ly = downY = e.clientY; if (e.button === 0 && this.fireByMouse === 'hold') { this.pressed.add('fire'); this.mouseFire = true; } });
+    c.addEventListener('contextmenu', (e) => e.preventDefault());
+    c.addEventListener('mousedown', (e) => { if (e.button === 2) { this.mouseAim = true; return; } });
+    addEventListener('mouseup', (e) => { if (e.button === 2) this.mouseAim = false; });
+    c.addEventListener('mousedown', (e) => { if (e.button === 2) return; mouseDown = true; lx = downX = e.clientX; ly = downY = e.clientY; if (e.button === 0 && this.fireByMouse === 'hold') { this.pressed.add('fire'); this.mouseFire = true; } });
     // unarmed: a short click (not a camera drag) throws a punch
     addEventListener('mouseup', (e) => { if (mouseDown && this.fireByMouse === 'tap' && e.button === 0 && Math.hypot(e.clientX - downX, e.clientY - downY) < 6) this.pressed.add('fire'); mouseDown = false; this.mouseFire = false; });
     addEventListener('mousemove', (e) => {

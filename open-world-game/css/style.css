@@ -230,7 +230,7 @@ body.navon #elevPanel { top: calc(max(10px, env(safe-area-inset-top)) + 52px); }
 .tbtns { position: absolute; right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); display: none; gap: 8px;
   grid-auto-rows: min-content; align-items: end; justify-items: center; }
 .tbtns.show { display: grid; }
-.tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "cyc . ." "light fire ." "jump run ."; }
+.tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "cyc aim ." "light fire ." "jump run ."; }
 .tbtns.drive { grid-template-columns: 58px 58px 48px; grid-template-areas: ". cam horn" "brake gas hb"; }
 .tbtns.heli { grid-template-columns: 58px 58px 48px; grid-template-areas: ". . cam" "brake gas ."; }
 .tbtns.plane { grid-template-columns: 58px 58px 48px; grid-template-areas: "dn up cam" "brake gas ."; }
@@ -313,3 +313,21 @@ html, body { touch-action: manipulation; }
 @media (max-height: 355px) {
   .tbtns.foot [data-btn="cycle"] { position: fixed; top: calc(max(12px, env(safe-area-inset-top)) + 100px); right: calc(max(12px, env(safe-area-inset-right)) + 54px); transform: none; margin: 0; }
 }
+
+/* aim button + sniper scope */
+.tbtn.aimbtn.on { background: #ff8a3dcc; border-color: #fff; }
+#hud.aiming #crosshair { display: block; width: 10px; height: 10px; margin: -5px; background: transparent; border: 2px solid #fff; box-shadow: 0 0 0 1px #0008; }
+#scope { position: absolute; inset: 0; display: none; pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, transparent 0, transparent min(38vh, 38vw), #000 calc(min(38vh, 38vw) + 1px)); }
+#hud.scoped #scope { display: block; }
+#hud.scoped #crosshair { display: none !important; }
+#scope .lens { position: absolute; left: 50%; top: 50%; width: min(76vh, 76vw); height: min(76vh, 76vw); transform: translate(-50%, -50%); border-radius: 50%; box-shadow: inset 0 0 40px 8px #000c; }
+#scope .h, #scope .v { position: absolute; background: #000; }
+#scope .h { left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; }
+#scope .v { top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; }
+#scope .dot { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #e03030; }
+#scope b { position: absolute; background: #000; }
+#scope .m1, #scope .m2 { top: 50%; height: 6px; margin-top: -3px; width: 18%; }
+#scope .m1 { left: 0; } #scope .m2 { right: 0; }
+#scope .m3, #scope .m4 { left: 50%; width: 6px; margin-left: -3px; height: 18%; }
+#scope .m3 { top: 0; } #scope .m4 { bottom: 0; }
