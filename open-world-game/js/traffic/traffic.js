@@ -120,6 +120,7 @@ export class Traffic {
 
   _drive(v, dt, time, vehicles, obstacles) {
     const ai = v.ai, T = v.T;
+    if (v.wrecked) { v.speed = 0; v.vx = v.vz = 0; v.horn = false; ai.wait = 0; v.sync(dt); return; }   // destroyed: stays where it is
     if (v.bumped > 0) {
       // knocked by the player: slide and slow down, then resume
       v.x += v.vx * dt; v.z += v.vz * dt;

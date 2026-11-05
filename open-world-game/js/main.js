@@ -279,6 +279,7 @@ class Game {
       { short: 'הבית שלי', name: 'הבית שלי — וילה עם בריכה', icon: '🏠', color: '#e0533b', x: VILLA.door.x, z: VILLA.door.z - 1 },
       { short: 'נמל תעופה', name: 'נמל התעופה אזורה — טרמינל', icon: '✈', color: '#1f5fa8', x: -300, z: 514 },
       { short: 'מרינה', name: 'מרינה מזרח', icon: '⚓', color: '#0e7c86', x: 2500, z: 510 },
+      { short: 'בל־ריב', name: 'בל־ריב, צרפת — שדה התעופה', icon: '🗼', color: '#23395b', x: 4500, z: 918 },
       { short: 'בסיס צבאי', name: 'בסיס צבאי — שער הכניסה', icon: '🪖', color: '#4b5320', x: -500, z: -20 },
       { short: 'לונה פארק', name: 'לונה פארק המרינה — גלגל ענק ורכבת הרים', icon: '🎡', color: '#d81b60', x: LUNA.x - 22, z: LUNA.z - 2 },
       { short: 'חנות נשקים', name: 'חנות נשקים', icon: '🎯', color: '#5b2c6f', ...door(find([[2, 5]], (b) => b.sign === 'חנות נשקים')) },
@@ -748,7 +749,7 @@ class Game {
     if (aimingNow) p.aimT = Math.max(p.aimT || 0, 0.25);
     this.rig.aimMode = aimingNow ? (this.econ.equipped === 'nz' ? 'scope' : 'aim') : null;
     if (input.wasPressed('light')) { if (this.econ.items.flashlight) this.econ.flashlightOn = !this.econ.flashlightOn; else this.toast('אין לך פנס — אפשר לקנות בחנות ציוד', 2); }
-    input.fireByMouse = p.state === 'driving' && p.vehicle?.T.tank ? 'hold' : p.state !== 'foot' ? false : this.econ.equipped ? 'hold' : 'tap';
+    input.fireByMouse = p.state === 'driving' && (p.vehicle?.T.tank || p.vehicle?.T.fighter) ? 'hold' : p.state !== 'foot' ? false : this.econ.equipped ? 'hold' : 'tap';
 
     const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list];
     const pedObs = this.peds.obstacles();
@@ -856,6 +857,11 @@ class Game {
     const fl = this.flashlight, on = this.econ.items.flashlight && this.econ.flashlightOn && p.state !== 'driving';
     fl.intensity = on ? 60 : 0;
     if (on) { fl.position.set(p.x, p.y + 1.5, p.z); fl.target.position.set(p.x + Math.sin(p.facing) * 8, p.y + 0.4, p.z + Math.cos(p.facing) * 8); }
+    // flying fast: stream less detail and at most one chunk per frame -> no stutters in the air
+    const flying = v && v.isAir && v.airborne && v.y > 35;
+    if (this.baseRadius) this.chunks.radius = flying ? Math.min(this.baseRadius, 230) : this.baseRadius;
+    this.chunks.maxNearPerFrame = flying ? 1 : 99;
+    this.chunks.budgetMs = flying ? 3 : 6;
     const pending = this.chunks.update(focusX, focusZ);
     const LI = this._lighting(dt, focusX, focusZ);
     this.env.update(new THREE.Vector3(focusX, v ? v.y : p.y, focusZ), dt, this.camera);
@@ -927,6 +933,7 @@ class Game {
       { const t = p.prompt?.label || 'היכנס לרכב'; if ($('tVehicle').textContent !== t) $('tVehicle').textContent = t; }
       { const t = v?.isPlane ? 'צא מהמטוס' : v?.T.tank ? 'צא מהטנק' : v?.isBoat ? 'רד מהסירה' : 'צא מהרכב'; if ($('tExit').textContent !== t) $('tExit').textContent = t; }
       $('tCannon').classList.toggle('show', !!v?.T.tank);
+      $('tMissile').classList.toggle('show', !!v?.T.fighter);
       $('tExit').classList.toggle('show', !!v && !v.isHeli && p.prompt?.key === 'vehicle');
       $('tExitHeli').classList.toggle('show', !!v && v.isHeli && p.prompt?.key === 'vehicle');
       $('runBtn').classList.toggle('on', p.sprint);

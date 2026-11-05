@@ -5,8 +5,8 @@ import { makeBox, makeSurface } from '../physics/collision.js';
 import { CURB_H, faceVector } from './layout.js';
 
 const T = 0.3; // wall thickness
-const CAFE = ['קפה', 'גלידת', 'מאפיית', 'פיצה', 'בורגר', 'סושי', 'פלאפל', 'מסעדת', 'יין'];
-const CLOTHES = ['חנות בגדים', 'אופנת', 'בגדי', 'נעלי', 'תכשיטי', 'משקפי', 'מספרת'];
+const CAFE = ['בולנז׳רי', 'פטיסרי', 'ביסטרו', 'קפה', 'גלידת', 'מאפיית', 'פיצה', 'בורגר', 'סושי', 'פלאפל', 'מסעדת', 'יין'];
+const CLOTHES = ['בוטיק', 'חנות בגדים', 'אופנת', 'בגדי', 'נעלי', 'תכשיטי', 'משקפי', 'מספרת'];
 
 // local frame of a building relative to its door face:
 //  a = lateral coordinate (-L/2..L/2), b = depth from the inner face of the front wall (0..D)

@@ -13,7 +13,7 @@ import { interiorSpec, garageSpec } from './interiors.js';
 export const WATER_Y = -1.0;
 export const RIDGE = { x0: -60, x1: 1060, z0: -760, z1: -640, h: 42 };
 export const TUNNEL_H = 8, TUNNEL_HALF = 9.5;
-const URBAN = new Set('DSCAHPGMTBLKIVU'.split(''));
+const URBAN = new Set('DSCAHPGMTBLKIVUJE'.split(''));
 const TOWN_NAMES = ['נווה ים', 'כפר אלונים', 'רמת השקד', 'עין הדקל', 'קריית הגפן', 'נאות הברוש', 'גבעת הכלנית', 'כרם התאנה'];
 const COUNTRY_NAMES = ['עמק השקדים', 'שדות הזהב', 'יער האלונים', 'מישור הרוח', 'גבעות הכלנית', 'נחל הצפצפות'];
 const mod = (a, n) => ((a % n) + n) % n;
@@ -28,6 +28,7 @@ export function regionInfo(rx, rz) {
   let type;
   if (rx === 0 && rz === 0) type = 'azura';
   else if (rx === -1 && rz === -1) type = 'base';
+  else if (rx === 4 && rz === 0) type = 'france';
   else if (rx === 1) type = 'bay';
   else if (rx === -1 && rz === 0) type = 'airport';
   else if ((rx === 0 || rx === -1) && rz === -1) type = 'country';
@@ -49,7 +50,7 @@ export function regionInfo(rx, rz) {
 
 // The world is the city and what belongs to it: Azura (0,0), the airport (-1,0), the bay with its beach and bridge (1,0)
 // and the marina island with the luna park (2,0). Everything else is open sea you can swim and sail in.
-export const isLandRegion = (rx, rz) => (rz === 0 && rx >= -1 && rx <= 2) || (rx === -1 && rz === -1);   // + the military base north of the airport
+export const isLandRegion = (rx, rz) => (rz === 0 && rx >= -1 && rx <= 2) || (rx === -1 && rz === -1) || (rx === 4 && rz === 0);   // + the military base, + 'Belle-Rive' (a French town across the sea)
 const kindCache = new Map();
 export function cellKind(ix, iz) {
   const key = ix * 1000003 + iz;
@@ -66,6 +67,15 @@ export function cellKind(ix, iz) {
     case 'bay': k = lx === 0 ? 'Y' : lx === 9 ? 'Z' : 'Q'; break;
     case 'airport': k = 'X'; break;
     case 'base': k = 'N'; break;
+    case 'france': {
+      // a compact French town: Haussmann blocks around a central square with the iron tower, parks, and an airstrip
+      const d = Math.hypot(lx + 0.5 - 5, lz + 0.5 - 4.5);
+      if (lz === 9 && lx >= 1 && lx <= 8) k = 'j';
+      else if (lx < 1 || lx > 8 || lz < 1 || lz > 8 || d > 3.7) k = 'Q';
+      else if (d < 0.8) k = 'E';
+      else k = h < 16 ? 'P' : 'J';
+      break;
+    }
     case 'town': {
       const d = Math.hypot(ix + 0.5 - reg.cx, iz + 0.5 - reg.cz);
       if (d > reg.R || lx < 1 || lx > 8 || lz < 1 || lz > 8) {
@@ -205,6 +215,7 @@ export function districtAt(x, z) {
   }
   if (reg.type === 'airport') return 'נמל התעופה אזורה';
   if (reg.type === 'base') return 'בסיס צבאי';
+  if (reg.type === 'france') return cellKind(ix, iz) === 'j' ? 'שדה התעופה בל־ריב' : cellKind(ix, iz) === 'E' ? 'כיכר מגדל הברזל · בל־ריב' : 'בל־ריב, צרפת';
   if (reg.type === 'azura') {
     if (z > 1003 && x > 380 && x < 620) return 'התחנה המרכזית';
     return DISTRICT_NAMES[cellKind(ix, iz)] || 'אזורה סיטי';
@@ -370,6 +381,16 @@ function generateCell(ix, iz) {
     for (const r of Object.values(AIRPORT_AREAS)) d.keepOut.push(r);
     d.keepOut.push([-640, 506, -20, 600]);
     if (!d.apron.length && oz < 900) addTrees(d, rng, rng.int(2, 8));
+  } else if (kind === 'j') {
+    // Belle-Rive airstrip: runway + taxi apron, windsock, a small terminal; a fighter and a plane to fly back with
+    const R = [4080, 932, 4920, 968], A = [4400, 905, 4620, 930];
+    for (const [name, r] of [['runway', R], ['apron', A]]) {
+      const x0 = Math.max(ox, r[0]), z0 = Math.max(oz, r[1]), x1 = Math.min(ox + P, r[2]), z1 = Math.min(oz + P, r[3]);
+      if (x1 > x0 && z1 > z0) d.apron.push({ name, rect: [x0, z0, x1, z1] });
+    }
+    for (let x = 4100; x <= 4900; x += 50) if (x >= ox && x < ox + P) for (const z of [928, 972]) PR.push({ kind: 'rlight', x, z, y: 0 });
+    if (ix === 41) PR.push({ kind: 'windsock', x: 4120, z: 985 });
+    if (ix === 45) { d.parking.push({ x: 4450, z: 918, rot: Math.PI / 2, type: 'fighter', fixed: true }, { x: 4480, z: 918, rot: Math.PI / 2, type: 'fighter', fixed: true }); B.push({ x: 4540, z: 985, w: 30, d: 14, h: 6, style: 'glass', color: 0xdfe6ea, face: 'n', sign: 'מסוף בל־ריב' }); }
   } else if (kind === 'N') {
     const BI = BASE_ITEMS, inCell = (q) => q.x >= ox && q.x < ox + P && q.z >= oz && q.z < oz + P;
     for (const b of BI.b) if (inCell(b)) B.push({ ...b });
@@ -567,6 +588,8 @@ export function propColliders(p, out) {
     case 'fence': out.push(makeBox((p.x0 + p.x1) / 2, (p.z0 + p.z1) / 2, Math.max(0.1, (p.x1 - p.x0) / 2), Math.max(0.1, (p.z1 - p.z0) / 2), 0, 0, 3)); break;
     case 'watchtower': for (const sx of [-1.6, 1.6]) for (const sz of [-1.6, 1.6]) out.push(makeCircle(p.x + sx, p.z + sz, 0.2, 0, 7)); break;
     case 'flagpole': out.push(makeCircle(p.x, p.z, 0.15, 0, 10)); break;
+    case 'cafeTable': out.push(makeCircle(p.x, p.z, 0.45, 0, 0.8)); break;
+    case 'ironTower': for (const sx of [-1, 1]) for (const sz of [-1, 1]) out.push(makeCircle(p.x + sx * 19, p.z + sz * 19, 2.2, 0, 12)); out.push(makeBox(p.x, p.z, 12, 12, 0, 29.4, 30.6)); break;
     case 'lounger': out.push(makeBox(p.x, p.z, 0.35, 0.95, p.rot || 0, 0, 0.6)); break;
     case 'parasol': out.push(makeCircle(p.x, p.z, 0.12, 0, 2.4)); break;
     case 'container': out.push(makeBox(p.x, p.z, 3.0, 1.2, p.rot || 0, 0, 2.6)); break;

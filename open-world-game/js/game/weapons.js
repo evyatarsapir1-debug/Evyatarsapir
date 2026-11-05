@@ -42,6 +42,7 @@ export class WeaponSystem {
     this.holeMat = new THREE.MeshBasicMaterial({ color: 0x15130f, transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
     this.sparkGeo = new THREE.BoxGeometry(0.012, 0.012, 0.06);
     this.casings = []; this.holes = []; this.sparks = [];
+    this.burning = [];
   }
 
   // brass shell flying out of the right side of the gun
@@ -210,7 +211,15 @@ export class WeaponSystem {
       v.vx += (dx / L) * 14 * k * (2000 / Math.max(800, v.T.mass)); v.vz += (dz / L) * 14 * k * (2000 / Math.max(800, v.T.mass));
       v.bumped = 1.5;
       v.addDamage(damage * k * 1.6, -dx / L, -dz / L);
-      if (v.damage >= 100) v.wreck?.();
+      if (d < radius * 0.55) v.damage = 100;   // direct hit: the vehicle is destroyed
+      if (v.damage >= 100 && !v.wrecked) {
+        v.wreck?.();
+        // destroyed: blown up a little, then it burns for a while (fire + black smoke)
+        if (!v.ai) { v.vy = 6; v.y += 0.3; }
+        if (v.ai) { v.ai.cruise = 0; v.ai.baseCruise = 0; }
+        this.burning.push({ v, t: 25 });
+        ctx.onShake?.(0.4);
+      }
     }
     for (const ped of ctx.peds) {
       const d = Math.hypot(ped.x - p.x, ped.z - p.z);
@@ -337,6 +346,20 @@ export class WeaponSystem {
       f.obj.material.opacity = (f.type === 'smoke' ? 0.55 : 1) * (1 - k);
       if (f.rise) f.obj.position.y += f.rise * dt;
       if (f.t <= 0) { this.scene.remove(f.obj); this.fx.splice(i, 1); }
+    }
+    // wrecked vehicles burning
+    for (let i = this.burning.length - 1; i >= 0; i--) {
+      const b = this.burning[i]; b.t -= dt;
+      if (b.t <= 0 || b.v.removed) { this.burning.splice(i, 1); continue; }
+      b.acc = (b.acc || 0) + dt;
+      if (b.acc > 0.12) {
+        b.acc = 0;
+        const p = new THREE.Vector3(b.v.x + (Math.random() - 0.5) * b.v.T.W * 0.6, b.v.y + b.v.T.H * 0.7, b.v.z + (Math.random() - 0.5) * b.v.T.L * 0.5);
+        if (b.t > 6) this._spark(p, Math.random() < 0.5 ? 0xff7a1a : 0xffb83a, 0.35 + Math.random() * 0.3, 0.35);
+        const sm = new THREE.Mesh(this.sphere, this.smokeMat.clone()); sm.material.color.setHex(0x222222);
+        sm.position.copy(p); sm.scale.setScalar(0.5); this.scene.add(sm);
+        this.fx.push({ obj: sm, t: 3, life: 3, grow: 1.4, rise: 2.5, type: 'smoke' });
+      }
     }
     // brass casings, sparks, bullet holes
     for (let i = this.casings.length - 1; i >= 0; i--) {

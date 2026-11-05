@@ -45,6 +45,8 @@ const DISTRICTS = {
   B: 'טיילת החוף',
   V: 'וילת החוף — הבית שלי',
   U: 'לונה פארק המרינה',
+  J: 'בל־ריב, צרפת',
+  E: 'כיכר מגדל הברזל',
 };
 
 const SHOP_NAMES = [
@@ -53,7 +55,7 @@ const SHOP_NAMES = [
   'נעלי הצעד', 'בית הקפה הירוק', 'מסעדת הנמל', 'סושי גל', 'פלאפל הכיכר', 'תכשיטי אור',
   'משקפי עין', 'פארם העיר', 'צעצועי קשת', 'יין ושמש', 'בגדי רחוב', 'מכולת אבי',
 ];
-export const SPECIAL_SIGNS = ['תחנת רכבת מרכזית', 'מוסך אזורה', 'דלק+', 'נמל התעופה אזורה', 'מגדל אזורה', 'בית העירייה', 'מחסני הנמל', 'בית קפה החוף', 'קניון העיר', 'חניון', 'חוות השקד', 'מנהרת הרכס', 'חנות נשקים', 'צ׳ק-אין', 'שער 1', 'שער 2', 'שער 3', 'שירותים', 'דיוטי פרי', 'קפה טרמינל', 'מסוע מזוודות', 'האנגר אזורה', 'מגדל פיקוח', 'הגעות', 'ספריית העיר', 'הבית שלי', 'בסיס צבאי', 'מפקדה', 'מגורי חיילים', 'מרכז שליטה', 'האנגר', 'מוסך צבאי'];
+export const SPECIAL_SIGNS = ['תחנת רכבת מרכזית', 'מוסך אזורה', 'דלק+', 'נמל התעופה אזורה', 'מגדל אזורה', 'בית העירייה', 'מחסני הנמל', 'בית קפה החוף', 'קניון העיר', 'חניון', 'חוות השקד', 'מנהרת הרכס', 'חנות נשקים', 'צ׳ק-אין', 'שער 1', 'שער 2', 'שער 3', 'שירותים', 'דיוטי פרי', 'קפה טרמינל', 'מסוע מזוודות', 'האנגר אזורה', 'מגדל פיקוח', 'הגעות', 'ספריית העיר', 'הבית שלי', 'בסיס צבאי', 'מפקדה', 'מגורי חיילים', 'מרכז שליטה', 'האנגר', 'מוסך צבאי', 'בולנז׳רי', 'קפה דה לה פלאס', 'פטיסרי', 'ביסטרו', 'בוטיק', 'מסוף בל־ריב'];
 export const ALL_SIGNS = [...SHOP_NAMES, ...SPECIAL_SIGNS];
 
 const PASTELS = [0xf2e3c6, 0xe8d1b5, 0xd9c8a9, 0xf0d9c0, 0xc9d6df, 0xe4c9b6, 0xd8e2cf, 0xefe6d8, 0xd4b8a0, 0xbfcfd9];
@@ -302,6 +304,27 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
       B.push({ x: cx - 6, z: oz + 14, w: 6, d: 4, h: 3.2, style: 'plaster', color: 0xf4d03f, face: 'n', storefront: true, sign: 'גלידת שקיעה' });
       break;
     }
+    case 'J': { // Haussmann block: cream limestone, 6 floors, shops and cafés at street level, mansard roofs
+      blk.ground = 'plaza';
+      const FR = ['בולנז׳רי', 'קפה דה לה פלאס', 'פטיסרי', 'ביסטרו', 'בוטיק', 'קפה דה לה פלאס', 'ביסטרו'];
+      perimeterBuildings(rng, ox, oz, { depth: 18, minFront: 14, maxFront: 22, minH: 17, maxH: 21, styles: ['plaster'], colors: [0xeadfc6, 0xe6d6b8, 0xf0e6d0, 0xe2d3b5], storefront: true }, B);
+      for (const b of B) { b.french = true; if (b.storefront) b.sign = rng.pick(FR); }
+      for (let k = 0; k < 6; k++) PR.push({ kind: 'tree', x: ox + rng.float(36, 64), z: oz + rng.float(36, 64), s: rng.float(0.9, 1.2) });
+      // café terraces on the pavement in front of cafés and bistros
+      for (const b of B) if (b.storefront && /קפה|ביסטרו/.test(b.sign)) {
+        const [fx, fz] = faceVector(b.face), half = (fx !== 0 ? b.w : b.d) / 2, rx = -fz, rz = fx;
+        for (let k = -1; k <= 1; k++) PR.push({ kind: 'cafeTable', x: b.x + fx * (half + 2.2) + rx * k * 2.2, z: b.z + fz * (half + 2.2) + rz * k * 2.2 });
+      }
+      break;
+    }
+    case 'E': { // the town square with the iron tower
+      blk.ground = 'plaza';
+      PR.push({ kind: 'ironTower', x: cx, z: cz });
+      for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; PR.push({ kind: 'tree', x: cx + Math.cos(a) * 34, z: cz + Math.sin(a) * 34, s: 1.1 }); }
+      for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2 + 0.4; PR.push({ kind: 'bench', x: cx + Math.cos(a) * 26, z: cz + Math.sin(a) * 26, rot: -a + Math.PI / 2 }); }
+      for (let k = 0; k < 4; k++) PR.push({ kind: 'cafeTable', x: cx - 30 + k * 3, z: oz + 14 });
+      break;
+    }
     case 'T': {
       blk.ground = 'plaza';
       B.push({ x: cx, z: oz + 70, w: 64, d: 26, h: 16, style: 'glass', color: 0xc9d3db, face: 's', station: true, sign: 'תחנת רכבת מרכזית' });
@@ -313,7 +336,7 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
   }
 
   // bus-stop style benches + trash bins along sidewalks of non-park blocks
-  if (type !== 'P' && type !== 'H' && type !== 'V' && type !== 'U') {
+  if (type !== 'P' && type !== 'H' && type !== 'V' && type !== 'U' && type !== 'E') {
     if (rng.chance(0.5)) PR.push({ kind: 'bench', x: cx + rng.float(-25, 25), z: oz + 9, rot: Math.PI });
     PR.push({ kind: 'bin', x: ox + 8.4, z: oz + 32 });
   }

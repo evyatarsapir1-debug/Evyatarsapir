@@ -621,6 +621,43 @@ const gate = await g(() => { const game = __game, step = (n) => { for (let i = 0
 check('base gate: the barrier arm lifts when you arrive', gate.closed < 0.05 && gate.open > 0.95 && gate.passable, JSON.stringify(gate));
 check('fighter jets patrol over the city', mil.patrol >= 4, `${mil.patrol} jets`);
 
+// ---------------------------------------------------------------- fighter missiles destroy cars, tank shells too, easy landing, France
+const strike = await g(() => {
+  const game = __game, P = game.player, I = game.input, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { if (P.vehicle) { P.vehicle.vx = P.vehicle.vz = 0; P.vehicle.speed = 0; } I.pressed.add('vehicle'); step(40); }
+  game.teleport(-690, -510, 0, 0.3); step(40);
+  const jet = game.vehicles.all().find((v) => v.T.fighter);
+  const jp = jet.doorPoint(); game.teleport(jp.x, jp.z, 0, 0.3); step(5); I.pressed.add('vehicle'); step(60);
+  // a target car 400 m ahead on the runway, the jet flying level towards it
+  const car = game.spawnVehicleNear('sedan', -300, -10) || game.vehicles.all().find((v) => v.T.kind === 'car' && !v.T.mil);
+  car.x = -300; car.z = -720; car.y = 0; car.heading = 0; car.vx = car.vz = 0; car.sync();
+  jet.x = -750; jet.z = -720; jet.y = 60; jet.heading = Math.PI / 2; jet.speed = 90; jet.pitch = 0.08; jet.roll = 0; jet.vy = 0; jet.throttleSet = 0.6; jet.airborne = true;
+  I.pressed.add('fire'); step(1); const fired = (game.military.missiles || []).length;
+  step(90);
+  const destroyed = car.wrecked, burning = game.weapons.burning.length > 0;
+  // landing: glide down onto the runway with the throttle at idle — should touch down without damage
+  jet.x = -950; jet.z = -720; jet.y = 40; jet.heading = Math.PI / 2; jet.speed = 72; jet.pitch = 0.06; jet.roll = 0.3; jet.vy = -4; jet.throttleSet = 0.25; jet.damage = 0; jet.airborne = true;
+  let landedAt = null;
+  for (let i = 0; i < 30 * 40 && landedAt === null; i++) { I.joyY = jet.y > 12 ? 0.25 : 0; step(1); if (!jet.airborne && jet.y < 0.5) landedAt = i; }
+  I.joyY = 0;
+  const landDamage = jet.damage;
+  step(30 * 25);
+  const stoppedSpeed = Math.abs(jet.speed);
+  I.pressed.add('vehicle'); step(40);
+  return { fired, destroyed, burning, landed: landedAt !== null, landDamage, stoppedSpeed, onFoot: P.state };
+});
+check('fighter: fires missiles that blow up a car (wrecked + burning)', strike.fired >= 1 && strike.destroyed && strike.burning, JSON.stringify(strike));
+check('fighter: easy landing on the runway without damage, rolls to a stop', strike.landed && strike.landDamage < 20 && strike.stoppedSpeed < 2 && strike.onFoot === 'foot', JSON.stringify(strike));
+const fr = await g(() => {
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  game.teleport(4405, 360, Math.PI, 0.3); step(60);
+  let french = 0, shops = 0; for (let i = 40; i < 50; i++) for (let j = 0; j < 10; j++) for (const b of __wg.cellData(i, j).buildings) { if (b.french) french++; if (b.interior === 'shop') shops++; }
+  let sea = 0; for (let x = 1100; x < 4000; x += 100) if (__wg.cellKind(Math.floor(x / 100), 5) === 'Q') sea++;
+  const tower = __wg.cellData(45, 4).props.some((p) => p.kind === 'ironTower');
+  return { french, shops, sea, tower, d: __wg.districtAt(4405, 360), peds: game.peds.peds.length, runway: __wg.cellData(45, 9).apron.some((a) => a.name === 'runway'), dist: 4000 - 1000 };
+});
+check('France (Belle-Rive) ~3 km across the sea: Paris-style buildings, shops, iron tower, airstrip', fr.french > 40 && fr.shops > 10 && fr.tower && fr.runway && fr.d.includes('בל־ריב'), JSON.stringify(fr));
+
 // ---------------------------------------------------------------- traffic drivers + carjacking
 const jack = await g(() => {
   const game = __game, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };

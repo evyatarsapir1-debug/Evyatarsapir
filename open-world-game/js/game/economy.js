@@ -18,6 +18,8 @@ export const FOODS = {
   sandwich:  { name: 'כריך', icon: '🥪', heal: 20, color: 0xe8d29a },
   meal:      { name: 'ארוחה מלאה', icon: '🍱', heal: 45, color: 0xc0392b },
   drink:     { name: 'שתייה קרה', icon: '🧃', heal: 5, color: 0x2e86c1 },
+  baguette:  { name: 'באגט', icon: '🥖', heal: 18, color: 0xd9a35c },
+  crepe:     { name: 'קרפ', icon: '🥞', heal: 20, color: 0xe8c58a },
   snack:     { name: 'חטיף', icon: '🍫', heal: 20, color: 0x6e4b3a },
 };
 export class Economy {

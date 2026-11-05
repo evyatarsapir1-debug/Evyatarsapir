@@ -89,6 +89,54 @@ export class Military {
       }
       if (this.recoilT > 0) { this.recoilT -= dt; v.parts.barrel.position.z = damp(v.parts.barrel.position.z, 2.2, 6, dt); }
     }
+    // ------------------------------------------------ fighter: missiles (fictional), homing on the nearest vehicle ahead
+    if (v && v.T.fighter && (input.wasPressed('fire') || input.isHeld('fire')) && this.cool <= 0) {
+      this.cool = 0.7; this.side = -(this.side || 1);
+      v.object.updateMatrixWorld();
+      const start = new THREE.Vector3(this.side * 3.0, 1.0, -0.6).applyMatrix4(v.parts.body.matrixWorld);
+      const fwd = new THREE.Vector3(0, 0, 1).transformDirection(v.parts.body.matrixWorld);
+      let target = null, best = 0.9;
+      for (const o of ctx.vehicles || []) {
+        if (o === v || o.wrecked) continue;
+        const d = _a.set(o.x - start.x, o.y + 1 - start.y, o.z - start.z), L = d.length();
+        if (L > 1500 || L < 15) continue;
+        const c = d.dot(fwd) / L; if (c > best) { best = c; target = o; }
+      }
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 2.6, 8).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xeeeeee, metalness: 0.4, roughness: 0.4 }));
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 8).rotateX(Math.PI / 2).translate(0, 0, 1.55), new THREE.MeshStandardMaterial({ color: 0x8a6a3a }));
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.6, 8).rotateX(-Math.PI / 2).translate(0, 0, -2.1), this.shellMat);
+      g.add(body, nose, flame); g.position.copy(start); g.lookAt(start.clone().add(fwd));
+      this.scene.add(g);
+      this.missiles ||= [];
+      this.missiles.push({ obj: g, v: fwd.clone().multiplyScalar(Math.max(60, v.speed) + 10), t: 0, owner: v, target });
+      audio?.gunshot?.('heavy');
+    }
+    for (let i = (this.missiles || []).length - 1; i >= 0; i--) {
+      const ms = this.missiles[i]; ms.t += dt;
+      const sp = Math.min(260, ms.v.length() + 120 * dt);
+      if (ms.target && !ms.target.removed && ms.t > 0.25) {
+        const want = _b.set(ms.target.x - ms.obj.position.x, ms.target.y + 0.8 - ms.obj.position.y, ms.target.z - ms.obj.position.z).normalize();
+        ms.v.normalize().lerp(want, Math.min(1, 3.5 * dt)).normalize();
+      } else ms.v.normalize();
+      ms.v.multiplyScalar(sp);
+      _a.copy(ms.obj.position); ms.obj.position.addScaledVector(ms.v, dt); _b.copy(ms.obj.position);
+      ms.obj.lookAt(_b.clone().add(ms.v));
+      if (Math.random() < 0.8) this._puff(_a.clone(), 0.35, 1.4, 0xd8d4cc);
+      let hit = ms.t > 8 || _b.y < heightAt(_b.x, _b.z, _b.y + 1);
+      if (!hit && ms.target && ms.obj.position.distanceTo(_a.set(ms.target.x, ms.target.y + 0.8, ms.target.z)) < 4) hit = true;
+      if (!hit) {
+        _a.copy(_b).addScaledVector(ms.v, -dt);
+        this.statics.query(Math.min(_a.x, _b.x) - 1, Math.min(_a.z, _b.z) - 1, Math.max(_a.x, _b.x) + 1, Math.max(_a.z, _b.z) + 1, _q);
+        for (const c of _q) { if (c.off || c.tag === 'water') continue; if (segmentVsBox(_a.x, _a.y, _a.z, _b.x, _b.y, _b.z, c, 0) < 1) { hit = true; break; } }
+        if (!hit) for (const o of ctx.vehicles || []) { if (o === ms.owner) continue; if (segmentVsBox(_a.x, _a.y, _a.z, _b.x, _b.y, _b.z, o.collider, 0.5) < 1) { hit = true; break; } }
+      }
+      if (hit) {
+        this.scene.remove(ms.obj); this.missiles.splice(i, 1);
+        if (weapons.lastCtx) weapons.explode(ms.obj.position.clone(), 11, 130, weapons.lastCtx);
+        for (let k = 0; k < 10; k++) this._puff(ms.obj.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 5, Math.random() * 3, (Math.random() - 0.5) * 5)), 1.4, 4, 0x4a4540);
+      }
+    }
     // ------------------------------------------------ shells in flight
     for (let i = this.shells.length - 1; i >= 0; i--) {
       const sh = this.shells[i]; sh.t += dt;

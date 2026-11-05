@@ -170,12 +170,12 @@ export class Vehicle {
     this.throttleSet = clamp((this.throttleSet || 0) + thr * 0.5 * dt, 0, 1);
     if (!this.driver) this.throttleSet = 0;
     this.thrust = damp(this.thrust || 0, this.throttleSet, 0.9, dt);
-    v += T.accel * this.thrust * dt;
+    if (!(onGround && this.throttleSet < 0.3)) v += T.accel * this.thrust * dt;   // on the ground, a low throttle is idle
     v -= v * Math.abs(v) * (T.accel / (T.maxSpeed * T.maxSpeed)) * dt;
     if (onGround) {
       // wheel brakes once the throttle is at idle and you keep pulling back
       if (thr < 0 && this.throttleSet === 0) v = v > 0.3 ? Math.max(0, v - T.brake * 2.2 * -thr * dt) : Math.max(-3, v - 1.5 * dt);
-      else if (this.throttleSet < 0.05) v -= Math.sign(v) * Math.min(Math.abs(v), 0.6 * dt);
+      else if (this.throttleSet < 0.3) v -= Math.sign(v) * Math.min(Math.abs(v), (Math.abs(v) > 6 ? 7 : 2) * dt);   // wheel brakes + air brakes after touchdown   // rolls to a stop after landing
       if (ctl.handbrake) v -= Math.sign(v) * Math.min(Math.abs(v), 14 * dt);
       // nose-wheel steering, less effective at speed
       const steer = (ctl.steer || 0) * T.steerMax / (1 + Math.abs(v) * 0.06);
@@ -203,7 +203,14 @@ export class Vehicle {
       let targetVy = v * Math.sin(pt) * L - (1 - L) * 14;
       // landing assist (ground effect): close to the ground with flying speed, the sink rate is gently limited
       const agl = this.y - ground;
-      if (agl < 25 && L > 0.6) targetVy = Math.max(targetVy, -2 - agl * 0.35);
+      if (agl < 25 && L > 0.6) targetVy = Math.max(targetVy, -1.6 - agl * 0.3);
+      // landing approach: engine low and the stick not pulled back -> settle gently onto the ground
+      if (agl < 30 && this.throttleSet < 0.4 && lift <= 0) targetVy = Math.min(targetVy, -1.0 - agl * 0.06);
+      // easy landing: close to the ground the wings level out and the nose flares a little by itself
+      if (agl < 18 && this.vy < 0.5) {
+        this.roll = damp(this.roll, 0, 3, dt);
+        if (!lift) this.pitch = damp(this.pitch, -0.05, 1.5, dt);
+      }
       this.vy = damp(this.vy, targetVy, L > 0.5 ? 3 : 1.2, dt);
       if (L < 0.5) this.pitch = damp(this.pitch, 0.12, 0.8, dt); // nose drops in a stall
     }
@@ -219,7 +226,7 @@ export class Vehicle {
     if (this.y < g2) {
       // touchdown: soft landings roll on, hard ones are a crash
       const sink = -this.vy;
-      if (sink > 8 || (sink > 3 && -this.pitch < -0.15)) { this.lastImpact = Math.max(this.lastImpact, sink * 2.2); this.addDamage(sink * 6, 0, 1); }
+      if (sink > 11 || (sink > 5 && -this.pitch < -0.25)) { this.lastImpact = Math.max(this.lastImpact, sink * 2.2); this.addDamage(sink * 6, 0, 1); }
       this.y = g2; this.vy = 0;
       if (-this.pitch > 0) this.pitch = damp(this.pitch, 0, 3, dt);
       this.roll = 0;

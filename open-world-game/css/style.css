@@ -233,7 +233,7 @@ body.navon #elevPanel { top: calc(max(10px, env(safe-area-inset-top)) + 52px); }
 .tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "cyc aim ." "light fire ." "jump run ."; }
 .tbtns.drive { grid-template-columns: 58px 58px 48px; grid-template-areas: "can cam horn" "brake gas hb"; }
 .tbtns.heli { grid-template-columns: 58px 58px 48px; grid-template-areas: ". . cam" "brake gas ."; }
-.tbtns.plane { grid-template-columns: 58px 58px 48px; grid-template-areas: "dn up cam" "brake gas ."; }
+.tbtns.plane { grid-template-columns: 58px 58px 52px; grid-template-areas: "dn up cam" "brake gas fir"; }
 .tbtn { pointer-events: auto; width: 56px; height: 56px; border-radius: 50%; border: 1.5px solid #ffffff4d; background: #00000038; color: #ffffffe6;
   font: inherit; font-weight: 800; font-size: 12px; touch-action: none; backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); text-shadow: 0 1px 3px #000a; }
 .tbtn.down { background: #ff8a3d80; border-color: #fff; }

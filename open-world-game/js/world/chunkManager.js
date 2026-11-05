@@ -145,6 +145,43 @@ function addProp(pb, p, lampB) {
       pb.addGeometry(G.cyl, mat(p.x, y + 3, p.z, 0, 0.1, 6, 0.1), 0xdddddd);
       pb.addGeometry(G.cone, mat(p.x + 1.2, y + 5.8, p.z, 0, 0.6, 2.2, 0.6, 0, -Math.PI / 2), 0xff7a1a);
       break;
+    case 'cafeTable': {
+      pb.addGeometry(G.cyl, mat(p.x, y + 0.72, p.z, 0, 0.75, 0.04, 0.75), 0xf2efe8);
+      pb.addGeometry(G.cyl, mat(p.x, y + 0.36, p.z, 0, 0.06, 0.72, 0.06), 0x222222);
+      for (const s2 of [-1, 1]) {
+        pb.addGeometry(G.box, mat(p.x + s2 * 0.6, y + 0.45, p.z, 0, 0.4, 0.05, 0.4), 0x8a5a33);
+        pb.addGeometry(G.box, mat(p.x + s2 * 0.8, y + 0.7, p.z, 0, 0.05, 0.5, 0.4), 0x8a5a33);
+        for (const dz of [-0.17, 0.17]) pb.addGeometry(G.box, mat(p.x + s2 * 0.6, y + 0.22, p.z + dz, 0, 0.03, 0.45, 0.03), 0x222222);
+      }
+      break;
+    }
+    case 'ironTower': {
+      // a tall wrought-iron lattice tower (fictional landmark of Belle-Rive): four splayed legs joining into a spire
+      const col = 0x7a6248, seg = (x0, y0, z0, x1, y1, z1, t) => {
+        const L = Math.hypot(x1 - x0, y1 - y0, z1 - z0), m = new THREE.Matrix4().lookAt(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1), new THREE.Vector3(0, 1, 0));
+        m.multiply(new THREE.Matrix4().makeScale(t, t, L)); m.setPosition((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+        pb.addGeometry(G.box, m, col);
+      };
+      const H = 130, w = (h) => h < 55 ? 18 * (1 - h / 55) ** 1.6 + 4.5 : 4.5 * (1 - (h - 55) / (H - 55)) + 0.4;
+      const lv = [0, 8, 18, 30, 42, 55, 70, 85, 100, 115, H];
+      for (let i = 0; i < lv.length - 1; i++) {
+        const a = lv[i], c = lv[i + 1], wa = w(a), wc = w(c);
+        for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) seg(p.x + sx * wa, y + a, p.z + sz * wa, p.x + sx * wc, y + c, p.z + sz * wc, a < 55 ? 1.1 : 0.6);
+        for (const [s0, s1] of [[[-1, -1], [1, -1]], [[1, -1], [1, 1]], [[1, 1], [-1, 1]], [[-1, 1], [-1, -1]]]) {
+          seg(p.x + s0[0] * wa, y + a, p.z + s0[1] * wa, p.x + s1[0] * wc, y + c, p.z + s1[1] * wc, 0.3);
+          seg(p.x + s1[0] * wa, y + a, p.z + s1[1] * wa, p.x + s0[0] * wc, y + c, p.z + s0[1] * wc, 0.3);
+          seg(p.x + s0[0] * wc, y + c, p.z + s0[1] * wc, p.x + s1[0] * wc, y + c, p.z + s1[1] * wc, 0.35);
+        }
+      }
+      // arches between the legs and two observation decks
+      for (let k = 0; k <= 12; k++) { const t = k / 12, ax = -14 + 28 * t, ay = 10 + Math.sin(t * Math.PI) * 6; for (const sz of [-14, 14]) pb.addGeometry(G.box, mat(p.x + ax, y + ay, p.z + sz, 0, 2.4, 0.5, 0.5), col); for (const sx of [-14, 14]) pb.addGeometry(G.box, mat(p.x + sx, y + ay, p.z + ax, 0, 0.5, 0.5, 2.4), col); }
+      pb.addGeometry(G.box, mat(p.x, y + 30, p.z, 0, 24, 1.2, 24), 0x6a543e);
+      pb.addGeometry(G.box, mat(p.x, y + 55, p.z, 0, 11, 1.0, 11), 0x6a543e);
+      pb.addGeometry(G.box, mat(p.x, y + 116, p.z, 0, 4, 2.5, 4), 0x6a543e);
+      pb.addGeometry(G.cyl, mat(p.x, y + H + 5, p.z, 0, 0.3, 10, 0.3), 0x8a8f94);
+      (lampB || pb).addGeometry(G.box, mat(p.x, y + H + 10.3, p.z, 0, 0.6, 0.6, 0.6), 0xffffff);
+      break;
+    }
     case 'towel': {
       const r = p.rot || 0;
       pb.addGeometry(G.box, mat(p.x, y + 0.012, p.z, r, 1.0, 0.02, 2.0), p.color);
@@ -343,7 +380,7 @@ function buildBuilding(b, out, B) {
       faces(f(b.style), rect, y, top, uS, vS, b.color, door);
     }
     // balconies on residential facades (aligned with the window bays of the facade texture)
-    if (!b.storefront && !b.tower && ['plaster', 'brick', 'concrete'].includes(b.style) && b.h >= 9) {
+    if (!b.storefront && !b.tower && !b.french && ['plaster', 'brick', 'concrete'].includes(b.style) && b.h >= 9) {
       const [fx, fz] = faceVector(b.face);
       const half = fx !== 0 ? b.w / 2 : b.d / 2, len = fx !== 0 ? b.d : b.w;
       const rx = -fz, rz = fx;
@@ -360,7 +397,39 @@ function buildBuilding(b, out, B) {
         }
       }
     }
-    if (!(b.tower && b.setback) && !b.villa) {
+    if (b.french) {
+      // Paris style: cornice, slate-blue mansard roof with dormer windows and chimney stacks,
+      // wrought-iron balconies on every floor, a striped awning over the shop
+      const [fx, fz] = faceVector(b.face), rx = -fz, rz = fx;
+      const half = fx !== 0 ? b.w / 2 : b.d / 2, len = fx !== 0 ? b.d : b.w, ry = fx !== 0 ? Math.PI / 2 : 0;
+      B.props.addGeometry(G.box, mat(b.x, top + 0.15, b.z, 0, b.w + 0.5, 0.3, b.d + 0.5), 0xd9ccb0);
+      B.props.addGeometry(G.box, mat(b.x, top + 1.0, b.z, 0, b.w - 0.2, 1.4, b.d - 0.2), 0x55606e);
+      B.props.addGeometry(G.box, mat(b.x, top + 2.3, b.z, 0, b.w - 1.6, 1.4, b.d - 1.6), 0x4c5664);
+      B.props.addGeometry(G.box, mat(b.x, top + 3.05, b.z, 0, b.w - 2.4, 0.12, b.d - 2.4), 0x434c58);
+      for (let u = 2; u < len - 1.5; u += 3) {
+        const a = u - len / 2, dx = b.x + fx * (half - 0.4) + rx * a, dz = b.z + fz * (half - 0.4) + rz * a;
+        B.props.addGeometry(G.box, mat(dx, top + 1.5, dz, ry, 1.0, 1.4, 0.7), 0xe8ddc6);                 // dormer
+        B.props.addGeometry(G.box, mat(dx + fx * 0.36, top + 1.45, dz + fz * 0.36, ry, 0.6, 0.8, 0.04), 0x2a3440);
+        B.props.addGeometry(G.box, mat(dx, top + 2.25, dz, ry, 1.1, 0.12, 0.8), 0x434c58);
+      }
+      for (const k of [-0.3, 0.3]) B.props.addGeometry(G.box, mat(b.x + rx * len * k - fx * 2, top + 3.6, b.z + rz * len * k - fz * 2, ry, 1.6, 1.4, 0.6), 0xc9b79a);
+      for (let fy = CURB_H + 4.2 + 3.2; fy < top - 0.5; fy += 3.0) {
+        for (let u = 1.5; u < len - 1.0; u += 3) {
+          const a = u - len / 2, cx = b.x + fx * (half + 0.35) + rx * a, cz = b.z + fz * (half + 0.35) + rz * a;
+          B.props.addGeometry(G.box, mat(cx, fy + 0.05, cz, ry, 1.6, 0.08, 0.7), 0xd9ccb0);
+          B.props.addGeometry(G.box, mat(cx + fx * 0.33, fy + 0.55, cz + fz * 0.33, ry, 1.6, 0.05, 0.05), 0x1d1f22);
+          for (let t = -0.75; t <= 0.76; t += 0.25) B.props.addGeometry(G.box, mat(cx + fx * 0.33 + rx * t, fy + 0.32, cz + fz * 0.33 + rz * t, ry, 0.025, 0.5, 0.025), 0x1d1f22);
+        }
+      }
+      if (b.storefront) {
+        const col = [0xb22234, 0x1f5f3a, 0x23395b, 0x7a1f2b][Math.abs(Math.round(b.x * 3 + b.z)) % 4];
+        for (let u = 0.5; u < len - 0.4; u += 1) {
+          const a = u - len / 2, cx = b.x + fx * (half + 0.75) + rx * a, cz = b.z + fz * (half + 0.75) + rz * a;
+          const mm = mat(cx, CURB_H + 3.55, cz, ry, 1.0, 0.08, 1.5).clone(); mm.multiply(new THREE.Matrix4().makeRotationX(fx !== 0 ? 0 : (fz > 0 ? -0.35 : 0.35)));
+          B.props.addGeometry(G.box, mm, Math.floor(u) % 2 ? col : 0xf2efe8);
+        }
+      }
+    } else if (!(b.tower && b.setback) && !b.villa) {
       roof.floor(rect[0], rect[1], rect[2], rect[3], top, 0xaaaaaa, 6);
       faces(f('concrete'), [rect[0] - 0.15, rect[1] - 0.15, rect[2] + 0.15, rect[3] + 0.15], top, top + 0.8, 60, 60, 0xcfcac2, null);
       if (b.h > 12 && b.w > 12 && b.d > 12) {
@@ -816,13 +885,16 @@ export class ChunkManager {
     wantNear.sort((a, b) => a[0] - b[0]);
     wantFar.sort((a, b) => a[0] - b[0]);
     let pending = wantNear.length + wantFar.length;
+    let built = 0;
     for (const [, cx, cz, k] of wantNear) {
-      if (!force && performance.now() - t0 > this.budgetMs) break;
+      if (!force && (performance.now() - t0 > this.budgetMs || built >= (this.maxNearPerFrame || 99))) break;
+      built++;
       const n = this._buildNear(cx, cz);
       this.group.add(n.group); this.near.set(k, n); pending--;
     }
     for (const [, cx, cz, k] of wantFar) {
-      if (!force && performance.now() - t0 > this.budgetMs) break;
+      if (!force && (performance.now() - t0 > this.budgetMs || built >= (this.maxNearPerFrame || 99) + 2)) break;
+      built++;
       if (force && wantFar.length > 40 && performance.now() - t0 > 400) break;
       const m = this._buildFar(cx, cz);
       this.group.add(m); this.far.set(k, m); pending--;

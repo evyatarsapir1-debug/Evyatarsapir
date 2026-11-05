@@ -5,7 +5,7 @@ import { cellData, cellKind, RIDGE } from '../world/worldGen.js';
 
 const TS = 50; // tile pixels per 100m cell (0.5 px / m)
 const S = TS / P;
-const KIND_COLORS = { D: '#b9b2a6', S: '#d9cdb5', C: '#cbbfa8', A: '#c4cfb6', H: '#b9d39a', I: '#a9a39a', P: '#7fbf63', G: '#d0c3a8', M: '#b0a89c', T: '#c9c0b0', B: '#e0d2b0', L: '#cbbfa8', K: '#b8b4ac',
+const KIND_COLORS = { J: '#d6c9ad', E: '#e3d7bd', j: '#9fbf7a', D: '#b9b2a6', S: '#d9cdb5', C: '#cbbfa8', A: '#c4cfb6', H: '#b9d39a', I: '#a9a39a', P: '#7fbf63', G: '#d0c3a8', M: '#b0a89c', T: '#c9c0b0', B: '#e0d2b0', L: '#cbbfa8', K: '#b8b4ac',
   F: '#a8bf6a', W: '#5f8f45', O: '#8fb873', h: '#a8bf6a', X: '#a5ad95', Q: '#4f9dc9' };
 
 // Landmark badges (icon in a coloured circle + name) drawn on any of the maps.
@@ -166,7 +166,7 @@ export class MiniMap {
       if (sx > 0 && sy > 0 && sx < c.width && sy < c.height) { g.strokeStyle = '#fff'; g.lineWidth = 3; g.strokeText(t, sx, sy); g.fillText(t, sx, sy); }
     };
     label('אזורה סיטי', 500, 470); label('מפרץ אזורה', 1500, 250);
-    label('בסיס צבאי', -500, -500); label('הים', 500, -350); label('הים', 500, 1350);
+    label('בסיס צבאי', -500, -500); label('בל־ריב (צרפת)', 4500, 470); label('הים', 500, -350); label('הים', 500, 1350);
     drawLandmarks(g, this.landmarks || [], (x, z) => W2(x, z), 15 * devicePixelRatio, true);
   }
 }
