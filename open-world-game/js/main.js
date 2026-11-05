@@ -18,7 +18,7 @@ import { GPS } from './phone/gps.js';
 import { Phone } from './phone/phone.js';
 import { Missions, CONTACTS, MISSIONS } from './game/missions.js';
 import { Radio } from './core/audio.js';
-import { PARK_OFFSET, VILLA } from './world/layout.js';
+import { PARK_OFFSET, VILLA, FORCED_SHOPS } from './world/layout.js';
 import { AirportManager, LIVERIES } from './world/airport.js';
 import { Combat } from './game/combat.js';
 import { setAnisotropy } from './world/textures.js';
@@ -231,7 +231,7 @@ class Game {
     this.missions.load(null); this.gps.clear();
     this.save();
     this.startPlaying();
-    this.toast('ברוכים הבאים לאזורה סיטי! מצא רכב חונה ולחץ F (או "כניסה") כדי לנהוג.', 6);
+    this.toast('ברוכים הבאים ללוס אנטוס! מצא רכב חונה ולחץ F (או "כניסה") כדי לנהוג.', 6);
   }
 
   continueGame() {
@@ -277,7 +277,7 @@ class Game {
     const door = (b) => b && { x: b.door.x + (b.door.x - b.x) * 0.15, z: b.door.z + (b.door.z - b.z) * 0.15 };
     const list = [
       { short: 'הבית שלי', name: 'הבית שלי — וילה עם בריכה', icon: '🏠', color: '#e0533b', x: VILLA.door.x, z: VILLA.door.z - 1 },
-      { short: 'נמל תעופה', name: 'נמל התעופה אזורה — טרמינל', icon: '✈', color: '#1f5fa8', x: -300, z: 514 },
+      { short: 'נמל תעופה', name: 'נמל התעופה לוס אנטוס — טרמינל', icon: '✈', color: '#1f5fa8', x: -300, z: 514 },
       { short: 'מרינה', name: 'מרינה מזרח', icon: '⚓', color: '#0e7c86', x: 2500, z: 510 },
       { short: 'בל־ריב', name: 'בל־ריב, צרפת — שדה התעופה', icon: '🗼', color: '#23395b', x: 4500, z: 918 },
       { short: 'בסיס צבאי', name: 'בסיס צבאי — שער הכניסה', icon: '🪖', color: '#4b5320', x: -500, z: -20 },
@@ -287,6 +287,15 @@ class Game {
       { short: 'גלידה', name: 'גלידת שקיעה', icon: '🍦', color: '#f39c12', ...door(find([[7, 3]], (b) => b.sign === 'גלידת שקיעה')) },
       { short: 'ספרייה', name: 'ספריית העיר', icon: '📚', color: '#6d4c41', ...door(find([[2, 3]], (b) => b.sign === 'ספריית העיר')) },
     ].filter((L) => Number.isFinite(L.x));
+    // every clothes / weapons / ice-cream / falafel shop in Los Antos gets its icon on the maps
+    const KIND = { 'חנות בגדים': ['חנות בגדים', '👕', '#c2185b'], 'חנות נשקים': ['חנות נשקים', '🎯', '#5b2c6f'], 'גלידת שקיעה': ['גלידה', '🍦', '#f39c12'], 'פלאפל הכיכר': ['פלאפל', '🧆', '#8a6d1f'] };
+    for (const [key, sign] of Object.entries(FORCED_SHOPS)) {
+      const k = KIND[sign]; if (!k) continue;
+      const [bx, bz] = key.split(',').map(Number);
+      const pt = door(find([[bx, bz]], (b) => b.sign === sign));
+      if (!pt || list.some((L) => Math.hypot(L.x - pt.x, L.z - pt.z) < 2)) continue;
+      list.push({ short: k[0], name: `${sign} (${bx},${bz})`, icon: k[1], color: k[2], minor: true, ...pt });
+    }
     this.minimap.landmarks = list;
     return (this._landmarks = list);
   }
@@ -295,15 +304,15 @@ class Game {
     const door = (b) => b && { x: b.door.x + (b.door.x - b.x) * 0.2, z: b.door.z + (b.door.z - b.z) * 0.2 };
     const reg = WG.regionInfo(0, 1);
     const list = [
-      ...this.landmarks().map((L) => ({ name: L.name, x: L.x, z: L.z })),
+      ...this.landmarks().filter((L) => !L.minor).map((L) => ({ name: L.name, x: L.x, z: L.z })),
       { name: 'קניון המרינה', ...door(find([WG.regionInfo(2, 0).mall], (b) => b.mall)) },
       { name: 'פלאפל הכיכר', ...door(find([[7, 6]], (b) => b.sign === 'פלאפל הכיכר')) },
-      { name: 'מוסך אזורה', ...door(find([[8, 3], [2, 7]], (b) => b.sign === 'מוסך אזורה')) },
+      { name: 'מוסך לוס אנטוס', ...door(find([[8, 3], [2, 7]], (b) => b.sign === 'מוסך לוס אנטוס')) },
       { name: 'התחנה המרכזית', x: 500, z: 992 },
       { name: 'כיכר העירייה', x: 550, z: 545 },
-      { name: 'חוף אזורה', x: 1030, z: 300 },
+      { name: 'חוף לוס אנטוס', x: 1030, z: 300 },
       { name: 'גשר המפרץ', x: 1500, z: 502 },
-      { name: 'חוף אזורה — רציפים וסירות', x: 1060, z: 250 },
+      { name: 'חוף לוס אנטוס — רציפים וסירות', x: 1060, z: 250 },
     ];
     const last = this.player.lastVehicle;
     if (last && this.vehicles.kept.includes(last)) list.unshift({ name: `הרכב שלי (${last.T.name})`, x: last.x, z: last.z, radius: 6 });
@@ -374,14 +383,14 @@ class Game {
         break;
       }
       case 'taxi': {
-        line = 'מוניות אזורה, לאן נוסעים?';
+        line = 'מוניות לוס אנטוס, לאן נוסעים?';
         acts.push({ text: 'שלחו מונית לכאן', run: () => { const p = this.playerPos(); const v = this.spawnVehicleNear('taxi', p.x, p.z); if (!v) return 'אין מונית פנויה באזור'; this.gps.set({ x: v.x, z: v.z, name: 'המונית', radius: 5 }, p); return 'המונית מחכה לך בצד הכביש — אפשר גם לנהוג בה.'; } });
         if (this.gps.dest) acts.push({ text: `קחו אותי אל ${this.gps.dest.name || 'היעד ב־GPS'}`, run: () => this.fastTravel(this.gps.dest) });
         break;
       }
       case 'airport': {
         const f = this.airport?.departures?.() || [];
-        line = f.length ? 'הטיסות הקרובות: ' + f.slice(0, 3).map((x) => `${x.dest} ${x.time} (${x.status})`).join(' · ') : 'נמל התעופה אזורה, טרמינל 1 פתוח 24 שעות.';
+        line = f.length ? 'הטיסות הקרובות: ' + f.slice(0, 3).map((x) => `${x.dest} ${x.time} (${x.status})`).join(' · ') : 'נמל התעופה לוס אנטוס, טרמינל 1 פתוח 24 שעות.';
         acts.push({ text: 'נווט לטרמינל', run: () => { this.gps.set({ x: -300, z: 514, name: 'נמל התעופה', radius: 14 }, this.playerPos()); return 'הדרך מסומנת ב־GPS.'; } });
         break;
       }

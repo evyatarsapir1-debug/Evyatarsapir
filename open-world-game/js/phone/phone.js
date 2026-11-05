@@ -184,7 +184,7 @@ export class Phone {
       case 'settings': {
         const st = this.settings;
         s.innerHTML = head('הגדרות') + `<div class="pset">
-          <label>צלצול <select id="pRing">${['צלילי אזורה', 'קלאסי', 'נצנוץ'].map((n, i) => `<option value="${i}" ${st.ring === i ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+          <label>צלצול <select id="pRing">${['צלילי לוס אנטוס', 'קלאסי', 'נצנוץ'].map((n, i) => `<option value="${i}" ${st.ring === i ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
           <button type="button" class="pbtn" id="pRingTest">השמע צלצול</button>
           <label>בהירות <input type="range" id="pBright" min="0.5" max="1.2" step="0.05" value="${st.bright}"></label>
           <label>רקע</label><div class="pwalls">${WALLS.map((w, i) => `<button type="button" class="pwall ${st.wall === i ? 'on' : ''}" data-w="${i}" style="background:${w}" aria-label="רקע ${i + 1}"></button>`).join('')}</div>

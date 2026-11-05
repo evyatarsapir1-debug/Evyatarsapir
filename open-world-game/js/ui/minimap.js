@@ -165,8 +165,10 @@ export class MiniMap {
       const [sx, sy] = W2(wx, wz);
       if (sx > 0 && sy > 0 && sx < c.width && sy < c.height) { g.strokeStyle = '#fff'; g.lineWidth = 3; g.strokeText(t, sx, sy); g.fillText(t, sx, sy); }
     };
-    label('אזורה סיטי', 500, 470); label('מפרץ אזורה', 1500, 250);
+    label('לוס אנטוס', 500, 470); label('מפרץ לוס אנטוס', 1500, 250);
     label('בסיס צבאי', -500, -500); label('בל־ריב (צרפת)', 4500, 470); label('הים', 500, -350); label('הים', 500, 1350);
-    drawLandmarks(g, this.landmarks || [], (x, z) => W2(x, z), 15 * devicePixelRatio, true);
+    const LM = this.landmarks || [];
+    drawLandmarks(g, LM.filter((L) => !L.minor), (x, z) => W2(x, z), 15 * devicePixelRatio, true);
+    drawLandmarks(g, LM.filter((L) => L.minor), (x, z) => W2(x, z), 12 * devicePixelRatio, view.r < 450);
   }
 }

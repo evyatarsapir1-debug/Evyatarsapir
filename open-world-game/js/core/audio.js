@@ -77,7 +77,7 @@ export class GameAudio {
 // In-game radio: three procedurally composed stations (no audio files needed),
 // plus phone ringtones and notification sounds.
 const STATIONS = [
-  { name: 'אזורה FM', genre: 'פופ', bpm: 112, root: 48, prog: [[0, 4, 7], [9, 12, 16], [5, 9, 12], [7, 11, 14]], lead: 'square', bass: 'sawtooth', drums: 1, pad: 'triangle' },
+  { name: 'לוס אנטוס FM', genre: 'פופ', bpm: 112, root: 48, prog: [[0, 4, 7], [9, 12, 16], [5, 9, 12], [7, 11, 14]], lead: 'square', bass: 'sawtooth', drums: 1, pad: 'triangle' },
   { name: 'גלי החוף', genre: 'צ׳יל', bpm: 84, root: 50, prog: [[0, 3, 7, 10], [5, 8, 12, 15], [10, 14, 17, 21], [3, 7, 10, 14]], lead: 'sine', bass: 'triangle', drums: 0.6, pad: 'sine' },
   { name: 'רוק הרכס', genre: 'רוק', bpm: 136, root: 40, prog: [[0, 7, 12], [5, 12, 17], [3, 10, 15], [7, 14, 19]], lead: 'sawtooth', bass: 'sawtooth', drums: 1.3, pad: 'sawtooth' },
 ];

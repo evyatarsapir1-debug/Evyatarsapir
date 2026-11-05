@@ -6,9 +6,9 @@ export const CONTACTS = {
   roni: { name: 'רוני', role: 'חבר מהשכונה', color: '#ff8a3d' },
   mom: { name: 'אמא', role: 'משפחה', color: '#e84a8f' },
   falafel: { name: 'פלאפל הכיכר', role: 'מסעדה', color: '#f1c40f' },
-  mechanic: { name: 'מאיה · מוסך אזורה', role: 'מוסך', color: '#3fa7ff' },
-  taxi: { name: 'מוניות אזורה', role: 'שירות מוניות', color: '#ffd400' },
-  airport: { name: 'מודיעין נמל התעופה', role: 'נמל התעופה אזורה', color: '#7d8cff' },
+  mechanic: { name: 'מאיה · מוסך לוס אנטוס', role: 'מוסך', color: '#3fa7ff' },
+  taxi: { name: 'מוניות לוס אנטוס', role: 'שירות מוניות', color: '#ffd400' },
+  airport: { name: 'מודיעין נמל התעופה', role: 'נמל התעופה לוס אנטוס', color: '#7d8cff' },
 };
 
 // helper lookups into the generated world
@@ -25,7 +25,7 @@ const doorOf = (b) => ({ x: b.door.x + (b.door.x - b.x) * 0.15, z: b.door.z + (b
 export const MISSIONS = [
   {
     id: 'airport', title: 'איסוף מנמל התעופה', giver: 'roni', reward: 1200,
-    offer: 'היי! אני נוחת עוד מעט בנמל התעופה אזורה. תוכל לאסוף אותי מאזור ההורדה מול הטרמינל?',
+    offer: 'היי! אני נוחת עוד מעט בנמל התעופה לוס אנטוס. תוכל לאסוף אותי מאזור ההורדה מול הטרמינל?',
     steps: [
       { text: 'סע ברכב לאזור ההורדה מול הטרמינל', target: () => ({ x: -300, z: 514, radius: 14, name: 'נמל התעופה — הורדה' }), cond: (g) => g.player.state === 'driving', done: 'רוני: ראיתי אותך! נכנסתי לרכב 🙂' },
       { text: 'קח את רוני הביתה, לשכונת הגפנים', target: () => { const b = findBuilding((q) => q.house, [[1, 1], [0, 1], [2, 1]]); return { ...doorOf(b), radius: 12, name: 'הבית של רוני' }; }, cond: (g) => g.player.state === 'driving', done: 'רוני: תודה ענקית! העברתי לך משהו על הטרחה.' },
@@ -45,7 +45,7 @@ export const MISSIONS = [
     id: 'sunset', title: 'תמונת שקיעה', giver: 'mom', reward: 400,
     offer: 'חמוד, תצלם לי את השקיעה מהחוף? בין 17:00 ל־19:30 השמיים הכי יפים. (אפשר לשנות שעה בהגדרות)',
     steps: [
-      { text: 'צלם במצלמת הטלפון מהחוף, בין 17:00 ל־19:30', target: () => ({ x: 1030, z: 300, radius: 9999, name: 'חוף אזורה' }), photo: (p) => p.x > 1000 && p.x < 1110 && p.hour >= 17 && p.hour <= 19.5, done: 'אמא: איזו תמונה מהממת! תלתי אותה על המקרר ❤️' },
+      { text: 'צלם במצלמת הטלפון מהחוף, בין 17:00 ל־19:30', target: () => ({ x: 1030, z: 300, radius: 9999, name: 'חוף לוס אנטוס' }), photo: (p) => p.x > 1000 && p.x < 1110 && p.hour >= 17 && p.hour <= 19.5, done: 'אמא: איזו תמונה מהממת! תלתי אותה על המקרר ❤️' },
     ],
     unlocks: [],
   },
@@ -60,7 +60,7 @@ export const MISSIONS = [
   },
   {
     id: 'race', title: 'מירוץ הגשר', giver: 'roni', reward: 1500,
-    offer: 'מירוץ! מהטיילת של אזורה לצד השני של גשר המפרץ בפחות מ־60 שניות. מתאים לך?',
+    offer: 'מירוץ! מהטיילת של לוס אנטוס לצד השני של גשר המפרץ בפחות מ־60 שניות. מתאים לך?',
     steps: [
       { text: 'סע לקו הזינוק בטיילת (קצה הגשר)', target: () => ({ x: 1004, z: 502, radius: 10, name: 'קו הזינוק' }), cond: (g) => g.player.state === 'driving', done: 'רוני: 3... 2... 1... סע!', startTimer: true },
       { text: 'הגע לקצה השני של הגשר תוך 60 שניות', target: () => ({ x: 2002, z: 502, radius: 14, name: 'קו הסיום' }), cond: (g) => g.player.state === 'driving', timeLimit: 60, done: 'רוני: זמן מטורף! אתה אגדה.' },
@@ -89,7 +89,7 @@ export class Missions {
   start() {
     if (!Object.keys(this.state).length) {
       this.state.airport = 'available';
-      this.message('roni', 'ברוך הבא לאזורה! 📱 זה הטלפון שלך — מפה, הודעות, מוסיקה והכול.');
+      this.message('roni', 'ברוך הבא ללוס אנטוס! 📱 זה הטלפון שלך — מפה, הודעות, מוסיקה והכול.');
       this._offer(MISSIONS[0]);
       this.message('mom', 'תשמור על עצמך ותאכל משהו, כן? יש פלאפל מעולה בכיכר.');
     }

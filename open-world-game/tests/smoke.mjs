@@ -617,7 +617,7 @@ const mil = await g(() => {
 check('military base: buildings and soldiers on guard / patrol', mil.buildings >= 7 && mil.soldiers >= 6, JSON.stringify({ b: mil.buildings, s: mil.soldiers }));
 check('tank: "enter tank", turret follows the camera, the cannon fires and explodes', mil.tLabel === 'היכנס לטנק' && mil.inTank && mil.turned > 0.3 && mil.shells === 1 && mil.boom, JSON.stringify(mil));
 check('fighter jet: "board plane", take off from the base runway and fly', mil.jLabel === 'היכנס למטוס' && mil.inJet && mil.alt > 80 && mil.kmh > 300 && mil.onFoot === 'foot', JSON.stringify(mil));
-const gate = await g(() => { const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } }; game.teleport(-497, 40, Math.PI, 0.3); step(30); const closed = game.military.gateOpen; game.teleport(-497, -28, Math.PI, 0.3); step(75); return { closed, open: game.military.gateOpen, passable: game.military.gateCol.off }; });
+const gate = await g(() => { const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } }; game.teleport(-497, 40, Math.PI, 0.3); step(90); const closed = game.military.gateOpen; game.teleport(-497, -28, Math.PI, 0.3); step(75); return { closed, open: game.military.gateOpen, passable: game.military.gateCol.off }; });
 check('base gate: the barrier arm lifts when you arrive', gate.closed < 0.05 && gate.open > 0.95 && gate.passable, JSON.stringify(gate));
 check('fighter jets patrol over the city', mil.patrol >= 4, `${mil.patrol} jets`);
 
@@ -657,6 +657,14 @@ const fr = await g(() => {
   return { french, shops, sea, tower, d: __wg.districtAt(4405, 360), peds: game.peds.peds.length, runway: __wg.cellData(45, 9).apron.some((a) => a.name === 'runway'), dist: 4000 - 1000 };
 });
 check('France (Belle-Rive) ~3 km across the sea: Paris-style buildings, shops, iron tower, airstrip', fr.french > 40 && fr.shops > 10 && fr.tower && fr.runway && fr.d.includes('בל־ריב'), JSON.stringify(fr));
+
+// ---------------------------------------------------------------- Los Antos: name and shop counts
+const la = await g(() => {
+  const n = {}; for (let i = 0; i < 10; i++) for (let j = 0; j < 10; j++) for (const b of __wg.cellData(i, j).buildings) if (b.interior === 'shop' && b.sign) n[b.sign] = (n[b.sign] || 0) + 1;
+  return { clothes: n['חנות בגדים'] || 0, weapons: n['חנות נשקים'] || 0, ice: n['גלידת שקיעה'] || 0, falafel: n['פלאפל הכיכר'] || 0, title: document.title, d: __wg.districtAt(470, 470) };
+});
+check('city is called Los Antos', la.title === 'לוס אנטוס', la.title);
+check('Los Antos: 8 clothes, 6 weapons, 4 ice-cream and 5 falafel shops', la.clothes === 8 && la.weapons === 6 && la.ice === 4 && la.falafel === 5, JSON.stringify(la));
 
 // ---------------------------------------------------------------- traffic drivers + carjacking
 const jack = await g(() => {

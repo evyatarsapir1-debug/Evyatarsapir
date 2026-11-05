@@ -13,7 +13,7 @@ const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 20), CONE = new THREE.ConeGe
 // with logo, wing-body fairing, navigation lights and (optionally) landing gear.
 // airline colour schemes (fictional airlines)
 export const LIVERIES = [
-  { name: 'אזורה איירליינס', tail: 0x1f5fa8, stripe: 0x2fb5e8 },
+  { name: 'לוס אנטוס איירליינס', tail: 0x1f5fa8, stripe: 0x2fb5e8 },
   { name: 'מפרץ אייר', tail: 0xe0533b, stripe: 0xf3a33a },
   { name: 'רכס תעופה', tail: 0x2e8a5d, stripe: 0x9bd16a },
 ];

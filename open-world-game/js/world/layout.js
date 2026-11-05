@@ -50,12 +50,12 @@ const DISTRICTS = {
 };
 
 const SHOP_NAMES = [
-  'קפה גלים', 'פיצה נמל', 'חנות בגדים', 'סופר השכונה', 'מאפיית הבוקר', 'ספרים ועוד',
-  'פרחי הים', 'בורגר חוף', 'גלידת שקיעה', 'מספרת סטייל', 'חדר כושר אנרגיה', 'אלקטרו פלוס',
-  'נעלי הצעד', 'בית הקפה הירוק', 'מסעדת הנמל', 'סושי גל', 'פלאפל הכיכר', 'תכשיטי אור',
-  'משקפי עין', 'פארם העיר', 'צעצועי קשת', 'יין ושמש', 'בגדי רחוב', 'מכולת אבי',
+  'קפה גלים', 'פיצה נמל', 'סופר השכונה', 'מאפיית הבוקר', 'ספרים ועוד',
+  'פרחי הים', 'בורגר חוף', 'מספרת סטייל', 'חדר כושר אנרגיה', 'אלקטרו פלוס',
+  'נעלי הצעד', 'בית הקפה הירוק', 'מסעדת הנמל', 'סושי גל', 'תכשיטי אור',
+  'משקפי עין', 'פארם העיר', 'צעצועי קשת', 'יין ושמש', 'מכולת אבי',
 ];
-export const SPECIAL_SIGNS = ['תחנת רכבת מרכזית', 'מוסך אזורה', 'דלק+', 'נמל התעופה אזורה', 'מגדל אזורה', 'בית העירייה', 'מחסני הנמל', 'בית קפה החוף', 'קניון העיר', 'חניון', 'חוות השקד', 'מנהרת הרכס', 'חנות נשקים', 'צ׳ק-אין', 'שער 1', 'שער 2', 'שער 3', 'שירותים', 'דיוטי פרי', 'קפה טרמינל', 'מסוע מזוודות', 'האנגר אזורה', 'מגדל פיקוח', 'הגעות', 'ספריית העיר', 'הבית שלי', 'בסיס צבאי', 'מפקדה', 'מגורי חיילים', 'מרכז שליטה', 'האנגר', 'מוסך צבאי', 'בולנז׳רי', 'קפה דה לה פלאס', 'פטיסרי', 'ביסטרו', 'בוטיק', 'מסוף בל־ריב'];
+export const SPECIAL_SIGNS = ['פלאפל הכיכר', 'גלידת שקיעה', 'בגדי רחוב', 'חנות בגדים', 'תחנת רכבת מרכזית', 'מוסך לוס אנטוס', 'דלק+', 'נמל התעופה לוס אנטוס', 'מגדל לוס אנטוס', 'בית העירייה', 'מחסני הנמל', 'בית קפה החוף', 'קניון העיר', 'חניון', 'חוות השקד', 'מנהרת הרכס', 'חנות נשקים', 'צ׳ק-אין', 'שער 1', 'שער 2', 'שער 3', 'שירותים', 'דיוטי פרי', 'קפה טרמינל', 'מסוע מזוודות', 'האנגר לוס אנטוס', 'מגדל פיקוח', 'הגעות', 'ספריית העיר', 'הבית שלי', 'בסיס צבאי', 'מפקדה', 'מגורי חיילים', 'מרכז שליטה', 'האנגר', 'מוסך צבאי', 'בולנז׳רי', 'קפה דה לה פלאס', 'פטיסרי', 'ביסטרו', 'בוטיק', 'מסוף בל־ריב'];
 export const ALL_SIGNS = [...SHOP_NAMES, ...SPECIAL_SIGNS];
 
 const PASTELS = [0xf2e3c6, 0xe8d1b5, 0xd9c8a9, 0xf0d9c0, 0xc9d6df, 0xe4c9b6, 0xd8e2cf, 0xefe6d8, 0xd4b8a0, 0xbfcfd9];
@@ -63,7 +63,13 @@ const TOWER_TINTS = [0x9fb8cc, 0x7f9bb5, 0xa9b9c4, 0x8aa3a8, 0xb7c4cf, 0x6f8aa3,
 const BRICK = [0xa65a45, 0x9b4f3c, 0xb26b4f, 0x8c5040];
 const ROOF_COLORS = [0xa04a35, 0x8a3f30, 0x5d5b5a, 0x7a4a33, 0x3f4b57];
 
-const FORCED_SHOPS = { '2,3': 'ספריית העיר', '7,3': 'גלידת שקיעה', '7,5': 'חנות בגדים', '7,6': 'פלאפל הכיכר', '7,4': 'אלקטרו פלוס', '2,5': 'חנות נשקים', '2,6': 'מספרת סטייל' };
+// Los Antos has exactly 8 clothes shops, 6 weapons shops, 4 ice-cream shops and 5 falafel shops (one per block)
+export const FORCED_SHOPS = {
+  '8,0': 'חנות בגדים', '6,1': 'חנות בגדים', '4,2': 'חנות בגדים', '1,4': 'חנות בגדים', '3,7': 'חנות בגדים', '4,9': 'חנות בגדים', '9,1': 'חנות בגדים',
+  '8,1': 'חנות נשקים', '5,2': 'חנות נשקים', '8,4': 'חנות נשקים', '3,8': 'חנות נשקים', '9,5': 'חנות נשקים',
+  '6,2': 'גלידת שקיעה', '9,0': 'גלידת שקיעה', '9,7': 'גלידת שקיעה',
+  '7,2': 'פלאפל הכיכר', '4,7': 'פלאפל הכיכר', '6,9': 'פלאפל הכיכר', '9,3': 'פלאפל הכיכר',
+  '2,3': 'ספריית העיר', '7,3': 'גלידת שקיעה', '7,5': 'חנות בגדים', '7,6': 'פלאפל הכיכר', '7,4': 'אלקטרו פלוס', '2,5': 'חנות נשקים', '2,6': 'מספרת סטייל' };
 
 // The player's own beach villa (block 8,8): house, pool deck, garden, two cars in the driveway.
 export const VILLA = { bx: 8, bz: 8, x: 850, z: 832, w: 26, d: 15, h: 7.6, door: { x: 850, z: 824.2 } };
@@ -151,7 +157,7 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
       } else {
         const w = rng.float(40, 52), d = rng.float(40, 52);
         const h = rng.float(110, 190);
-        B.push({ x: cx, z: cz, w, d, h, style: 'glass', color: rng.pick(TOWER_TINTS), face: 'n', tower: true, setback: true, sign: bx === 4 && bz === 4 ? 'מגדל אזורה' : undefined });
+        B.push({ x: cx, z: cz, w, d, h, style: 'glass', color: rng.pick(TOWER_TINTS), face: 'n', tower: true, setback: true, sign: bx === 4 && bz === 4 ? 'מגדל לוס אנטוס' : undefined });
         // low podium shops on the south edge
         B.push({ x: cx, z: oz + 84, w: 60, d: 10, h: 7, style: 'concrete', color: 0xd8d2c6, face: 's', storefront: true, sign: rng.pick(SHOP_NAMES) });
         for (let k = 0; k < 6; k++) PR.push({ kind: 'tree', x: ox + 16 + k * 13.6, z: oz + 16, s: rng.float(0.9, 1.2) });
@@ -185,7 +191,7 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
       blk.ground = 'asphalt';
       parkingGrid(ox + 34, oz + 36, 10, 3, 0);
       for (const b of B) if (b.face === 'e' && b.storefront) {
-        b.sign = rng.pick(['קפה גלים', 'מסעדת הנמל', 'בורגר חוף', 'גלידת שקיעה', 'סושי גל', 'בית קפה החוף']);
+        b.sign = rng.pick(['קפה גלים', 'מסעדת הנמל', 'בורגר חוף', 'סושי גל', 'בית קפה החוף']);
       }
       break;
     }
@@ -260,7 +266,7 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
     }
     case 'M': {
       blk.ground = 'asphalt';
-      B.push({ x: ox + 32, z: oz + 30, w: 36, d: 26, h: 8, style: 'industrial', color: 0x6d7b84, face: 'n', garage: true, sign: 'מוסך אזורה' });
+      B.push({ x: ox + 32, z: oz + 30, w: 36, d: 26, h: 8, style: 'industrial', color: 0x6d7b84, face: 'n', garage: true, sign: 'מוסך לוס אנטוס' });
       B.push({ x: ox + 75, z: cz, w: 22, d: 60, h: rng.float(10, 18), style: 'brick', color: rng.pick(BRICK), face: 'e', storefront: true, sign: rng.pick(SHOP_NAMES) });
       parkingGrid(ox + 16, oz + 60, 12, 3, 0);
       break;
@@ -343,6 +349,7 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
 
   // guaranteed shops near the city centre (+ a few fictional gear stores in other towns)
   const forced = FORCED_SHOPS[bx + ',' + bz] || (type === 'C' && (bx < 0 || bx > 9 || bz < 0 || bz > 9) && rng.chance(0.08) ? 'חנות נשקים' : null);
+  // (the marina is the only other town)
   if (forced) {
     const b = B.filter((q) => q.storefront && q.w >= 9 && q.d >= 9).sort((p, q) => (p.face === 'w' ? -1 : 0) - (q.face === 'w' ? -1 : 0))[0];
     if (b) { b.sign = forced; b.forceShop = true; }

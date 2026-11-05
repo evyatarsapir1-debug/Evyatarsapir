@@ -210,15 +210,15 @@ export function districtAt(x, z) {
   if (isWaterCell(ix, iz) && !(x >= 1000 && x < 2000 && z >= 0 && z < 1000)) return shoreDist(x, z) < 14 ? 'חוף הים' : 'הים הפתוח';
   if (reg.type === 'bay') {
     const xx = Math.min(x, 3000 - x);
-    if (xx < 1095) return x < 1500 ? 'חוף אזורה' : 'חוף מרינה';
-    return mod(z, 500) < 12 || mod(z, 500) > 488 ? 'גשר המפרץ' : 'מפרץ אזורה';
+    if (xx < 1095) return x < 1500 ? 'חוף לוס אנטוס' : 'חוף מרינה';
+    return mod(z, 500) < 12 || mod(z, 500) > 488 ? 'גשר המפרץ' : 'מפרץ לוס אנטוס';
   }
-  if (reg.type === 'airport') return 'נמל התעופה אזורה';
+  if (reg.type === 'airport') return 'נמל התעופה לוס אנטוס';
   if (reg.type === 'base') return 'בסיס צבאי';
   if (reg.type === 'france') return cellKind(ix, iz) === 'j' ? 'שדה התעופה בל־ריב' : cellKind(ix, iz) === 'E' ? 'כיכר מגדל הברזל · בל־ריב' : 'בל־ריב, צרפת';
   if (reg.type === 'azura') {
     if (z > 1003 && x > 380 && x < 620) return 'התחנה המרכזית';
-    return DISTRICT_NAMES[cellKind(ix, iz)] || 'אזורה סיטי';
+    return DISTRICT_NAMES[cellKind(ix, iz)] || 'לוס אנטוס';
   }
   if (iz === 10 && x > 380 && x < 620) return 'התחנה המרכזית';
   if (reg.type === 'town' && isUrban(ix, iz)) return reg.name;
@@ -232,8 +232,8 @@ export const AIRPORT = {
 };
 const AIRPORT_ITEMS = (() => {
   const b = [
-    { x: -300, z: 555, w: 180, d: 50, h: 18, style: 'glass', color: 0xd0dbe3, face: 'n', sign: 'נמל התעופה אזורה', airport: true, interior: 'terminal' },
-    { x: -760, z: 640, w: 80, d: 56, h: 24, style: 'industrial', color: 0xb8c0c5, face: 's', interior: 'hangar', sign: 'האנגר אזורה' },
+    { x: -300, z: 555, w: 180, d: 50, h: 18, style: 'glass', color: 0xd0dbe3, face: 'n', sign: 'נמל התעופה לוס אנטוס', airport: true, interior: 'terminal' },
+    { x: -760, z: 640, w: 80, d: 56, h: 24, style: 'industrial', color: 0xb8c0c5, face: 's', interior: 'hangar', sign: 'האנגר לוס אנטוס' },
     { x: -560, z: 640, w: 12, d: 12, h: 38, style: 'glass', color: 0x9fb8cc, face: 'n', interior: 'ctower', sign: 'מגדל פיקוח' },
   ];
   const p = [{ kind: 'helipad', x: -85, z: 625 }];
