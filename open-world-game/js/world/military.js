@@ -50,13 +50,13 @@ export class Military {
       const dx = -Math.sin(a) * r.rx * Math.sign(r.w), dz = Math.cos(a) * r.rz * Math.sign(r.w);
       P.g.position.set(x, y, z);
       P.g.rotation.set(0, Math.atan2(dx, dz), 0, 'YXZ');
-      P.g.rotation.z = -Math.sign(r.w) * 0.5;   // banked in the turn
+      P.g.rotation.z = Math.sign(r.w) * 0.5;   // banked in the turn
     }
     // ------------------------------------------------ gate barrier
     {
       const pp = player.state === 'driving' && player.vehicle ? player.vehicle : player;
       let near = Math.hypot(pp.x + 500, pp.z + 40) < 18;
-      for (const o of ctx.vehicles || []) if (!near && Math.abs(o.x + 500) < 9 && Math.abs(o.z + 40) < 16) near = true;
+      for (const o of ctx.vehicles || []) if (!near && o.driver && Math.hypot(o.vx, o.vz) > 0.5 && Math.abs(o.x + 500) < 9 && Math.abs(o.z + 40) < 16) near = true;   // parked cars don't hold it open
       const want = near ? 1 : 0;
       this.gateOpen += Math.sign(want - this.gateOpen) * Math.min(Math.abs(want - this.gateOpen), dt * 0.7);
       const e = this.gateOpen * this.gateOpen * (3 - 2 * this.gateOpen);

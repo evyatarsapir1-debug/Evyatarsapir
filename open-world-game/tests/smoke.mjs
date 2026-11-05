@@ -617,7 +617,7 @@ const mil = await g(() => {
 check('military base: buildings and soldiers on guard / patrol', mil.buildings >= 7 && mil.soldiers >= 6, JSON.stringify({ b: mil.buildings, s: mil.soldiers }));
 check('tank: "enter tank", turret follows the camera, the cannon fires and explodes', mil.tLabel === 'היכנס לטנק' && mil.inTank && mil.turned > 0.3 && mil.shells === 1 && mil.boom, JSON.stringify(mil));
 check('fighter jet: "board plane", take off from the base runway and fly', mil.jLabel === 'היכנס למטוס' && mil.inJet && mil.alt > 80 && mil.kmh > 300 && mil.onFoot === 'foot', JSON.stringify(mil));
-const gate = await g(() => { const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } }; game.teleport(-497, 40, Math.PI, 0.3); step(90); const closed = game.military.gateOpen; game.teleport(-497, -28, Math.PI, 0.3); step(75); return { closed, open: game.military.gateOpen, passable: game.military.gateCol.off }; });
+const gate = await g(() => { const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } }; const dens = game.traffic.target; game.traffic.setDensity(0); game.teleport(-497, 40, Math.PI, 0.3); step(5); for (const c of game.traffic.cars.slice()) game.traffic.remove(c); step(90); const closed = game.military.gateOpen; game.teleport(-497, -28, Math.PI, 0.3); step(75); return { closed, open: game.military.gateOpen, passable: game.military.gateCol.off, restore: game.traffic.setDensity(dens) }; });
 check('base gate: the barrier arm lifts when you arrive', gate.closed < 0.05 && gate.open > 0.95 && gate.passable, JSON.stringify(gate));
 check('fighter jets patrol over the city', mil.patrol >= 4, `${mil.patrol} jets`);
 

@@ -174,7 +174,7 @@ export class Vehicle {
     v -= v * Math.abs(v) * (T.accel / (T.maxSpeed * T.maxSpeed)) * dt;
     if (onGround) {
       // wheel brakes once the throttle is at idle and you keep pulling back
-      if (thr < 0 && this.throttleSet === 0) v = v > 0.3 ? Math.max(0, v - T.brake * 2.2 * -thr * dt) : Math.max(-3, v - 1.5 * dt);
+      if (thr < 0 && this.throttleSet === 0) v = v > 0.3 ? Math.max(0, v - T.brake * 2.2 * -thr * dt) : 0;   // planes never roll backwards
       else if (this.throttleSet < 0.3) v -= Math.sign(v) * Math.min(Math.abs(v), (Math.abs(v) > 6 ? 7 : 2) * dt);   // wheel brakes + air brakes after touchdown   // rolls to a stop after landing
       if (ctl.handbrake) v -= Math.sign(v) * Math.min(Math.abs(v), 14 * dt);
       // nose-wheel steering, less effective at speed
@@ -194,8 +194,9 @@ export class Vehicle {
       if (!lift) pt = damp(pt, clamp(pt, -0.05, 0.08), 0.6, dt);
       this.pitch = -pt;
       // bank and turn
-      this.roll = damp(this.roll, -(ctl.steer || 0) * (0.62 + (ag - 1) * 0.35), 2.2 * ag, dt);
-      this.heading += Math.tan(this.roll) * 19 * ag / Math.max(25, v) * dt;
+      // stick right: the right wing dips (positive roll) and the plane turns right (heading decreases)
+      this.roll = damp(this.roll, (ctl.steer || 0) * (0.62 + (ag - 1) * 0.35), 2.2 * ag, dt);
+      this.heading -= Math.tan(this.roll) * 19 * ag / Math.max(25, v) * dt;
       this.steer = 0;
       // gravity along the flight path, lift vs. stall
       v -= Math.sin(pt) * 9.8 * 0.55 * dt;
@@ -214,7 +215,7 @@ export class Vehicle {
       this.vy = damp(this.vy, targetVy, L > 0.5 ? 3 : 1.2, dt);
       if (L < 0.5) this.pitch = damp(this.pitch, 0.12, 0.8, dt); // nose drops in a stall
     }
-    v = clamp(v, -3, T.maxSpeed * 1.08);
+    v = clamp(v, onGround ? 0 : 18, T.maxSpeed * 1.08);   // never backwards; in the air it keeps a gliding speed
     this.speed = v;
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     const hv = v * Math.cos(this.pitch);
