@@ -46,12 +46,17 @@ export function regionInfo(rx, rz) {
   return r;
 }
 
+// The world is the city and what belongs to it: Azura (0,0), the airport (-1,0), the bay with its beach and bridge (1,0)
+// and the marina island with the luna park (2,0). Everything else is open sea you can swim and sail in.
+export const isLandRegion = (rx, rz) => rz === 0 && rx >= -1 && rx <= 2;
 const kindCache = new Map();
 export function cellKind(ix, iz) {
   const key = ix * 1000003 + iz;
   let k = kindCache.get(key);
   if (k) return k;
   const rx = Math.floor(ix / 10), rz = Math.floor(iz / 10), lx = mod(ix, 10), lz = mod(iz, 10);
+  if (iz === 10 && ix >= 0 && ix <= 9) { kindCache.set(key, 'R'); return 'R'; }   // the railway strip south of the city
+  if (!isLandRegion(rx, rz)) { kindCache.set(key, 'Q'); return 'Q'; }
   const reg = regionInfo(rx, rz);
   const h = hash2(ix, iz, 31) % 100;
   const country = () => (h < 38 ? 'F' : h < 62 ? 'W' : h < 90 ? 'O' : 'h');
@@ -61,7 +66,10 @@ export function cellKind(ix, iz) {
     case 'airport': k = 'X'; break;
     case 'town': {
       const d = Math.hypot(ix + 0.5 - reg.cx, iz + 0.5 - reg.cz);
-      if (d > reg.R || lx < 1 || lx > 8 || lz < 1 || lz > 8) { k = country(); break; }
+      if (d > reg.R || lx < 1 || lx > 8 || lz < 1 || lz > 8) {
+        // the marina is an island: only a short causeway from the bridge to the town, the rest is sea
+        k = rx === 2 && rz === 0 && (iz === 4 || iz === 5) && lx <= 2 ? 'F' : 'Q'; break;
+      }
       if (ix === reg.mall[0] && iz === reg.mall[1]) { k = 'L'; break; }
       if (ix === reg.garage[0] && iz === reg.garage[1]) { k = 'K'; break; }
       if (rx === 2 && rz === 0 && ix === 25 && iz === 5) { k = 'U'; break; }   // marina luna park
@@ -82,6 +90,7 @@ const isWaterCell = (ix, iz) => cellKind(ix, iz) === 'Q';
 // segH(gx,gz): road along z = gz*100 from x = gx*100 to (gx+1)*100
 export function segH(gx, gz) {
   if (isUrban(gx, gz - 1) || isUrban(gx, gz)) return true;
+  if ((isWaterCell(gx, gz - 1) || isWaterCell(gx, gz)) && !isBridgeLine(gx, gz)) return false;   // no roads into the sea
   if (mod(gz, 5) === 0) {
     // arterial; skip through the ridge (there are tunnels on the vertical arterials instead)
     const z = gz * P;
@@ -93,7 +102,7 @@ export function segH(gx, gz) {
 // segV(gx,gz): road along x = gx*100 from z = gz*100 to (gz+1)*100
 export function segV(gx, gz) {
   if (isWaterCell(gx - 1, gz) && isWaterCell(gx, gz)) return false;
-  if (isWaterCell(gx - 1, gz) || isWaterCell(gx, gz)) return false; // no roads along the water's edge inside the bay
+  if ((isWaterCell(gx - 1, gz) || isWaterCell(gx, gz)) && !(isUrban(gx - 1, gz) || isUrban(gx, gz))) return false; // no roads along open water
   if (isUrban(gx - 1, gz) || isUrban(gx, gz)) return true;
   if (mod(gx, 5) === 0) {
     if (gx === -5 && gz >= 0 && gz <= 9) return false; // runway area of the airport
@@ -115,7 +124,7 @@ export function hasLightsAt(gx, gz, nbrCount) {
   if (n === 4) return true;
   return isUrban(gx - 1, gz - 1) || isUrban(gx, gz - 1) || isUrban(gx - 1, gz) || isUrban(gx, gz);
 }
-export function isBridgeLine(gx, gz) { return mod(gz, 5) === 0 && gx >= 10 && gx <= 19; }
+export function isBridgeLine(gx, gz) { return gz === 5 && gx >= 10 && gx <= 19; }
 
 // --------------------------------------------------------------------------- terrain height
 function bayHeight(x) {
@@ -127,8 +136,41 @@ function bayHeight(x) {
   if (xx <= 1110) return -1.5 - 2.5 * (xx - 1090) / 20;
   return -4;
 }
+// open sea next to land: sand beach first (or the road shoulder next to the city), then the sea floor drops away
+const seaCache = new Map();
+function seaShore(ix, iz) {
+  const key = ix * 1000003 + iz;
+  let s = seaCache.get(key);
+  if (s) return s;
+  s = [];
+  for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+    if (!dx && !dz) continue;
+    const k = cellKind(ix + dx, iz + dz);
+    if (k !== 'Q') s.push({ x0: (ix + dx) * P, z0: (iz + dz) * P, x1: (ix + dx + 1) * P, z1: (iz + dz + 1) * P, urban: URBAN.has(k) });
+  }
+  seaCache.set(key, s);
+  return s;
+}
+export function seaHeight(x, z) {
+  const ix = Math.floor(x / P), iz = Math.floor(z / P);
+  let best = Infinity;
+  for (const r of seaShore(ix, iz)) {
+    const dx = Math.max(r.x0 - x, 0, x - r.x1), dz = Math.max(r.z0 - z, 0, z - r.z1);
+    best = Math.min(best, Math.hypot(dx, dz) - (r.urban ? ROAD_HALF + 0.5 : 0));
+  }
+  if (best < 0) return 0;
+  if (best < 14) return 0.02;
+  if (best < 40) return 0.02 - (best - 14) / 26 * 4.5;
+  return -4.5;
+}
+export function shoreDist(x, z) {
+  const ix = Math.floor(x / P), iz = Math.floor(z / P);
+  let best = Infinity;
+  for (const r of seaShore(ix, iz)) { const dx = Math.max(r.x0 - x, 0, x - r.x1), dz = Math.max(r.z0 - z, 0, z - r.z1); best = Math.min(best, Math.hypot(dx, dz) - (r.urban ? ROAD_HALF + 0.5 : 0)); }
+  return best;
+}
 export function baseHeight(x, z) {
-  if (x >= 1000 && x < 2000) {
+  if (x >= 1000 && x < 2000 && z >= 0 && z < 1000) {
     const xx = Math.min(x, 3000 - x);
     if (xx >= 1007 && xx <= 1022) {
       const lz = mod(z, 500);
@@ -137,6 +179,7 @@ export function baseHeight(x, z) {
     return bayHeight(x);
   }
   const ix = Math.floor(x / P), iz = Math.floor(z / P);
+  if (isWaterCell(ix, iz)) return seaHeight(x, z);
   if (isUrban(ix, iz)) {
     const lx = x - ix * P, lz = z - iz * P;
     if (lx > ROAD_HALF && lx < P - ROAD_HALF && lz > ROAD_HALF && lz < P - ROAD_HALF) return CURB_H;
@@ -149,7 +192,7 @@ export function districtAt(x, z) {
   const ix = Math.floor(x / P), iz = Math.floor(z / P);
   const rx = Math.floor(ix / 10), rz = Math.floor(iz / 10);
   const reg = regionInfo(rx, rz);
-  if (z > RIDGE.z0 - 40 && z < RIDGE.z1 + 40 && x > RIDGE.x0 && x < RIDGE.x1) return Math.abs(x - Math.round(x / 500) * 500) < 12 ? 'מנהרת הרכס' : 'רכס הנשרים';
+  if (isWaterCell(ix, iz) && !(x >= 1000 && x < 2000 && z >= 0 && z < 1000)) return shoreDist(x, z) < 14 ? 'חוף הים' : 'הים הפתוח';
   if (reg.type === 'bay') {
     const xx = Math.min(x, 3000 - x);
     if (xx < 1095) return x < 1500 ? 'חוף אזורה' : 'חוף מרינה';
@@ -243,12 +286,12 @@ function generateCell(ix, iz) {
 
   // special areas that cross cells
   const cellRect = [ox, oz, ox + P, oz + P];
-  if (oz < RIDGE.z1 && oz + P > RIDGE.z0 && ox < RIDGE.x1 && ox + P > RIDGE.x0) {
+  if (kind !== 'Q' && oz < RIDGE.z1 && oz + P > RIDGE.z0 && ox < RIDGE.x1 && ox + P > RIDGE.x0) {
     d.ridge = { x0: Math.max(ox, RIDGE.x0), x1: Math.min(ox + P, RIDGE.x1), z0: Math.max(oz, RIDGE.z0), z1: Math.min(oz + P, RIDGE.z1) };
     d.keepOut.push([RIDGE.x0 - 8, RIDGE.z0 - 8, RIDGE.x1 + 8, RIDGE.z1 + 8]);
   }
-  if (iz === 10 && ox < 1022 && ox + P > -1000) {
-    d.rail = { x0: Math.max(ox, -1000), x1: Math.min(ox + P, 1022), bufferW: ox <= -1000, bufferE: ox + P >= 1022 };
+  if (kind === 'R') {
+    d.rail = { x0: Math.max(ox, 0), x1: Math.min(ox + P, 1000), bufferW: ox <= 0, bufferE: ox + P >= 1000 };
     d.keepOut.push([ox - 1, RAIL.z - 6, ox + P + 1, RAIL.z + 6]);
     if (ox < RAIL.platformX1 && ox + P > RAIL.platformX0) {
       const x0 = Math.max(ox, RAIL.platformX0), x1 = Math.min(ox + P, RAIL.platformX1);
@@ -286,6 +329,40 @@ function generateCell(ix, iz) {
     }
     if (mod(iz, 3) === 0 && !nearRoad(oz + 50)) PR.push({ kind: 'lifeguard', x: X(1058), z: oz + 50, y: 0 });
     if (rng.chance(0.5) && !nearRoad(oz + 30)) PR.push({ kind: 'umbrella', x: X(1032 + rng.float(0, 10)), z: oz + 30, color: rng.pick([0xe74c3c, 0x2e86c1, 0xf1c40f]), y: 0.02 });
+    // wooden piers with jet skis and motor boats moored at the end (on the city beach)
+    if (west && (iz === 2 || iz === 7)) {
+      const pz = oz + 50, x0 = 1036, x1 = 1104;
+      PR.push({ kind: 'pier', x0, x1, z: pz, y: 0.25 });
+      d.surfaces.push(makeSurface(x0, pz - 1.3, x1, pz + 1.3, 0.25));
+      d.parking.push({ x: 1099, z: pz + 3.4, rot: Math.PI / 2, type: 'jetski', fixed: true, y: WATER_Y - 0.25 });
+      d.parking.push({ x: 1092, z: pz + 3.4, rot: Math.PI / 2, type: 'jetski', fixed: true, y: WATER_Y - 0.25 });
+      d.parking.push({ x: 1098, z: pz - 4.0, rot: Math.PI / 2, type: 'boat', fixed: true, y: WATER_Y - 0.4 });
+    }
+    // people in swimwear: sunbathing on towels, sitting on the sand, strolling by the water, swimming
+    if (west && iz >= 0 && iz <= 9) {
+      d.beachSpots = [];
+      const TOWELS = [0xe74c3c, 0x2e86c1, 0xf1c40f, 0x27ae60, 0xe84393, 0xffffff, 0x8e44ad];
+      for (let k = 0; k < 7; k++) {
+        const z = oz + 8 + k * 12.5 + rng.float(-2, 2);
+        if (nearRoad(z)) continue;
+        const x = 1027 + rng.float(0, 12), yaw = rng.float(-0.4, 0.4) + Math.PI / 2;
+        const st = rng.float() < 0.55 ? 'sunbathe' : 'beachsit';
+        PR.push({ kind: 'towel', x, z, rot: yaw, color: TOWELS[k % TOWELS.length], y: baseHeight(x, z) });
+        d.beachSpots.push({ key: `beach:${ix},${iz}:${k}`, x: x + (st === 'sunbathe' ? 0 : 0.2), z, y: baseHeight(x, z) + 0.01, yaw: st === 'sunbathe' ? yaw - Math.PI / 2 : yaw + Math.PI / 2, state: st });
+        if (st === 'beachsit' && rng.chance(0.5)) PR.push({ kind: 'umbrella', x: x - 1.6, z: z + 1.2, color: TOWELS[(k + 3) % TOWELS.length], y: baseHeight(x, z) });
+      }
+      for (let k = 0; k < 2; k++) {
+        const z = oz + 20 + k * 50;
+        if (nearRoad(z)) continue;
+        const pts = [[1046, z - 20], [1048, z + 20], [1044, z]];
+        d.beachSpots.push({ key: `beach:${ix},${iz}:w${k}`, x: 1046, z, y: baseHeight(1056, z), yaw: 0, state: 'wander', pts });
+      }
+      for (let k = 0; k < 2; k++) {
+        const z = oz + 30 + k * 40;
+        if (nearRoad(z) || nearRoad(z + 14) || nearRoad(z - 14)) continue;
+        d.beachSpots.push({ key: `beach:${ix},${iz}:s${k}`, x: 1098 + k * 6, z, y: WATER_Y - 0.55, yaw: 0, state: 'swimmer' });
+      }
+    }
   } else if (kind === 'Q') {
     d.water = [ox, oz, ox + P, oz + P];
   } else if (!urban) {

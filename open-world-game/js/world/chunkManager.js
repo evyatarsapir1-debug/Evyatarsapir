@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { GeoBuilder, mat } from './geoBuilder.js';
 import { P, CURB_H, ROAD_HALF, SIDEWALK, RAIL, faceVector } from './layout.js';
 import { signUV } from './textures.js';
-import { cellData, cellPhysics, ridgeHeight, tunnelLines, RIDGE, TUNNEL_H, TUNNEL_HALF, WATER_Y, baseHeight, nodeNbrs } from './worldGen.js';
+import { cellData, cellPhysics, ridgeHeight, tunnelLines, RIDGE, TUNNEL_H, TUNNEL_HALF, WATER_Y, baseHeight, nodeNbrs, seaHeight, shoreDist } from './worldGen.js';
 import { interiorSpec, garageSpec, doorFor } from './interiors.js';
 
 const CH = 200;               // render chunk size (2x2 cells)
@@ -94,6 +94,22 @@ function addProp(pb, p, lampB) {
       pb.addGeometry(G.cone, mat(p.x, y + 2.6, p.z, 0, 3.2, 0.6, 3.2), 0xf4f1ea);
       pb.addGeometry(G.cone, mat(p.x, y + 2.62, p.z, 0.4, 2.0, 0.42, 2.0), 0x2e86c1);
       break;
+    case 'pier': {
+      const L = p.x1 - p.x0, cx = (p.x0 + p.x1) / 2;
+      pb.addGeometry(G.box, mat(cx, p.y - 0.06, p.z, 0, L, 0.12, 2.6), 0x9c7650);                 // deck
+      for (let x = p.x0 + 0.6; x < p.x1; x += 1.2) pb.addGeometry(G.box, mat(x, p.y + 0.005, p.z, 0, 0.04, 0.01, 2.6), 0x6b4a2f); // plank gaps
+      for (let x = p.x0 + 2; x <= p.x1; x += 4) for (const sz of [-1.2, 1.2]) pb.addGeometry(G.cyl, mat(x, p.y - 2.2, p.z + sz, 0, 0.22, 4.4, 0.22), 0x5a4030); // posts
+      for (const sz of [-1.25, 1.25]) pb.addGeometry(G.box, mat(cx + L * 0.25, p.y + 0.5, p.z + sz, 0, L * 0.5, 0.06, 0.06), 0x6b4a2f); // rails (shore half)
+      pb.addGeometry(G.cyl, mat(p.x1 - 0.5, p.y + 0.25, p.z + 1.1, 0, 0.18, 0.5, 0.18), 0x333333); // bollards
+      pb.addGeometry(G.cyl, mat(p.x1 - 0.5, p.y + 0.25, p.z - 1.1, 0, 0.18, 0.5, 0.18), 0x333333);
+      break;
+    }
+    case 'towel': {
+      const r = p.rot || 0;
+      pb.addGeometry(G.box, mat(p.x, y + 0.012, p.z, r, 1.0, 0.02, 2.0), p.color);
+      pb.addGeometry(G.box, mat(p.x, y + 0.014, p.z, r, 1.0, 0.02, 0.18), 0xffffff);
+      break;
+    }
     case 'hedge':
       pb.addGeometry(G.box, mat(p.x, y + 0.75, p.z, 0, p.w, 1.5, p.d), 0x3b6e2e);
       pb.addGeometry(G.box, mat(p.x, y + 1.52, p.z, 0, p.w + 0.1, 0.06, p.d + 0.1), 0x4b8a3a);
@@ -499,6 +515,18 @@ function buildCellNear(cd, B, bulbs) {
     for (const a of cd.apron) (a.name === 'runway' ? B.road : B.lot).floor(a.rect[0], a.rect[1], a.rect[2], a.rect[3], a.name === 'runway' ? 0.012 : 0.006, 0xb5b5b5, a.name === 'runway' ? 14 : 8);
   }
   if (cd.water) B.water.floor(cd.water[0], cd.water[1], cd.water[2], cd.water[3], WATER_Y, 0xffffff, 30);
+  // open-sea cells along the coast: sandy beach and the sea floor sloping away (a height grid)
+  if (cd.kind === 'Q' && !(ox >= 1000 && ox < 2000 && oz >= 0 && oz < 1000) && shoreDist(ox + 50, oz + 50) < 120) {
+    const N = 25, st = P / N, h = [];
+    for (let i = 0; i <= N; i++) { h.push([]); for (let j = 0; j <= N; j++) h[i].push(seaHeight(ox + i * st, oz + j * st)); }
+    const col = (y) => (y > -0.1 ? 0xffffff : y > -1.2 ? 0xd9cdb0 : 0xa89c80);
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      const x0 = ox + i * st, x1 = x0 + st, z0 = oz + j * st, z1 = z0 + st;
+      const a = h[i][j], b = h[i + 1][j], c = h[i + 1][j + 1], d = h[i][j + 1];
+      if (Math.min(a, b, c, d) < -4.4) continue;   // deep water: nothing to draw under the surface
+      B.sand.quad([x0, a, z1 - st], [x0, d, z1], [x1, c, z1], [x1, b, z0], [x0 / 6, -z0 / 6, x0 / 6, -z1 / 6, x1 / 6, -z1 / 6, x1 / 6, -z0 / 6], col((a + b + c + d) / 4));
+    }
+  }
 
   // rail
   if (cd.rail) {

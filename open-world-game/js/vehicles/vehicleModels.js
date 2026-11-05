@@ -1,7 +1,7 @@
 // Procedural vehicle models. Each model faces +Z, origin on the ground at the vehicle center.
 // Returns references to animated parts: wheels (spin/steer), driver door (opens), rotors, damage panels.
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GeoBuilder } from '../world/geoBuilder.js';
 import { airlinerGeometry, JET_MAT, LIVERIES, FY } from '../world/airliner.js';
 
@@ -297,6 +297,45 @@ export function buildVehicleModel(type, color) {
       parts.wheels.push(w);
     }
     parts.wheelR = r;
+  } else if (T.kind === 'boat') {
+    // hulls float with the waterline at y = 0 of the model; the vehicle y is kept at the water surface
+    const white = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, metalness: 0.2, roughness: 0.35 });
+    const hullGeo = (len, wid, h, bowK) => {
+      // tapered hull: wide at the stern, pointed at the bow, V-shaped bottom
+      const sh = new THREE.Shape();
+      sh.moveTo(-wid / 2, -len / 2); sh.lineTo(wid / 2, -len / 2); sh.lineTo(wid / 2, len * (0.5 - bowK));
+      sh.quadraticCurveTo(wid / 2, len / 2, 0, len / 2); sh.quadraticCurveTo(-wid / 2, len / 2, -wid / 2, len * (0.5 - bowK)); sh.closePath();
+      const g2 = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.08, bevelSegments: 2, curveSegments: 10 });
+      g2.rotateX(Math.PI / 2); g2.translate(0, h - 0.35, 0);
+      return mergeVertices(g2);   // indexed, like every other part (so parts can be merged)
+    };
+    if (T.jetski) {
+      m(hullGeo(L, W, 0.55, 0.3), paint, body, 0, 0, 0);
+      m(box(W * 0.6, 0.2, L * 0.35), white, body, 0, 0.28, -0.05);                       // deck
+      const seat = m(box(0.42, 0.18, 1.0), shared.seat, body, 0, 0.42, -0.45);
+      const hood = m(new THREE.SphereGeometry(0.45, 12, 8), paint, body, 0, 0.32, 0.6); hood.scale.set(1.1, 0.55, 1.4);
+      m(box(0.08, 0.32, 0.08), shared.dark, body, 0, 0.62, 0.42).rotation.x = -0.5;     // steering column
+      m(box(0.7, 0.04, 0.04), shared.chrome, body, 0, 0.78, 0.36);                        // handlebar
+      for (const sx of [-0.35, 0.35]) m(box(0.05, 0.06, 0.1), shared.dark, body, sx, 0.78, 0.36);
+      m(box(0.18, 0.06, 0.12), shared.dark, body, 0, 0.0, -L / 2 + 0.05);                // jet nozzle
+      parts.seat.set(0, 0.04, -0.4); parts.seatMode = 'ride';
+    } else {
+      m(hullGeo(L, W, 0.85, 0.33), white, body, 0, 0, 0);
+      m(box(W + 0.04, 0.16, L * 0.86), paint, body, 0, 0.12, -L * 0.04);                 // coloured stripe
+      m(box(W - 0.3, 0.06, L * 0.62), new THREE.MeshStandardMaterial({ color: 0xc8a876, roughness: 0.6 }), body, 0, 0.42, -L * 0.12); // teak deck
+      for (const sx of [-1, 1]) m(box(0.08, 0.28, L * 0.6), white, body, sx * (W / 2 - 0.08), 0.58, -L * 0.12); // gunwales
+      m(box(W * 0.75, 0.55, 0.06), shared.glass, body, 0, 0.82, L * 0.18, false).rotation.x = -0.45; // windshield
+      m(box(0.6, 0.5, 0.5), white, body, 0.45, 0.68, L * 0.06);                          // console
+      m(new THREE.TorusGeometry(0.17, 0.025, 6, 14), shared.dark, body, 0.45, 0.98, L * 0.03).rotation.x = -0.9; // wheel
+      for (const sx of [-0.45, 0.45]) m(box(0.5, 0.35, 0.5), shared.seat, body, sx, 0.6, -L * 0.18); // seats
+      m(box(W - 0.4, 0.35, 0.6), shared.seat, body, 0, 0.6, -L * 0.38);                   // rear bench
+      const mot = m(box(0.45, 0.75, 0.45), shared.dark, body, 0, 0.55, -L / 2 - 0.2);    // outboard motor
+      m(box(0.12, 0.6, 0.18), shared.dark, body, 0, 0.0, -L / 2 - 0.25);
+      for (const sx of [-1, 1]) m(box(0.04, 0.04, L * 0.4), shared.chrome, body, sx * (W / 2 - 0.08), 0.95, L * 0.05); // rails
+      parts.lights.push(m(box(0.1, 0.06, 0.06), shared.head, body, 0, 0.75, L / 2 - 0.4, false));
+      parts.seat.set(0.45, 0.42, -L * 0.03); parts.seatMode = 'drive';
+    }
+    parts.wheelR = 0;
   } else if (T.kind === 'heli') {
     const cab = m(new THREE.SphereGeometry(1.25, 16, 12), paint, body, 0, 1.55, 1.0);
     cab.scale.set(0.95, 0.95, 1.5);

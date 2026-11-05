@@ -9,6 +9,7 @@ import { InteriorManager } from './world/interiorManager.js';
 import { Economy, fmt, FOODS } from './game/economy.js';
 import { PostFX } from './render/postfx.js';
 import { LunaPark, LUNA } from './world/lunapark.js';
+import { BoatTraffic } from './world/boats.js';
 import { ShopUI, shopKind } from './game/shops.js';
 import { WeaponSystem, WEAPONS, WEAPON_ORDER } from './game/weapons.js';
 import { shared as vehicleMats } from './vehicles/vehicleModels.js';
@@ -85,6 +86,7 @@ class Game {
     this.interiors = new InteriorManager(this.scene, this.mats, this.statics);
     this.airport = new AirportManager(this.scene, this.statics, null);
     this.luna = new LunaPark(this.scene, this.statics);
+    this.boats = new BoatTraffic(this.scene, this.statics);
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());
     this.rig = new CameraRig(this.camera, this.statics);
@@ -290,14 +292,14 @@ class Game {
     const reg = WG.regionInfo(0, 1);
     const list = [
       ...this.landmarks().map((L) => ({ name: L.name, x: L.x, z: L.z })),
-      { name: 'קניון העיר (גבעת הרימון)', ...door(find([reg.mall], (b) => b.mall)) },
+      { name: 'קניון המרינה', ...door(find([WG.regionInfo(2, 0).mall], (b) => b.mall)) },
       { name: 'פלאפל הכיכר', ...door(find([[7, 6]], (b) => b.sign === 'פלאפל הכיכר')) },
       { name: 'מוסך אזורה', ...door(find([[8, 3], [2, 7]], (b) => b.sign === 'מוסך אזורה')) },
       { name: 'התחנה המרכזית', x: 500, z: 992 },
       { name: 'כיכר העירייה', x: 550, z: 545 },
       { name: 'חוף אזורה', x: 1030, z: 300 },
       { name: 'גשר המפרץ', x: 1500, z: 502 },
-      { name: 'מנהרת הרכס', x: 502, z: -620 },
+      { name: 'חוף אזורה — רציפים וסירות', x: 1060, z: 250 },
     ];
     const last = this.player.lastVehicle;
     if (last && this.vehicles.kept.includes(last)) list.unshift({ name: `הרכב שלי (${last.T.name})`, x: last.x, z: last.z, radius: 6 });
@@ -450,6 +452,7 @@ class Game {
     const i = this.airport.service.indexOf(v);
     if (i >= 0) this.airport.service.splice(i, 1);
     v.svc = null;
+    this.boats.release(v);
     this.vehicles.markUsed(v);
   }
   myVehicleNear(r) {
@@ -682,7 +685,7 @@ class Game {
     this.chunks.update(cx, cz);
     this._lighting(dt, cx, cz);
     this.env.update(new THREE.Vector3(cx, 0, cz), dt, this.camera);
-    const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service];
+    const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list];
     for (const veh of all) veh.setFar(true);
     this.airport.update(dt, this.env.hour, cx, cz, all);
     this.traffic.update(dt, this.time, cx, cz, all, this.peds.obstacles());
@@ -744,7 +747,7 @@ class Game {
     if (input.wasPressed('light')) { if (this.econ.items.flashlight) this.econ.flashlightOn = !this.econ.flashlightOn; else this.toast('אין לך פנס — אפשר לקנות בחנות ציוד', 2); }
     input.fireByMouse = p.state !== 'foot' ? false : this.econ.equipped ? 'hold' : 'tap';
 
-    const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service];
+    const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list];
     const pedObs = this.peds.obstacles();
     const world = {
       statics: this.statics, vehicles: all, benches: this.chunks.benches, peds: pedObs,
@@ -814,6 +817,7 @@ class Game {
     // every AI car has someone at the wheel
     for (const car of all) if (car.driver === 'ai' && !car.driverPed && !car.isAir && !car.removed) this.peds.addDriver(car);
     this.vehicles.update(dt, focusX, focusZ, all, (x, z) => this.chunks.isPhysicsReady(x, z));
+    this.boats.update(dt, focusX, focusZ, all);
     this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
       onPlayerHit: (who, n) => { this.hurt(n, 'קטטה'); this.rig.shake = Math.max(this.rig.shake, 0.3); p.combatT = 3; } });
     this.airport.update(dt, this.env.hour, focusX, focusZ, all);

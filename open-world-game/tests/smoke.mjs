@@ -121,7 +121,7 @@ check('climbs stairs to the upper floor of a house', sy > stairs.top - 0.3, `y=$
 await shot('04-upstairs');
 
 const ramp = await g(() => {
-  const reg = __wg.regionInfo(0, 1); const gar = __wg.cellData(reg.garage[0], reg.garage[1]).garage;
+  const reg = __wg.regionInfo(2, 0); const gar = __wg.cellData(reg.garage[0], reg.garage[1]).garage;
   return { x: gar.x - gar.w / 2 + 4.5, z: gar.z - 15.5 };
 });
 await g((r) => __game.teleport(r.x, r.z, 0, 0.2), ramp);
@@ -154,7 +154,7 @@ await sim(1.5, { keys: ['Space'] });
 await sim(2, { press: ['vehicle'] });
 check('exit vehicle', (await g(() => __game.player.state)) === 'foot');
 
-// long drive east: Azura -> bridge over the bay -> Marina East -> further, never reaching an edge
+// drive east over the bridge to the marina island (the world ends at the sea)
 await g(() => {
   __game.traffic.setDensity(0); __game.traffic.cars.slice().forEach((c) => __game.traffic.remove(c));
   const v = __game.vehicles.kept.at(-1);
@@ -164,38 +164,33 @@ await g(() => {
 });
 await sim(1);
 const steerEast = "const v = g.player.vehicle; const e = (v.z - 502.25); const he = v.heading - Math.PI/2; g.input.joyX = Math.max(-1, Math.min(1, -e * 0.25 + he * 2.5)); g.input.joyY = 1;";
-let minY = 0, maxX = 0;
-for (let k = 0; k < 6; k++) {
-  await sim(25, { each: steerEast });
-  const s = await g(() => ({ x: __game.player.vehicle.x, y: __game.player.vehicle.y, z: __game.player.vehicle.z }));
-  minY = Math.min(minY, s.y); maxX = s.x;
+let minY = 0;
+for (let k = 0; k < 8; k++) {
+  await sim(15, { each: steerEast });
+  const s = await g(() => ({ x: __game.player.vehicle.x, y: __game.player.vehicle.y }));
+  minY = Math.min(minY, s.y);
+  if (s.x > 2150) break;
 }
 const drv = await g(() => ({ x: __game.player.vehicle.x, z: __game.player.vehicle.z, d: __wg.districtAt(__game.player.vehicle.x, __game.player.vehicle.z) }));
-check('long drive east crosses the bridge and keeps going', drv.x > 3000 && minY > -0.3, `reached x=${drv.x.toFixed(0)} (${drv.d}), lowest y=${minY.toFixed(2)}`);
-await shot('06-far-east');
+check('drive over the bridge to the marina island', drv.x > 2050 && minY > -0.3, `reached x=${drv.x.toFixed(0)} (${drv.d}), lowest y=${minY.toFixed(2)}`);
+await shot('06-marina');
+await sim(1, { keys: ['Space'] }); await sim(2, { press: ['vehicle'] });
 
-// through the tunnel: northbound on x=500
-await g(() => { const v = __game.player.vehicle; __game.teleport(502.25, -420, Math.PI); v.x = 502.25; v.z = -420; v.heading = Math.PI; v.vx = v.vz = 0; v.y = 0; __game.chunks.update(v.x, v.z, true); });
-const steerNorth = "const v = g.player.vehicle; const e = (v.x - 502.25); const he = v.heading - Math.PI; g.input.joyX = Math.max(-1, Math.min(1, -e * 0.25 + he * 2.5)); g.input.joyY = 1;";
-await sim(10, { each: steerNorth });
-await shot('07-tunnel');
-await sim(20, { each: steerNorth });
-const tz = await g(() => __game.player.vehicle.z);
-check('drives through the ridge tunnel', tz < -800, `z=${tz.toFixed(0)} (ridge spans -760..-640)`);
-
-// ---------------------------------------------------------------- world streaming far from the start
-await g(() => { const v = __game.player.vehicle; v.x = 7500; v.z = -6000; v.y = 0; v.vx = v.vz = 0; __game.chunks.update(7500, -6000, true); });
-await sim(2);
-const far = await g(() => {
-  const n = __game.graph.node(75, -60);
-  let roads = 0; for (let i = 70; i < 80; i++) for (let j = -65; j < -55; j++) if (__game.graph.node(i, j).nbrs.length) roads++;
-  return { near: __game.chunks.near.size, far: __game.chunks.far.size, phys: __game.chunks.phys.size, roads, d: __wg.districtAt(7500, -6000) };
+// ---------------------------------------------------------------- beyond the city: open sea you can swim in
+const sea = await g(() => {
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (game.player.state !== 'foot') { game.player.state = 'foot'; game.player.vehicle = null; game.player._detach?.(); }
+  game.teleport(500, -300, 0, 0.5); step(30);
+  let buildings = 0; for (let i = -2; i < 12; i++) for (let j = -6; j < -1; j++) buildings += __wg.cellData(i, j).buildings.length;
+  const farKinds = new Set(); for (const [i, j] of [[75, -60], [-30, 20], [40, 40], [5, 15]]) farKinds.add(__wg.cellKind(i, j));
+  return { swimming: game.player.swimming, d: __wg.districtAt(500, -300), buildings, farKinds: [...farKinds], beachH: __wg.baseHeight(500, -12), seaH: __wg.baseHeight(500, -300) };
 });
-check('world keeps generating 9km from the start', far.near > 0 && far.phys > 0 && far.roads > 0, JSON.stringify(far));
-await shot('08-far-away');
+check('beyond the city is open sea (no towns, no houses) and you can swim in it', sea.swimming && sea.buildings === 0 && sea.farKinds.length === 1 && sea.farKinds[0] === 'Q', JSON.stringify(sea));
+check('the city coast has a sandy beach that slopes into the sea', sea.beachH > -0.1 && sea.seaH < -3, JSON.stringify(sea));
+await shot('07-open-sea');
 
 // ---------------------------------------------------------------- traffic + pedestrians
-await g(() => { __game.player.exitVehicle({ statics: __game.statics, vehicles: __game.vehicles.all() }); });
+await g(() => { if (__game.player.vehicle) __game.player.exitVehicle({ statics: __game.statics, vehicles: __game.vehicles.all() }); });
 await sim(2);
 await g(() => { __game.traffic.setDensity(18); __game.teleport(311, 309, 0); });
 await sim(15);
@@ -458,7 +453,7 @@ check('fight: people have different personalities', fight.tempers.length >= 4, f
 // ---------------------------------------------------------------- punching people indoors + guard drops after 3 s
 const indoor = await g(() => {
   const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
-  const ped = game.peds.peds.find((q) => q.state === 'resident' || q.state === 'shopkeeper');
+  const ped = game.peds.peds.find((q) => q.state === 'resident' || q.state === 'shopkeeper'); if (ped) ped.temper = 'flee';
   if (!ped) return { err: 'no indoor person', states: [...new Set(game.peds.peds.map((q) => q.state))] };
   const s0 = ped.state, hp0 = ped.hp;
   game.player.setPosition(ped.x - Math.sin(ped.yaw) * -1.1, ped.z - Math.cos(ped.yaw) * -1.1, 0, ped.y + 0.3);
@@ -553,6 +548,37 @@ const luna = await g(() => {
 });
 check('luna park: Ferris wheel costs ₪10, lifts you high and lets you off', luna.wPaid === 10 && luna.top > 25 && luna.wEnd === 'foot', JSON.stringify(luna));
 check('luna park: roller coaster costs ₪20, full ride then off', luna.cPaid === 20 && luna.cState === 'riding' && luna.cEnd === 'foot', JSON.stringify(luna));
+
+// ---------------------------------------------------------------- beach people in swimwear, jet skis and boats
+const beach = await g(() => {
+  const game = __game, P = game.player, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { P.vehicle && (P.vehicle.speed = 0); game.input.pressed.add('vehicle'); step(40); }
+  game.teleport(1045, 250, Math.PI / 2, 0.3); step(60);
+  const people = game.peds.peds.filter((q) => q.app.swim);
+  const states = [...new Set(people.map((q) => q.state))];
+  // the pier at z=250: walk to its end, take the jet ski
+  game.teleport(1096, 251.2, Math.PI / 2, 0.6); step(40);
+  const jet = game.vehicles.all().find((v) => v.T.jetski && Math.hypot(v.x - 1099, v.z - 253.4) < 6);
+  if (jet) { const dp = jet.doorPoint(); game.teleport(dp.x, Math.min(dp.z, 251.2), Math.PI / 2, 0.6); step(10); }
+  const prompt = P.prompt?.text;
+  game.input.pressed.add('vehicle'); step(1); step(70);
+  const riding = P.state === 'driving' && !!P.vehicle?.isBoat, ridingType = P.vehicle?.typeKey;
+  let x0 = P.vehicle?.x, maxX = 0, minY = 99, maxY = -99;
+  game.input.keys.add('KeyW'); step(30 * 6, () => {});
+  for (let i = 0; i < 30 * 6; i++) { game.time += 1 / 30; game._playFrame(1 / 30); const v = P.vehicle; if (!v) break; maxX = Math.max(maxX, v.x); minY = Math.min(minY, v.y); maxY = Math.max(maxY, v.y); }
+  game.input.keys.clear();
+  // turn back to the beach at full speed: must stop at the shore, never drive onto the sand
+  const v = P.vehicle; if (v) { v.heading = -Math.PI / 2; v.vx = v.vz = 0; }
+  game.input.keys.add('KeyW'); step(30 * 12); game.input.keys.clear();
+  const shoreX = P.vehicle?.x;
+  const aiBoats = game.boats.list.length, aiDrivers = game.boats.list.filter((b) => b.driverPed).length;
+  return { people: people.length, states, jet: !!jet, prompt, riding, ridingType, x0, maxX, yRange: [minY, maxY], shoreX, aiBoats, aiDrivers };
+});
+check('beach: people in swimwear sunbathing, sitting, walking and swimming', beach.people >= 6 && beach.states.length >= 3, JSON.stringify({ people: beach.people, states: beach.states }));
+check('jet ski at the pier: board it and ride on the water', beach.jet && beach.riding && beach.maxX > beach.x0 + 40 && beach.yRange[1] < -0.8, JSON.stringify(beach));
+check('boats stay in the water (stop at the shore)', beach.shoreX > 1060, `stopped at x=${beach.shoreX?.toFixed(1)}`);
+check('boats and jet skis with drivers cruise the bay', beach.aiBoats >= 4 && beach.aiDrivers >= 4, JSON.stringify({ ai: beach.aiBoats, drivers: beach.aiDrivers }));
+await g(() => { const game = __game, P = game.player; if (P.vehicle) { P.vehicle.vx = P.vehicle.vz = 0; P.vehicle.speed = 0; game.input.pressed.add('vehicle'); for (let i = 0; i < 40; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } } });
 
 // ---------------------------------------------------------------- traffic drivers + carjacking
 const jack = await g(() => {

@@ -8,7 +8,7 @@ import { RNG } from '../core/rng.js';
 import { clamp, damp, dampAngle } from '../core/mathx.js';
 import { P } from '../world/layout.js';
 import { cellData, isUrban, nodeNbrs } from '../world/worldGen.js';
-import { heightAt } from '../world/terrain.js';
+import { heightAt, WATER_Y } from '../world/terrain.js';
 import { lightState } from '../traffic/roadGraph.js';
 import { circleVs, verticalOverlap } from '../physics/collision.js';
 import { interiorSpec } from '../world/interiors.js';
@@ -135,6 +135,17 @@ export class Pedestrians {
     this.peds.forEach((p, i) => {
       const a = p.app;
       const set = (m, idx, hex) => m.setColorAt(idx, c.setHex(hex));
+      if (a.swim) {
+        // swimwear: trunks / swimsuit in a bright colour, bare arms and legs, barefoot
+        const sw = a.swimColor;
+        set(this.M.pelvis, i, sw); set(this.M.torso, i, a.long ? sw : a.skin); set(this.M.head, i, a.skin);
+        set(this.M.hairS, i, a.hair); set(this.M.hairL, i, a.hair); set(this.M.phone, i, 0x111111); set(this.M.bag, i, 0xf2c94c);
+        for (let s = 0; s < 2; s++) {
+          set(this.M.uArm, i * 2 + s, a.skin); set(this.M.lArm, i * 2 + s, a.skin); set(this.M.hand, i * 2 + s, a.skin);
+          set(this.M.uLeg, i * 2 + s, a.long ? a.skin : sw); set(this.M.lLeg, i * 2 + s, a.skin); set(this.M.foot, i * 2 + s, a.skin);
+        }
+        return;
+      }
       set(this.M.pelvis, i, a.pants); set(this.M.torso, i, a.shirt); set(this.M.head, i, a.skin);
       set(this.M.hairS, i, a.hair); set(this.M.hairL, i, a.hair); set(this.M.phone, i, 0x111111);
       set(this.M.bag, i, [0x2c3e50, 0xc0392b, 0x16a085, 0x7f8c8d][i % 4]);
@@ -147,8 +158,16 @@ export class Pedestrians {
   }
 
   // shopkeepers behind counters and residents at home, for interiors loaded around the player
-  _syncInteriorPeople(places, player) {
+  _syncInteriorPeople(places, player, cells) {
     const want = new Map();
+    // beachgoers in swimwear on the city beach near the player
+    for (const [i, j] of cells || []) {
+      const cd = cellData(i, j);
+      for (const b of cd.beachSpots || []) {
+        if (Math.hypot(b.x - player.x, b.z - player.z) > 130) continue;
+        want.set(b.key, { x: b.x, z: b.z, y: b.y, yaw: b.yaw, state: b.state, swim: true, pts: b.pts, seats: [] });
+      }
+    }
     for (const L of places || []) {
       const key = `${L.b.x.toFixed(1)},${L.b.z.toFixed(1)}`;
       const c = L.spec.counter;
@@ -178,6 +197,7 @@ export class Pedestrians {
       if (this.peds.length >= MAX) break;
       if (this.deadKeys.has(k) || this.peds.some((p) => p.shopKey === k)) continue;
       const p = this._add({ x: w.x, z: w.z, y: w.y, state: w.state, shopKey: k, pts: w.pts, seats: w.seats, suitcase: !!w.suitcase });
+      if (w.swim) { p.app.swim = true; p.app.swimColor = [0xe74c3c, 0x2e86c1, 0xf1c40f, 0x1abc9c, 0xe84393, 0x2d3436, 0xff7f50][this.rng.int(0, 6)]; p.phone = false; p.suitcase = false; if (w.state === 'swimmer') { p.fixedY = null; } this._colors(); }
       p.yaw = w.yaw; p.phone = !!w.phone;
       p.homeSpot = { x: w.x, z: w.z, y: w.y, yaw: w.yaw, state: w.state };
       if (w.state === 'wander') { p.wi = this.rng.int(0, w.pts.length - 1); p.timer = this.rng.float(0, 4); }
@@ -197,7 +217,7 @@ export class Pedestrians {
     const walkers = this.peds.filter((p) => !p.shopKey && !p.car).length;
     if (walkers < this.target && cells.length && this.peds.length < MAX) this._spawnWalker(px, pz, cells);
     this._skT = (this._skT || 0) - dt;
-    if (this._skT <= 0) { this._skT = 1; this._syncInteriorPeople(ctx.places, ctx.player); }
+    if (this._skT <= 0) { this._skT = 1; this._syncInteriorPeople(ctx.places, ctx.player, ctx.cells); }
 
     for (const p of this.peds) this._think(p, dt, time, ctx);
     this._render();
@@ -236,7 +256,7 @@ export class Pedestrians {
     v.object.updateMatrixWorld();
     const w = v.seatWorld(_seatV);
     p.x = w.x; p.y = w.y - (v.isTwoWheel ? 0 : 0.1); p.z = w.z; p.yaw = v.heading; p.speed = 0;
-    p.pose = v.isTwoWheel ? 'ride' : 'drive';
+    p.pose = v.isTwoWheel || v.T.jetski ? 'ride' : 'drive';
   }
 
   _think(p, dt, time, ctx) {
@@ -305,7 +325,7 @@ export class Pedestrians {
     if (p.hitT > 0) p.hitT -= dt;
     if (p.sayT > 0) p.sayT -= dt;
     if (p.barT > 0) p.barT -= dt;
-    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'driving', 'pulled', 'thrown', 'dead'].includes(p.state)) {
+    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'driving', 'pulled', 'thrown', 'dead', 'swimmer', 'sunbathe', 'beachsit'].includes(p.state)) {
       for (const v of vehicles) {
         const sp = Math.hypot(v.vx, v.vz);
         if (sp < 4 || Math.abs(v.x - p.x) > 12 || Math.abs(v.z - p.z) > 12 || v.y - p.y > 3) continue;
@@ -334,6 +354,15 @@ export class Pedestrians {
       case 'resident':
         pose = 'sit'; speed = 0;
         break;
+      case 'sunbathe': speed = 0; pose = 'sunbathe'; p.y = damp(p.y, p.homeSpot?.y ?? p.y, 8, dt); break;
+      case 'beachsit': speed = 0; pose = 'beachsit'; break;
+      case 'swimmer': {
+        // swims slowly back and forth parallel to the shore
+        const h = p.homeSpot; p.swimT = (p.swimT || 0) + dt;
+        const tz = h.z + Math.sin(p.swimT * 0.12 + h.x) * 14;
+        goal = [h.x + Math.sin(p.swimT * 0.07) * 4, tz]; speed = 0.9; pose = 'swim';
+        break;
+      }
       case 'goHome': {
         const h = p.homeSpot;
         goal = [h.x, h.z]; speed = p.walkSpeed * 0.9;
@@ -510,6 +539,7 @@ export class Pedestrians {
         }
       }
     } else p.speed = damp(p.speed, 0, 8, dt);
+    if (p.state === 'swimmer') { p.y = WATER_Y - 0.55 + Math.sin(performance.now() * 0.002 + p.x) * 0.05; p.pose = pose; return; }
     p.y = p.fixedY != null ? damp(p.y, p.fixedY, 8, dt) : damp(p.y, heightAt(p.x, p.z, p.y + 0.4), 12, dt);
     p.pose = pose;
   }
@@ -690,6 +720,19 @@ export class Pedestrians {
       case 'sit':
         t.legL = t.legR = -1.45; t.kneeL = t.kneeR = 1.4; t.armL = t.armR = -0.35; t.elbowL = t.elbowR = -0.9; t.spine = -0.05; hipsY = 0.5;
         break;
+      case 'sunbathe':
+        // lying on the back on a towel, hands behind the head
+        t.bodyX = -1.52; t.legL = 0.05; t.legR = -0.1; t.kneeL = 0.05; t.kneeR = 0.35; t.armL = -2.7; t.armR = -2.7; t.elbowL = t.elbowR = -2.0; t.side = 0.6; hipsY = 0.13; t.spine = 0; t.head = 0.1;
+        break;
+      case 'beachsit':
+        t.legL = t.legR = -1.35; t.kneeL = t.kneeR = 1.9; t.armL = t.armR = 0.3; t.elbowL = t.elbowR = -0.2; t.side = 0.25; t.spine = -0.25; hipsY = 0.22;
+        break;
+      case 'swim': {
+        const ph = now * 2.4 + p.x;
+        t.bodyX = -1.3; t.armL = -2.6 + Math.sin(ph) * 1.3; t.armR = -2.6 - Math.sin(ph) * 1.3; t.elbowL = t.elbowR = -0.3;
+        t.legL = Math.sin(ph * 2) * 0.3; t.legR = -Math.sin(ph * 2) * 0.3; t.kneeL = t.kneeR = 0.15; t.side = 0.3; hipsY = 0.3;
+        break;
+      }
       case 'drive': case 'ride':
         // seated at the wheel, hands on it (riders: legs apart, arms on the bars)
         { const ride = p.pose === 'ride', st = (p.car?.steer || 0) * 0.35;

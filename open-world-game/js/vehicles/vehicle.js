@@ -35,6 +35,7 @@ export class Vehicle {
     this.isHeli = this.T.kind === 'heli';
     this.isPlane = this.T.kind === 'plane';
     this.isAir = this.isHeli || this.isPlane;
+    this.isBoat = this.T.kind === 'boat';
     this.isTwoWheel = this.T.kind === 'moto' || this.T.kind === 'bike';
     this.collider = makeBox(x, z, this.T.W / 2, this.T.L / 2, heading, this.y, this.y + this.T.H, 'vehicle');
     this.collider.owner = this;
@@ -63,6 +64,7 @@ export class Vehicle {
     const T = this.T;
     if (this.isHeli) return this._updateHeli(dt, ctl, statics, others);
     if (this.isPlane) return this._updatePlane(dt, ctl, statics, others);
+    if (this.isBoat) return this._updateBoat(dt, ctl, statics, others);
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     const rx = -fz, rz = fx; // right vector of the vehicle (facing +z, right is -x)
     let vf = this.vx * fx + this.vz * fz;
@@ -227,6 +229,42 @@ export class Vehicle {
     this.roofY = -100;
     this._collide(statics, others);
     this.sync(dt);
+  }
+
+  // Boats and jet skis: float on the water, plane over it at speed, lean into turns, can't go onto land.
+  _updateBoat(dt, ctl, statics, others) {
+    const T = this.T, fx = Math.sin(this.heading), fz = Math.cos(this.heading), rx = -fz, rz = fx;
+    let vf = this.vx * fx + this.vz * fz, vs = this.vx * rx + this.vz * rz;
+    const thr = this.driver ? (ctl.throttle || 0) : 0;
+    if (thr > 0) vf += T.accel * thr * Math.max(0.05, 1 - vf / T.maxSpeed) * dt;
+    else if (thr < 0) vf += (vf > 0.5 ? T.brake : T.accel * 0.4) * thr * dt;
+    vf -= vf * (0.25 + Math.abs(vf) * 0.012) * dt;                     // water drag
+    vs *= Math.exp(-T.grip * dt);                                          // slides a little in turns
+    const rudder = (ctl.steer || 0) * T.steerMax * Math.min(1, Math.abs(vf) / 4) * Math.sign(vf || 1);
+    this.steer = damp(this.steer, ctl.steer || 0, 6, dt);
+    this.heading -= rudder * dt;
+    const nfx = Math.sin(this.heading), nfz = Math.cos(this.heading);
+    this.vx = nfx * vf + (-nfz) * vs; this.vz = nfz * vf + nfx * vs;
+    // land check ahead: the hull needs water under it
+    const nx = this.x + this.vx * dt, nz = this.z + this.vz * dt;
+    const probe = (x, z) => heightAt(x, z, WATER_Y) > WATER_Y - 0.45;
+    const bowX = nx + nfx * T.L * 0.45, bowZ = nz + nfz * T.L * 0.45, sternX = nx - nfx * T.L * 0.45, sternZ = nz - nfz * T.L * 0.45;
+    if (probe(bowX, bowZ) || probe(sternX, sternZ)) {
+      if (Math.abs(vf) > 4) { this.lastImpact = Math.max(this.lastImpact, Math.abs(vf) * 0.6); }
+      this.vx *= -0.2; this.vz *= -0.2; vf *= -0.2;
+    } else { this.x = nx; this.z = nz; }
+    this.speed = vf;
+    // floating: waves, bow lifts when planing, lean into turns
+    const t = performance.now() * 0.001, k = Math.min(1, Math.abs(vf) / T.maxSpeed);
+    const wave = Math.sin(t * 1.6 + this.x * 0.15) * 0.06 + Math.sin(t * 2.3 + this.z * 0.21) * 0.04;
+    this.y = damp(this.y, WATER_Y - (T.jetski ? 0.12 : 0.08) + wave + k * 0.15, 6, dt);
+    this.pitch = damp(this.pitch, -k * (T.jetski ? 0.1 : 0.16) + Math.sin(t * 1.9 + this.x) * 0.025 * (1 - k), 4, dt);
+    this.roll = damp(this.roll, rudder * k * (T.jetski ? 0.35 : 0.12) + Math.sin(t * 1.4 + this.z) * 0.03, 4, dt);
+    this.inWater = false;
+    this._collide(statics, others);
+    this.sync(dt);
+    // spray behind the boat
+    this.wake = k;
   }
 
   _collide(statics, others) {

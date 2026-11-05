@@ -173,7 +173,7 @@ export class Player {
     for (const v of vehicles) {
       if (v.driver === 'ai' || v.driver === 'player') continue;
       if (v.isAir && v.y > Math.max(heightAt(v.x, v.z, v.y + 0.3), v.roofY ?? -100) + 0.5) continue;
-      if (Math.abs(v.y - this.y) > 1.6) continue;
+      if (Math.abs(v.y - this.y) > (v.isBoat ? 2.4 : 1.6)) continue;
       const dp = v.doorPoint();
       const d = v.isPlane ? Math.hypot(dp.x - this.x, dp.z - this.z) - 1.2 : Math.min(Math.hypot(dp.x - this.x, dp.z - this.z), Math.hypot(v.x - this.x, v.z - this.z) - Math.max(v.T.W, v.T.L) / 2 + 0.6);
       if (d < bd) { bd = d; best = v; }
@@ -399,7 +399,7 @@ export class Player {
   _free(x, z, world, ignore) {
     world.statics.query(x - 1, z - 1, x + 1, z + 1, _q);
     const y = heightAt(x, z, this.vehicle ? this.vehicle.y + 0.6 : this.y);
-    if (y < WATER_Y - 1.2 && !(this.vehicle && this.vehicle.inWater)) return false;
+    if (y < WATER_Y - 1.2 && !(this.vehicle && (this.vehicle.inWater || this.vehicle.isBoat))) return false;
     for (const c of _q) if (!c.off && c.tag !== 'slab' && verticalOverlap(y + 0.25, y + HEIGHT, c) && circleVs(x, z, RADIUS, c).hit) return false;
     for (const v of world.vehicles) if (v !== ignore && Math.abs(v.x - x) < 8 && Math.abs(v.z - z) < 8 && circleVs(x, z, RADIUS, v.collider).hit) return false;
     return true;
