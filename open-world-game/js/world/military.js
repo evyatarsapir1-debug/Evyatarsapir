@@ -1,7 +1,7 @@
 // Military systems: the tank turret follows your camera and its cannon fires (fictional) shells that explode on
 // impact (smoke, fire flash, shake — no gore); fighter jets patrol in formation over the city.
 import * as THREE from 'three';
-import { segmentVsBox } from '../physics/collision.js';
+import { segmentVsBox, makeBox } from '../physics/collision.js';
 import { heightAt } from './terrain.js';
 import { damp, dampAngle } from '../core/mathx.js';
 import { fighterGeometry, FIGHTER_MAT, afterburner } from '../vehicles/fighterModel.js';
@@ -17,12 +17,23 @@ export class Military {
     this.smokeMat = new THREE.MeshLambertMaterial({ color: 0xb8b2a6, transparent: true, depthWrite: false });
     this.sphere = new THREE.SphereGeometry(1, 10, 8);
     this.puffs = [];
+    // base gate barrier: a red-and-white arm that lifts when someone drives or walks up to it
+    this.gate = new THREE.Group(); this.gate.position.set(-506.5, 1.0, -40); scene.add(this.gate);
+    const arm = new THREE.Group(); this.gate.add(arm); this.gateArm = arm;
+    const white = new THREE.MeshStandardMaterial({ color: 0xf4f4f4, roughness: 0.5 }), red = new THREE.MeshStandardMaterial({ color: 0xd0312d, roughness: 0.5 });
+    const bm = new THREE.Mesh(new THREE.BoxGeometry(12, 0.13, 0.13), white); bm.position.x = 6; bm.castShadow = true; arm.add(bm);
+    for (let k = 0; k < 6; k++) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.14, 0.14), red); r.position.x = 1 + k * 2; arm.add(r); }
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), new THREE.MeshStandardMaterial({ color: 0xff3020, emissive: 0xff2010, emissiveIntensity: 1.5 })); lamp.position.set(11.8, 0.12, 0); arm.add(lamp);
+    const cw = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: 0x333333 })); cw.position.x = -0.4; arm.add(cw);   // counterweight
+    this.gateOpen = 0;
+    this.gateCol = makeBox(-500.5, -40, 6, 0.15, 0, 0.6, 1.2, 'gate');
+    this.gateAdded = false;
     // patrol: two pairs of fighters on long loops over the city and the bay
     this.patrol = [];
     const routes = [{ cx: 500, cz: 450, rx: 1100, rz: 650, y: 230, w: 0.045, ph: 0 }, { cx: 700, cz: 400, rx: 1300, rz: 800, y: 320, w: -0.035, ph: 2.5 }];
     for (const r of routes) for (let k = 0; k < 2; k++) {
       const g = new THREE.Group();
-      const m = new THREE.Mesh(fighterGeometry(0x6f7a80, false), FIGHTER_MAT); m.castShadow = true; g.add(m);
+      const m = new THREE.Mesh(fighterGeometry(0x7d8790, false), FIGHTER_MAT); m.castShadow = true; g.add(m);
       const f = afterburner(); f.scale.set(1, 1, 1.6); g.add(f);
       g.matrixAutoUpdate = true; scene.add(g);
       this.patrol.push({ g, r, off: k, a: r.ph });
@@ -40,6 +51,20 @@ export class Military {
       P.g.position.set(x, y, z);
       P.g.rotation.set(0, Math.atan2(dx, dz), 0, 'YXZ');
       P.g.rotation.z = -Math.sign(r.w) * 0.5;   // banked in the turn
+    }
+    // ------------------------------------------------ gate barrier
+    {
+      const pp = player.state === 'driving' && player.vehicle ? player.vehicle : player;
+      let near = Math.hypot(pp.x + 500, pp.z + 40) < 18;
+      for (const o of ctx.vehicles || []) if (!near && Math.abs(o.x + 500) < 9 && Math.abs(o.z + 40) < 16) near = true;
+      const want = near ? 1 : 0;
+      this.gateOpen += Math.sign(want - this.gateOpen) * Math.min(Math.abs(want - this.gateOpen), dt * 0.7);
+      const e = this.gateOpen * this.gateOpen * (3 - 2 * this.gateOpen);
+      this.gateArm.rotation.z = e * 1.45;
+      this.gateCol.off = this.gateOpen > 0.55;
+      const close = Math.abs(pp.x + 500) < 300 && Math.abs(pp.z + 40) < 300;
+      if (close && !this.gateAdded) { this.statics.addGroup('basegate', [this.gateCol]); this.gateAdded = true; }
+      else if (!close && this.gateAdded) { this.statics.removeGroup('basegate'); this.gateAdded = false; }
     }
     // ------------------------------------------------ tank: turret + cannon
     const v = player.state === 'driving' ? player.vehicle : null;

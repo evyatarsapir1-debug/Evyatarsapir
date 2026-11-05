@@ -45,6 +45,13 @@ class Rig {
       this.hip.push(hip); this.knee.push(knee);
       this.a.uLeg.push(g(hip, 0, -0.21, 0)); this.a.lLeg.push(g(knee, 0, -0.2, 0)); this.a.foot.push(g(knee, 0, -0.44, 0.05));
     }
+    this.a.neck = g(this.spine, 0, 0.5, 0);
+    this.a.shoulders = g(this.spine, 0, 0.4, -0.005);
+    this.a.nose = g(this.head, 0, -0.012, 0.108);
+    this.a.eyes = g(this.head, 0, 0.022, 0.095);
+    this.a.helmet = g(this.head, 0, 0.035, -0.005);
+    this.a.vest = g(this.spine, 0, 0.27, 0.0);
+    this.a.rifle = g(this.spine, 0.02, 0.3, -0.17); this.a.rifle.rotation.z = 0.85;
     this.a.phone = g(this.a.hand[1], 0, -0.02, 0.05);
     this.a.bag = g(this.a.hand[0], -0.12, -0.3, 0);
   }
@@ -78,6 +85,13 @@ export class Pedestrians {
       lLeg: mk(cap(0.065, 0.3), MAX * 2, 0xffffff),
       foot: mk(new THREE.BoxGeometry(0.1, 0.07, 0.25), MAX * 2, 0xffffff),
       phone: mk(new THREE.BoxGeometry(0.07, 0.14, 0.012), MAX, 0x111111),
+      neck: mk(new THREE.CylinderGeometry(0.045, 0.05, 0.1, 8), MAX, 0xffffff),
+      shoulders: mk(cap(0.075, 0.28).rotateZ(Math.PI / 2), MAX, 0xffffff),
+      nose: mk(new THREE.BoxGeometry(0.03, 0.04, 0.03), MAX, 0xffffff),
+      eyes: mk(new THREE.BoxGeometry(0.085, 0.018, 0.01), MAX, 0x1a1a1a),
+      helmet: mk(new THREE.SphereGeometry(0.14, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.52).scale(1, 0.95, 1.08), MAX, 0x4b5320),
+      vest: mk(new THREE.BoxGeometry(0.36, 0.34, 0.25), MAX, 0x3d4428),
+      rifle: mk(new THREE.BoxGeometry(0.05, 0.75, 0.06), MAX, 0x1d1f1c),
       bag: mk(new THREE.BoxGeometry(0.22, 0.55, 0.38), MAX, 0x2c3e50),
     };
     this.zero = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -135,6 +149,8 @@ export class Pedestrians {
     this.peds.forEach((p, i) => {
       const a = p.app;
       const set = (m, idx, hex) => m.setColorAt(idx, c.setHex(hex));
+      set(this.M.neck, i, a.skin); set(this.M.nose, i, a.skin); set(this.M.eyes, i, 0x1a1a1a); set(this.M.shoulders, i, a.swim ? a.skin : a.shirt);
+      set(this.M.helmet, i, 0x4b5320); set(this.M.vest, i, 0x3d4428); set(this.M.rifle, i, 0x1d1f1c);
       if (a.swim) {
         // swimwear: trunks / swimsuit in a bright colour, bare arms and legs, barefoot
         const sw = a.swimColor;
@@ -146,6 +162,8 @@ export class Pedestrians {
         }
         return;
       }
+      set(this.M.neck, i, a.skin); set(this.M.nose, i, a.skin); set(this.M.eyes, i, 0x1a1a1a); set(this.M.shoulders, i, a.swim ? a.skin : a.shirt);
+      set(this.M.helmet, i, 0x4b5320); set(this.M.vest, i, 0x3d4428); set(this.M.rifle, i, 0x1d1f1c);
       set(this.M.pelvis, i, a.pants); set(this.M.torso, i, a.shirt); set(this.M.head, i, a.skin);
       set(this.M.hairS, i, a.hair); set(this.M.hairL, i, a.hair); set(this.M.phone, i, 0x111111);
       set(this.M.bag, i, [0x2c3e50, 0xc0392b, 0x16a085, 0x7f8c8d][i % 4]);
@@ -814,6 +832,11 @@ export class Pedestrians {
       M.hairS.setMatrixAt(i, p.app.bald ? this.zero : a.hairS.matrixWorld);
       M.hairL.setMatrixAt(i, p.app.long ? a.hairL.matrixWorld : this.zero);
       M.phone.setMatrixAt(i, p.pose === 'phone' || p.pose === 'phoneWalk' ? a.phone.matrixWorld : this.zero);
+      M.neck.setMatrixAt(i, a.neck.matrixWorld); M.shoulders.setMatrixAt(i, a.shoulders.matrixWorld);
+      M.nose.setMatrixAt(i, a.nose.matrixWorld); M.eyes.setMatrixAt(i, a.eyes.matrixWorld);
+      const sol = !!p.app.soldier;
+      M.helmet.setMatrixAt(i, sol ? a.helmet.matrixWorld : this.zero); M.vest.setMatrixAt(i, sol ? a.vest.matrixWorld : this.zero); M.rifle.setMatrixAt(i, sol ? a.rifle.matrixWorld : this.zero);
+      if (sol) M.hairS.setMatrixAt(i, this.zero);
       M.bag.setMatrixAt(i, p.suitcase && p.pose !== 'sit' ? a.bag.matrixWorld : this.zero);
       for (let s = 0; s < 2; s++) {
         M.uArm.setMatrixAt(i * 2 + s, a.uArm[s].matrixWorld); M.lArm.setMatrixAt(i * 2 + s, a.lArm[s].matrixWorld); M.hand.setMatrixAt(i * 2 + s, a.hand[s].matrixWorld);

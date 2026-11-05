@@ -850,7 +850,7 @@ class Game {
       onRecoil: (k) => { this.rig.pitch -= k; },
       onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); }, message: (m) => this.toast(m, 2),
     });
-    this.military.update(dt, { player: p, input, camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
+    this.military.update(dt, { player: p, input, vehicles: all, camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.rig.update(dt, input, p);
     // flashlight
     const fl = this.flashlight, on = this.econ.items.flashlight && this.econ.flashlightOn && p.state !== 'driving';

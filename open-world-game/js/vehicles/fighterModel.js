@@ -10,7 +10,7 @@ const cache = new Map();
 
 function build(col, gear) {
   const b = new GeoBuilder(), I = new THREE.Matrix4();
-  const DARK = 0x1c2228, GLASS = 0x223a4c, METAL = 0x8c939a, light = new THREE.Color(col).offsetHSL(0, 0, 0.08).getHex();
+  const DARK = 0x1c2228, GLASS = 0x4a4630, METAL = 0x8c939a, light = new THREE.Color(col).offsetHSL(0, 0, 0.08).getHex();
   // fuselage: pointed nose (radome), cockpit hump, wide middle, tapering to the nozzle
   const fus = tubeGeo([[8.0, 0.02, -0.15], [7.4, 0.22, -0.12], [6.3, 0.48, -0.06], [4.8, 0.7, 0], [3.0, 0.82, 0.05], [1.0, 0.9, 0.05], [-1.5, 0.95, 0], [-4.5, 0.85, 0], [-6.4, 0.62, 0], [-7.2, 0.55, 0]]
     .map(([z, r, cy]) => ({ z, r, cy: FY + cy, sx: 1.15, sy: 0.92 })), 24, (x, yr, z) => (yr < -0.45 ? light : col), [true, false]);
@@ -32,10 +32,26 @@ function build(col, gear) {
     const V = loftGeo([foil([s * 0.75, FY + 0.6, -3.6], [0, 0, -1], [1, 0, 0], 3.0, 0.16), foil([s * 1.3, FY + 2.6, -6.0], [0, 0, -1], [1, 0, 0], 1.2, 0.08)]);
     b.addGeometry(V, I, col);
   }
+  // leading-edge root extensions, anti-glare panel, ejection seat inside the canopy, panel lines, tail stripes
+  for (const s2 of [-1, 1]) b.addGeometry(loftGeo([foil([s2 * 0.75, FY + 0.05, 5.2], [0, 0, -1], [0, 1, 0], 4.2, 0.08), foil([s2 * 1.5, FY - 0.02, 1.6], [0, 0, -1], [0, 1, 0], 0.6, 0.04)]), I, col);
+  b.addGeometry(BOX, M(0, FY + 0.62, 5.15, 0, 0.55, 0.04, 1.2, -0.12), DARK);
+  b.addGeometry(BOX, M(0, FY + 0.82, 2.75, 0, 0.42, 0.7, 0.18, -0.2), 0x2b2b2b);
+  b.addGeometry(BOX, M(0, FY + 1.15, 2.7, 0, 0.3, 0.18, 0.16), 0xb8862b);
+  for (const z of [4.4, 1.9, -1.2, -4.2]) b.addGeometry(CYL, M(0, FY, z, 0, 2.02, 0.012, 1.7, Math.PI / 2), 0x4f5a62);
+  for (const s2 of [-1, 1]) { b.addGeometry(BOX, M(s2 * 1.65, FY + 2.0, -5.3, 0, 0.05, 0.25, 1.6, -0.55, 0), 0xd0a020); b.addGeometry(BOX, M(s2 * 1.62, FY + 1.7, -5.0, 0, 0.05, 0.25, 1.6, -0.55, 0), 0x1c2228); }
+  // missiles (fictional): two on the wingtip rails, two under the wings on pylons
+  const missile = (x, y, z) => {
+    b.addGeometry(CYL, M(x, y, z, 0, 0.18, 2.6, 0.18, Math.PI / 2), 0xe8e8e8);
+    b.addGeometry(SPH, M(x, y, z + 1.3, 0, 0.18, 0.18, 0.4), 0x8a6a3a);
+    for (const r of [0, Math.PI / 2]) b.addGeometry(BOX, M(x, y, z - 1.1, 0, 0.5, 0.02, 0.3, 0, r), 0xd8d8d8);
+    b.addGeometry(BOX, M(x, y, z + 0.6, 0, 0.36, 0.02, 0.18), 0xd8d8d8);
+  };
+  for (const s2 of [-1, 1]) { missile(s2 * 5.45, FY - 0.15, -3.0); b.addGeometry(BOX, M(s2 * 3.0, FY - 0.45, -0.8, 0, 0.1, 0.4, 1.6), 0x5a6168); missile(s2 * 3.0, FY - 0.78, -0.6); }
   // nozzle
   const noz = tubeGeo([[-7.0, 0.56], [-7.9, 0.5], [-8.1, 0.47]].map(([z, r]) => ({ z, r, cy: FY })), 16, null, [false, false]);
   b.addGeometry(noz, I, 0x3a3f44); noz.dispose();
   b.addGeometry(CYL, M(0, FY, -7.6, 0, 0.82, 0.05, 0.82, Math.PI / 2), 0x14181c);
+  for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; b.addGeometry(BOX, M(Math.sin(a) * 0.5, FY + Math.cos(a) * 0.5, -8.05, 0, 0.22, 0.04, 0.5, 0, -a), 0x52575c); }
   b.addGeometry(BOX, M(0, FY + 1.0, 6.3, 0, 0.05, 0.05, 0.6), METAL);                       // pitot
   b.addGeometry(BOX, M(-0.65, FY + 0.05, 7.2, 0, 0.06, 0.06, 1.2), METAL);                  // refuelling probe
   // national-style roundels (fictional) + tail stripe

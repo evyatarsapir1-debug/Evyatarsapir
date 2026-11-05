@@ -15,7 +15,9 @@ const CH = 200;               // render chunk size (2x2 cells)
 const STYLES = ['glass', 'office', 'concrete', 'plaster', 'brick', 'industrial', 'storefront'];
 
 const G = {
-  trunk: new THREE.CylinderGeometry(0.16, 0.26, 3, 6).translate(0, 1.5, 0),
+  trunk: new THREE.CylinderGeometry(0.13, 0.27, 3.4, 7).translate(0, 1.7, 0),
+  branch: new THREE.CylinderGeometry(0.05, 0.1, 1.6, 5).translate(0, 0.8, 0),
+  crown: new THREE.IcosahedronGeometry(1, 1),
   leaf: new THREE.IcosahedronGeometry(1.9, 0),
   leafSmall: new THREE.IcosahedronGeometry(1.4, 0),
   box: new THREE.BoxGeometry(1, 1, 1),
@@ -41,10 +43,18 @@ function addProp(pb, p, lampB) {
   const y = p.y ?? CURB_H;
   switch (p.kind) {
     case 'tree': {
-      const s = p.s || 1;
-      pb.addGeometry(G.trunk, mat(p.x, y, p.z, 0, s, s, s), 0x6b4a2f);
-      pb.addGeometry(G.leaf, mat(p.x, y + 3.6 * s, p.z, p.x, s * 1.1, s, s * 1.1), 0x3f7a32);
-      pb.addGeometry(G.leafSmall, mat(p.x + 0.6 * s, y + 4.8 * s, p.z - 0.3 * s, p.z, s, s, s), 0x4f8f3a);
+      // trunk with a few branches and a crown of overlapping leaf clusters in several greens (deterministic per tree)
+      const s = p.s || 1, h = (n) => { const v = Math.sin(p.x * 12.9898 + p.z * 78.233 + n * 37.719) * 43758.5453; return v - Math.floor(v); };
+      pb.addGeometry(G.trunk, mat(p.x, y, p.z, h(9) * 6, s, s, s), 0x5e4330);
+      for (let k = 0; k < 3; k++) { const a = h(k) * 6.28; pb.addGeometry(G.branch, mat(p.x + Math.sin(a) * 0.12 * s, y + (2.4 + k * 0.35) * s, p.z + Math.cos(a) * 0.12 * s, a, s, s, s, 0.75, 0), 0x5e4330); }
+      const greens = [0x3d6e2c, 0x4a8236, 0x2f5d26, 0x5a9440, 0x447a30];
+      const n = 6;
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * 6.28 + h(k + 3) * 0.8, r = (0.7 + h(k + 11) * 0.6) * s, cy = (3.6 + h(k + 21) * 1.4) * s;
+        const sz = (1.0 + h(k + 31) * 0.55) * s;
+        pb.addGeometry(G.crown, mat(p.x + Math.sin(a) * r, y + cy, p.z + Math.cos(a) * r, a, sz * 1.15, sz * 0.9, sz * 1.15), greens[(k + Math.floor(h(5) * 5)) % 5]);
+      }
+      pb.addGeometry(G.crown, mat(p.x, y + 5.0 * s, p.z, h(6), 1.35 * s, 1.1 * s, 1.35 * s), greens[Math.floor(h(7) * 5)]);
       break;
     }
     case 'palm': {
@@ -123,8 +133,6 @@ function addProp(pb, p, lampB) {
     }
     case 'barrier':
       pb.addGeometry(G.box, mat(p.x - 6.5, y + 0.55, p.z, 0, 0.5, 1.1, 0.5), 0xc0392b);
-      pb.addGeometry(G.box, mat(p.x - 0.5, y + 1.0, p.z, 0, 12, 0.12, 0.12), 0xf2f2f2);
-      for (let k = 0; k < 6; k++) pb.addGeometry(G.box, mat(p.x - 5.5 + k * 2, y + 1.0, p.z, 0, 0.9, 0.13, 0.13), 0xc0392b);
       pb.addGeometry(G.box, mat(p.x + 6.5, y + 0.4, p.z, 0, 0.3, 0.8, 0.3), 0x555555);
       break;
     case 'flagpole':

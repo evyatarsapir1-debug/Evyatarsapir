@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GeoBuilder } from '../world/geoBuilder.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { airlinerGeometry, JET_MAT, LIVERIES, FY } from '../world/airliner.js';
 import { fighterGeometry, FIGHTER_MAT, FIGHTER_FY, afterburner } from './fighterModel.js';
 
@@ -23,6 +24,8 @@ export const shared = {
   lod: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.35 }),
 };
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+// rounded body panels (softer, car-like edges); the BufferGeometry stays indexed so parts can be merged
+const rbox = (w, h, d, r) => { const g = new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2 - 0.01, h / 2 - 0.01, d / 2 - 0.01)); return g.index ? g : mergeVertices(g); };
 const archCache = new Map();
 // half-ring over a wheel (dark plastic arch)
 const ARCH = (r) => { const k = r.toFixed(2); if (!archCache.has(k)) archCache.set(k, new THREE.TorusGeometry(r + 0.06, 0.055, 6, 14, Math.PI)); return archCache.get(k); };
@@ -155,6 +158,24 @@ function milModel(T, parts, g, body, paint) {
     m(new THREE.CylinderGeometry(0.035, 0.035, 2.2, 6), dark, turret, 0.9, 1.6, -1.2);                 // antenna
     for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) m(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 8).rotateX(Math.PI / 2 - 0.4), dark, turret, sx * (1.05 + k * 0.08), 0.65, 1.0 - k * 0.15);
     m(box(1.6, 0.5, 0.6), olive, turret, 0, 0.35, -1.85);                                               // bustle
+    // track links on top of the tracks, drive sprocket and idler, mudguards, storage boxes, exhausts, tow hooks
+    for (const sx of [-1, 1]) {
+      for (let z = -L / 2 + 0.2; z < L / 2 - 0.1; z += 0.32) m(box(0.72, 0.05, 0.14), dark, body, sx * (W / 2 - 0.35), 0.95, z);
+      for (const [z, r] of [[-L / 2 + 0.35, 0.42], [L / 2 - 0.35, 0.36]]) m(new THREE.CylinderGeometry(r, r, 0.6, 10).rotateZ(Math.PI / 2), dark, body, sx * (W / 2 - 0.35), 0.55, z);
+      m(box(0.8, 0.06, 0.9), olive, body, sx * (W / 2 - 0.35), 1.46, L / 2 - 0.45);
+      for (let k = 0; k < 3; k++) m(box(0.5, 0.35, 0.9), olive, body, sx * (W / 2 - 0.25), 1.6, -0.6 - k * 1.0);
+    }
+    for (const sx of [-0.7, 0.7]) m(box(0.5, 0.2, 0.06), dark, body, sx, 1.25, -L / 2 + 0.38);
+    for (const sx of [-0.9, 0.9]) m(box(0.18, 0.18, 0.3), dark, body, sx, 0.9, L / 2 - 0.25);
+    // turret: commander's cupola with periscopes + roof machine gun, gunner's sight, basket on the bustle
+    const cup = m(new THREE.CylinderGeometry(0.42, 0.46, 0.32, 14), olive, turret, 0.55, 0.92, -0.3);
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; m(box(0.12, 0.08, 0.06), shared.glass, turret, 0.55 + Math.sin(a) * 0.42, 0.98, -0.3 + Math.cos(a) * 0.42, false).rotation.y = a; }
+    m(new THREE.CylinderGeometry(0.035, 0.035, 0.9, 6).rotateX(Math.PI / 2), dark, turret, 0.55, 1.22, 0.15);
+    m(box(0.12, 0.16, 0.3), dark, turret, 0.55, 1.15, -0.1);
+    m(box(0.35, 0.3, 0.35), olive, turret, -0.75, 0.9, 0.9);
+    m(box(0.25, 0.15, 0.06), shared.glass, turret, -0.75, 0.95, 1.08, false);
+    for (const sx of [-0.8, 0, 0.8]) m(box(0.04, 0.35, 0.04), dark, turret, sx, 0.75, -2.15);
+    m(box(1.7, 0.04, 0.04), dark, turret, 0, 0.92, -2.15);
     parts.turret = turret; parts.barrel = barrel; parts.muzzleZ = 4.7;
     parts.seat.set(0, 1.1, 0); parts.wheelR = 0.36;
     for (const sx of [-1, 1]) parts.lights.push(m(box(0.2, 0.12, 0.08), shared.head, body, sx * (W / 2 - 0.9), 1.45, L / 2 - 0.3, false));
@@ -234,10 +255,10 @@ export function buildVehicleModel(type, color) {
       const lowH = H * (T.van ? 0.4 : 0.48);
       const sporty = T.maxSpeed > 60 || T.coupe;
       // lower body
-      const lower = m(box(W, lowH, L), paint, body, 0, clear + lowH / 2, 0);
+      const lower = m(rbox(W, lowH, L, 0.16), paint, body, 0, clear + lowH / 2, 0);
       lower.receiveShadow = true;
       // hood slope hint
-      m(box(W * 0.98, 0.06, L * 0.3), paint, body, 0, clear + lowH + 0.02, L * 0.33);
+      m(rbox(W * 0.96, 0.1, L * 0.3, 0.05), paint, body, 0, clear + lowH + 0.01, L * 0.33);
       // cabin (glass) + roof — shaped per body style
       let cabL = L * (sporty ? 0.42 : 0.5), cabH = H - lowH - clear, cabZ = sporty ? -L * 0.06 : -L * 0.05;
       if (T.pickup) { cabL = L * 0.36; cabZ = L * 0.05; }
@@ -248,9 +269,9 @@ export function buildVehicleModel(type, color) {
         m(box(W * 0.8, 0.5, 0.5), shared.seat, body, 0, clear + lowH + 0.05, cabZ - cabL * 0.05);
         m(box(W * 0.84, 0.08, 0.08), paint, body, 0, clear + lowH + cabH * 0.55, cabZ - cabL * 0.35);
       } else {
-        const cab = m(box(W * 0.88, cabH * 0.92, cabL), shared.glass, body, 0, clear + lowH + cabH * 0.46, cabZ, false);
+        const cab = m(rbox(W * 0.88, cabH * 0.92, cabL, 0.18), shared.glass, body, 0, clear + lowH + cabH * 0.46, cabZ, false);
         parts.glassParts.push(cab);
-        m(box(W * 0.86, 0.07, cabL * 0.82), paint, body, 0, clear + lowH + cabH * 0.95, cabZ - cabL * 0.02);
+        m(rbox(W * 0.87, 0.09, cabL * 0.84, 0.04), paint, body, 0, clear + lowH + cabH * 0.95, cabZ - cabL * 0.02);
         for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
           m(box(0.06, cabH * 0.92, 0.08), paint, body, sx * W * 0.43, clear + lowH + cabH * 0.46, cabZ + sz * cabL * 0.47);
         }
