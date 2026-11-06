@@ -95,6 +95,7 @@ export class Vehicle {
     // yaw from bicycle model (positive steer turns right -> heading decreases)
     const yaw = -(vf / T.wheelbase) * Math.tan(this.steer);
     this.heading += yaw * dt;
+    if (this.yawRate) { this.heading += this.yawRate * dt; this.yawRate *= Math.exp(-2.2 * dt); if (Math.abs(this.yawRate) < 0.02) this.yawRate = 0; }
     const nfx = Math.sin(this.heading), nfz = Math.cos(this.heading);
     this.vx = nfx * vf + (-nfz) * vs;
     this.vz = nfz * vf + nfx * vs;
@@ -115,7 +116,8 @@ export class Vehicle {
     if (gy < this.y - 0.05) { this.vy -= 18 * dt; this.y = Math.max(gy, this.y + this.vy * dt); }
     else { this.vy = 0; this.y = damp(this.y, gy, 18, dt); }
     this.pitch = damp(this.pitch, Math.atan2(gR - gF, T.wheelbase), 10, dt);
-    this.roll = damp(this.roll, this.isTwoWheel ? clamp(-yaw * Math.abs(vf) * 0.06, -0.6, 0.6) : clamp(yaw * vf * 0.006, -0.06, 0.06), 6, dt);
+    if (this.isTwoWheel && this.driver === 'player') this.fallen = false;
+    this.roll = damp(this.roll, this.fallen ? 1.35 : this.isTwoWheel ? clamp(-yaw * Math.abs(vf) * 0.06, -0.6, 0.6) : clamp(yaw * vf * 0.006, -0.06, 0.06), this.fallen ? 9 : 6, dt);
 
     this._collide(statics, others);
     this.wheelSpin += (vf / (this.parts.wheelR || 0.35)) * dt;
@@ -175,7 +177,7 @@ export class Vehicle {
     v -= v * Math.abs(v) * (T.accel / (T.maxSpeed * T.maxSpeed)) * dt;
     if (onGround) {
       // wheel brakes once the throttle is at idle and you keep pulling back
-      if (thr < 0 && this.throttleSet === 0) v = v > 0.3 ? Math.max(0, v - T.brake * 2.2 * -thr * dt) : 0;   // planes never roll backwards
+      if (thr < 0 && this.throttleSet === 0) v = v > 0.3 ? Math.max(0, v - T.brake * 2.2 * -thr * dt) : Math.max(-4, v - 1.5 * dt);   // stopped + brake held = slow reverse (taxi back)
       else if (this.throttleSet < 0.3) v -= Math.sign(v) * Math.min(Math.abs(v), (Math.abs(v) > 6 ? 7 : 2) * dt);   // wheel brakes + air brakes after touchdown   // rolls to a stop after landing
       if (ctl.handbrake) v -= Math.sign(v) * Math.min(Math.abs(v), 14 * dt);
       // nose-wheel steering, less effective at speed
@@ -217,7 +219,7 @@ export class Vehicle {
       this.vy = damp(this.vy, targetVy, L > 0.5 ? 3 : 1.2, dt);
       if (L < 0.5) this.pitch = damp(this.pitch, 0.12, 0.8, dt); // nose drops in a stall
     }
-    v = clamp(v, onGround ? 0 : 18, T.maxSpeed * 1.08);   // never backwards; in the air it keeps a gliding speed
+    v = clamp(v, onGround ? (thr < 0 ? -4 : Math.min(0, v)) : 18, T.maxSpeed * 1.08);   // reverse only while braking on the ground; in the air it keeps a gliding speed
     this.speed = v;
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     const hv = v * Math.cos(this.pitch);
@@ -312,15 +314,21 @@ export class Vehicle {
         const total = this.T.mass + o.T.mass;
         const share = o.T.mass / total;
         const nx = r.nx, nz = r.nz, depth = r.depth;
+        const rel = (this.vx - o.vx) * nx + (this.vz - o.vz) * nz;   // closing speed BEFORE this car is stopped
         this._resolve(nx, nz, depth * share, share * 2);
         // push the other vehicle and transfer some momentum
         o.x -= nx * depth * (1 - share); o.z -= nz * depth * (1 - share);
-        const rel = (this.vx - o.vx) * nx + (this.vz - o.vz) * nz;
         if (rel < 0) {
           const j = -rel * (this.T.mass / total) * 0.8;
           o.vx -= nx * j; o.vz -= nz * j;
-          o.bumped = 1.5;
-          o.addDamage(Math.abs(rel) * 2, -nx, -nz);
+          const hit = Math.abs(rel);
+          o.bumped = hit > 8 ? 5 : 1.5;                                   // a real crash: the other car stops for a while
+          o.addDamage(hit * 2, -nx, -nz);
+          // the hit car spins around depending on where it was struck; this car twists a little too
+          const ofx = Math.sin(o.heading), ofz = Math.cos(o.heading), side = Math.sign(ofx * nz - ofz * nx) || 1;
+          o.yawRate = (o.yawRate || 0) + side * Math.min(3.2, hit * 0.22) * (this.T.mass / total) * 1.6;
+          this.yawRate = (this.yawRate || 0) - side * Math.min(2, hit * 0.12) * share;
+          if (hit > 5) { const ev = { s: hit, x: (this.x + o.x) / 2, y: Math.max(this.y, o.y) + 0.7, z: (this.z + o.z) / 2, a: this, b: o }; this.crashEvt = ev; o.crashEvt = ev; }
         }
       }
       if (!any) break;
@@ -337,6 +345,7 @@ export class Vehicle {
       const impact = -vn;
       if (impact > 2) this.addDamage(impact * 2.2, nx, nz);
       this.lastImpact = Math.max(this.lastImpact, impact);
+      if (impact > 6 && !this.crashEvt) this.crashEvt = { s: impact, x: this.x - nx * this.T.W * 0.4, y: this.y + 0.7, z: this.z - nz * this.T.W * 0.4, a: this };
     }
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     this.speed = this.vx * fx + this.vz * fz;

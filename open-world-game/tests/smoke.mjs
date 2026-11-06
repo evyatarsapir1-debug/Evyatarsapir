@@ -643,10 +643,12 @@ const strike = await g(() => {
   const landDamage = jet.damage;
   step(30 * 25);
   const stoppedSpeed = Math.abs(jet.speed);
+  I.held.add('brake'); step(90); I.held.delete('brake'); const planeRev = jet.speed; step(60);
   I.pressed.add('vehicle'); step(40);
-  return { fired, destroyed, burning, landed: landedAt !== null, landDamage, stoppedSpeed, onFoot: P.state };
+  return { fired, destroyed, burning, landed: landedAt !== null, landDamage, stoppedSpeed, planeRev, onFoot: P.state };
 });
 check('fighter: fires missiles that blow up a car (wrecked + burning)', strike.fired >= 1 && strike.destroyed && strike.burning, JSON.stringify(strike));
+check('fighter: brake held when stopped = taxi backwards', strike.planeRev < -2, `speed ${strike.planeRev?.toFixed(1)}`);
 check('fighter: easy landing on the runway without damage, rolls to a stop', strike.landed && strike.landDamage < 20 && strike.stoppedSpeed < 2 && strike.onFoot === 'foot', JSON.stringify(strike));
 const fr = await g(() => {
   const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
@@ -665,6 +667,30 @@ const la = await g(() => {
 });
 check('city is called Los Antos', la.title === 'לוס אנטוס', la.title);
 check('Los Antos: 8 clothes, 6 weapons, 4 ice-cream and 5 falafel shops', la.clothes === 8 && la.weapons === 6 && la.ice === 4 && la.falafel === 5, JSON.stringify(la));
+
+// ---------------------------------------------------------------- crashes, rider thrown off a motorbike, reversing with the brake
+const crash = await g(() => {
+  const game = __game, P = game.player, I = game.input, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { if (P.vehicle) { P.vehicle.vx = P.vehicle.vz = 0; P.vehicle.speed = 0; P.vehicle.y = Math.max(0, P.vehicle.y); P.vehicle.airborne = false; } I.pressed.add('vehicle'); step(40); }
+  const dens = game.traffic.target; game.traffic.setDensity(0); game.traffic.cars.slice().forEach((c) => game.traffic.remove(c));
+  game.teleport(560, 502, Math.PI / 2, 0.3); step(10);
+  const a = game.spawnVehicleNear('sedan', 550, 502), t = game.spawnVehicleNear('hatch', 600, 502);
+  t.x = 600; t.z = 502.5; t.heading = 0; t.vx = t.vz = 0; t.sync();
+  P.forceIntoVehicle(a); a.x = 584; a.z = 502.9; a.heading = Math.PI / 2; a.vx = 22; a.vz = 0; a.speed = 22; a.sync();
+  let bits = 0; step(25, () => { bits = Math.max(bits, game.crashes.bits.length); });
+  const car = { bits, other: t.damage, spun: Math.abs(Math.atan2(Math.sin(t.heading), Math.cos(t.heading))) };
+  a.vx = a.vz = 0; a.speed = 0; I.held.add('brake'); step(60); I.held.delete('brake'); const carRev = a.speed;
+  I.pressed.add('vehicle'); step(40);
+  const bike = game.spawnVehicleNear('moto', 520, 560), suv = game.spawnVehicleNear('suv', 560, 560);
+  suv.x = 590; suv.z = 502.5; suv.heading = 0; suv.vx = suv.vz = 0; suv.sync();
+  P.forceIntoVehicle(bike); bike.x = 578; bike.z = 502.4; bike.heading = Math.PI / 2; bike.vx = 18; bike.vz = 0; bike.speed = 18; bike.sync();
+  const states = new Set(); step(30 * 6, () => states.add(P.state));
+  game.traffic.setDensity(dens);
+  return { car, carRev, states: [...states], end: P.state, bikeFallen: !!bike.fallen };
+});
+check('car crash: parts and sparks fly, the hit car is damaged and spins', crash.car.bits > 10 && crash.car.other > 10 && crash.car.spun > 0.1, JSON.stringify(crash.car));
+check('brake reverses (cars)', crash.carRev < -2, `speed ${crash.carRev.toFixed(1)}`);
+check('motorbike into a car at speed: the rider is thrown off, then gets up', crash.states.includes('ejected') && crash.end === 'foot' && crash.bikeFallen, JSON.stringify(crash));
 
 // ---------------------------------------------------------------- traffic drivers + carjacking
 const jack = await g(() => {

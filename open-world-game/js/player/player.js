@@ -57,6 +57,7 @@ export class Player {
       case 'entering': this._entering(dt, world); break;
       case 'driving': this._driving(dt, input, world); break;
       case 'exiting': this._exiting(dt, world); break;
+      case 'ejected': this._ejected(dt, world); break;
     }
   }
 
@@ -367,8 +368,11 @@ export class Player {
       ctl.throttle = input.isHeld('gas') ? 1 : input.isHeld('brake') ? -1 : input.keyY || 0;
     }
     this.controls = ctl;
+    const preSpeed = v.speed, preHeading = v.heading;
     v.update(dt, ctl, world.statics, world.vehicles);
     this.x = v.x; this.z = v.z; this.y = v.y;
+    // motorbike / bicycle: a hard hit throws the rider over the handlebars
+    if (v.isTwoWheel && v.lastImpact > 7 && Math.abs(preSpeed) > 7) { this.eject(v, preSpeed, preHeading, world); return; }
     this.model.animate(dt, { speed: Math.abs(v.speed), mode: v.parts.seatMode, steer: v.steer / (v.T.steerMax || 1), pedal: v.T.kind === 'bike' && Math.abs(v.speed) > 0.3 });
     const landed = !v.isAir || v.y < Math.max(heightAt(v.x, v.z, v.y + 0.3), v.roofY ?? -100) + 0.4;
     if (landed && Math.abs(v.speed) < 3) this.prompt = { key: 'vehicle', text: 'צא מהרכב' };
@@ -442,6 +446,55 @@ export class Player {
       }
     }
     this._sync();
+  }
+
+  // Thrown off a motorbike: fly forward over the bars, tumble, hit the road, slide, lie a moment, get up.
+  eject(v, speed, heading, world) {
+    v.object.updateMatrixWorld();
+    const w = v.seatWorld(_v3);
+    this._detach();
+    v.driver = null; v.fallen = true; v.vx *= 0.4; v.vz *= 0.4;
+    this.lastVehicle = v; this.vehicle = null; this.ignoreVehicle = v;
+    const s = Math.min(Math.abs(speed), 30) * 0.75, fx = Math.sin(heading) * Math.sign(speed), fz = Math.cos(heading) * Math.sign(speed);
+    this.x = w.x; this.y = w.y + 0.4; this.z = w.z; this.facing = heading;
+    this.vx = fx * s; this.vz = fz * s; this.vy = 3.5 + s * 0.18;
+    this.state = 'ejected'; this.seq = { t: 0, tumble: 0, spin: 6 + s * 0.35, bounced: 0, landedAt: null };
+    this.grounded = false;
+    world.onHurt?.(Math.round(8 + s * 1.6), 'תאונת אופנוע');
+    world.onMessage?.('עפת מהאופנוע!');
+  }
+  _ejected(dt, world) {
+    const q = this.seq; q.t += dt;
+    const g0 = heightAt(this.x, this.z, this.y + 0.5);
+    const air = this.y > g0 + 0.05 || this.vy > 0;
+    if (air) { this.vy -= GRAVITY * dt; q.tumble += q.spin * dt; }
+    else {
+      // sliding on the asphalt, then rolling to a stop
+      this.vx *= Math.exp(-2.6 * dt); this.vz *= Math.exp(-2.6 * dt);
+      const rest = Math.round(q.tumble / (Math.PI * 2)) * Math.PI * 2 - Math.PI / 2;   // ends lying on the back
+      q.tumble += (rest - q.tumble) * Math.min(1, 5 * dt);
+      if (q.landedAt === null) q.landedAt = q.t;
+    }
+    this.x += this.vx * dt; this.z += this.vz * dt; this.y += this.vy * dt;
+    this._collide(world);
+    const g = heightAt(this.x, this.z, this.y + 0.5);
+    if (this.y <= g) {
+      this.y = g;
+      if (this.vy < -3 && q.bounced < 2) { this.vy = -this.vy * 0.3; q.bounced++; q.spin *= 0.5; this.vx *= 0.7; this.vz *= 0.7; }
+      else this.vy = 0;
+    }
+    if (q.t > 0.4 && q.t - (q.landedAt ?? q.t) < 0.01 && !air) this.ignoreVehicle = null;
+    this.model.animate(dt, { speed: 0, grounded: !air, mode: air ? 'swim' : 'foot', chute: false });
+    // body rotates around the hips while tumbling
+    const a = q.tumble, h = 0.95;
+    this.object.position.set(this.x - h * Math.sin(a) * Math.sin(this.facing), this.y + 0.15 + 0.8 * Math.abs(Math.cos(a)) - h * Math.cos(a) + (1 - Math.abs(Math.cos(a))) * 0.0, this.z - h * Math.sin(a) * Math.cos(this.facing));
+    this.object.rotation.set(a, this.facing, 0, 'YXZ');
+    // lie still a moment, then stand up
+    if (!air && q.landedAt !== null && q.t - q.landedAt > 1.6 && Math.hypot(this.vx, this.vz) < 0.8) {
+      this.object.rotation.set(0, this.facing, 0, 'XYZ');
+      this.state = 'foot'; this.seq = null; this.vx = this.vz = this.vy = 0; this.grounded = true; this.ignoreVehicle = null;
+      this._sync();
+    }
   }
 
   // Instantly place the player inside a vehicle (used when loading a save)

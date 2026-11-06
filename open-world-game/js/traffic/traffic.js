@@ -126,6 +126,7 @@ export class Traffic {
       v.x += v.vx * dt; v.z += v.vz * dt;
       v.vx *= Math.exp(-3 * dt); v.vz *= Math.exp(-3 * dt);
       v.speed = 0; v.horn = true;
+      if (v.yawRate) { v.heading += v.yawRate * dt; v.yawRate *= Math.exp(-2.2 * dt); }   // spins after the crash
       v._collide(this.statics, null);
       v.sync(dt);
       return;

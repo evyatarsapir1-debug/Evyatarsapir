@@ -11,6 +11,7 @@ import { PostFX } from './render/postfx.js';
 import { LunaPark, LUNA } from './world/lunapark.js';
 import { BoatTraffic } from './world/boats.js';
 import { Military } from './world/military.js';
+import { Crashes } from './game/crashes.js';
 import { ShopUI, shopKind } from './game/shops.js';
 import { WeaponSystem, WEAPONS, WEAPON_ORDER } from './game/weapons.js';
 import { shared as vehicleMats } from './vehicles/vehicleModels.js';
@@ -89,6 +90,7 @@ class Game {
     this.luna = new LunaPark(this.scene, this.statics);
     this.boats = new BoatTraffic(this.scene, this.statics);
     this.military = new Military(this.scene, this.statics);
+    this.crashes = new Crashes(this.scene);
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());
     this.rig = new CameraRig(this.camera, this.statics);
@@ -860,6 +862,7 @@ class Game {
       onRecoil: (k) => { this.rig.pitch -= k; },
       onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); }, message: (m) => this.toast(m, 2),
     });
+    this.crashes.update(dt, { vehicles: all, player: p, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.military.update(dt, { player: p, input, vehicles: all, camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.rig.update(dt, input, p);
     // flashlight
