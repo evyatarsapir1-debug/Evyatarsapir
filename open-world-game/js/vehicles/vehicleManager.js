@@ -64,11 +64,14 @@ export class VehicleManager {
     const i = list.indexOf(v); if (i >= 0) list.splice(i, 1);
   }
 
-  update(dt, px, pz, allVehicles, physicsReady) {
+  update(dt, px, pz, allVehicles, physicsReady, noSpawn = false) {
+    let spawned = 0;
     for (const s of this.slots.values()) {
       if (this.vacated.has(s.key)) continue;
       const d2 = (s.x - px) ** 2 + (s.z - pz) ** 2;
       if (!s.vehicle && d2 < SPAWN_R * SPAWN_R) {
+        if (noSpawn || spawned >= 1) continue;      // at most one new parked vehicle per frame (no stutter); none while flying
+        spawned++;
         if (physicsReady && !physicsReady(s.x, s.z)) continue;
         const blocked = allVehicles.some((v) => Math.abs(v.x - s.x) < 3 && Math.abs(v.z - s.z) < 5 && Math.abs(v.y - (s.y ?? v.y)) < 2);
         if (blocked) continue;

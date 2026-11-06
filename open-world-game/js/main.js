@@ -829,7 +829,7 @@ class Game {
     this.traffic.update(dt, this.time, focusX, focusZ, all, obstacles);
     // every AI car has someone at the wheel
     for (const car of all) if (car.driver === 'ai' && !car.driverPed && !car.isAir && !car.removed) this.peds.addDriver(car);
-    this.vehicles.update(dt, focusX, focusZ, all, (x, z) => this.chunks.isPhysicsReady(x, z));
+    this.vehicles.update(dt, focusX, focusZ, all, (x, z) => this.chunks.isPhysicsReady(x, z), !!(v && v.isAir && v.airborne && v.y > 25));
     this.boats.update(dt, focusX, focusZ, all);
     this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
       onPlayerHit: (who, n) => { this.hurt(n, 'קטטה'); this.rig.shake = Math.max(this.rig.shake, 0.3); p.combatT = 3; } });
@@ -867,8 +867,9 @@ class Game {
     fl.intensity = on ? 60 : 0;
     if (on) { fl.position.set(p.x, p.y + 1.5, p.z); fl.target.position.set(p.x + Math.sin(p.facing) * 8, p.y + 0.4, p.z + Math.cos(p.facing) * 8); }
     // flying fast: stream less detail and at most one chunk per frame -> no stutters in the air
-    const flying = v && v.isAir && v.airborne && v.y > 35;
-    if (this.baseRadius) this.chunks.radius = flying ? Math.min(this.baseRadius, 230) : this.baseRadius;
+    const flying = v && v.isAir && v.airborne && v.y > 35, high = flying && v.y > 90;
+    // high up only the low-detail world is needed (it is real geometry and looks right from the air)
+    if (this.baseRadius) this.chunks.radius = high ? 0 : flying ? Math.min(this.baseRadius, 230) : this.baseRadius;
     this.chunks.maxNearPerFrame = flying ? 1 : 99;
     this.chunks.budgetMs = flying ? 3 : 6;
     const pending = this.chunks.update(focusX, focusZ);

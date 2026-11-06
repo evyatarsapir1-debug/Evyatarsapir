@@ -167,7 +167,8 @@ export class Vehicle {
     const lift = this.driver ? (ctl.lift || 0) : 0;
     let v = this.speed;
     // throttle lever (0..100%): gas moves it up, brake moves it down; the engines spool towards it
-    this.throttleSet = clamp((this.throttleSet || 0) + thr * 0.5 * dt, 0, 1);
+    this.throttleSet = clamp((this.throttleSet || 0) + thr * (thr < 0 ? 0.9 : 0.5) * dt, 0, 1);
+    this.airbrake = thr < 0;
     if (!this.driver) this.throttleSet = 0;
     this.thrust = damp(this.thrust || 0, this.throttleSet, 0.9, dt);
     if (!(onGround && this.throttleSet < 0.3)) v += T.accel * this.thrust * dt;   // on the ground, a low throttle is idle
@@ -200,6 +201,7 @@ export class Vehicle {
       this.steer = 0;
       // gravity along the flight path, lift vs. stall
       v -= Math.sin(pt) * 9.8 * 0.55 * dt;
+      if (this.airbrake) v -= (T.fighter ? 14 : 8) * dt;   // brake in the air = air brakes: the speed drops quickly
       const L = clamp((v - STALL) / 14, 0, 1);
       let targetVy = v * Math.sin(pt) * L - (1 - L) * 14;
       // landing assist (ground effect): close to the ground with flying speed, the sink rate is gently limited
