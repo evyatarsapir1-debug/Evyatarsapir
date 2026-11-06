@@ -173,9 +173,9 @@ export class Phone {
         break;
       }
       case 'cars': {
-        const cars = g.vehicles.kept.filter((v) => v.T.kind !== 'heli' || true);
+        const cars = [...g.vehicles.kept].sort((a, b) => (b.owned ? 1 : 0) - (a.owned ? 1 : 0));
         const pos = g.playerPos();
-        s.innerHTML = head('הרכבים שלי') + `<div class="plist">${cars.length ? cars.map((v, i) => `<div class="prow"><span class="pav" style="background:#${v.parts.baseColor.getHexString()}"></span><span><b>${v.T.name}</b><small>${v.driver === 'player' ? 'אתה בתוכו' : `${Math.round(Math.hypot(v.x - pos.x, v.z - pos.z))} מ׳ · נזק ${Math.round(v.damage)}%`}</small></span>
+        s.innerHTML = head('הרכבים שלי') + `<div class="plist">${cars.length ? cars.map((v, i) => `<div class="prow"><span class="pav" style="background:#${v.parts.baseColor.getHexString()}"></span><span><b>${v.T.name}${v.owned ? ' · בבעלותך' : ''}</b><small>${v.driver === 'player' ? 'אתה בתוכו' : `${Math.round(Math.hypot(v.x - pos.x, v.z - pos.z))} מ׳ · נזק ${Math.round(v.damage)}%`}</small></span>
           ${v.driver === 'player' ? '' : `<span class="pbtns"><button type="button" class="pcall" data-nav="${i}">נווט</button><button type="button" class="pcall" data-bring="${i}">הבא אליי ₪200</button></span>`}</div>`).join('') : '<div class="pempty">עוד אין לך רכבים. כל רכב שנהגת בו נשמר כאן.</div>'}</div>`;
         s.querySelectorAll('[data-nav]').forEach((b) => { b.onclick = () => { const v = cars[+b.dataset.nav]; g.gps.set({ x: v.x, z: v.z, name: v.T.name, radius: 6 }, g.playerPos()); this.show('map'); }; });
         s.querySelectorAll('[data-bring]').forEach((b) => { b.onclick = () => { const v = cars[+b.dataset.bring]; const m = g.deliverVehicle(v); g.toast(m, 3); this.show('cars'); }; });

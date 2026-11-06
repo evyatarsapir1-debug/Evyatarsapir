@@ -426,7 +426,8 @@ await shot('13-tower-cab');
 
 // ---------------------------------------------------------------- fist fights
 const fight = await g(() => {
-  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  // the police are tested on their own further down; here they stay out of it
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { if (game.police.level) game.police.clear(); game.time += 1 / 30; game._playFrame(1 / 30); } };
   if (game.player.state !== 'foot') { game.player.exitVehicle({ statics: game.statics, vehicles: game.vehicles.all() }); step(60); }
   game.equip(null);
   game.teleport(311, 309, 0); step(60);
@@ -738,6 +739,46 @@ check('jet: "board plane" button at a parked airliner', fly.prompt === 'היכנ
 check('jet: player can fly it — takes off, climbs, retracts the gear', fly.alt > 60 && fly.kmh > 230 && fly.gearUp, JSON.stringify(fly));
 await shot('21-flying');
 await g(() => { const v = __game.player.vehicle; if (v) { v.x = -600; v.z = 790; v.y = 0; v.vy = 0; v.speed = 0; v.pitch = 0; v.airborne = false; } __game.input.pressed.add('vehicle'); for (let i = 0; i < 40; i++) { __game.time += 1 / 30; __game._playFrame(1 / 30); } });
+
+// ---------------------------------------------------------------- police / wanted level, hospital, car dealership
+const pol = await g(() => {
+  const game = __game, P = game.player, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (game.player.state !== 'foot') { const v = game.player.vehicle; v.speed = 0; v.vx = v.vz = 0; game.input.pressed.add('vehicle'); step(40); }
+  const W = window.__wg, st = W.cellData(7, 1).buildings.find((b) => b.sign === 'תחנת משטרה'), ho = W.cellData(1, 2).buildings.find((b) => b.sign === 'בית חולים');
+  game.econ.money = 20000;
+  game.teleport(530, 545, 0, 0.3); step(10);
+  game.police.crime('kill', P.x, P.z); step(1);
+  const lv = game.police.level, hud = document.querySelectorAll('#wanted > :not(s)').length + (document.getElementById('wanted').textContent.length ? 1 : 0);
+  let maxCars = 0, cop = false, m0 = game.econ.money;
+  for (let i = 0; i < 30 * 60 && game.police.level > 0; i++) { game.time += 1 / 30; game._playFrame(1 / 30); maxCars = Math.max(maxCars, game.police.cars.length); cop = cop || game.peds.peds.some((q) => q.copChase); }
+  const busted = { level: game.police.level, atStation: Math.hypot(P.x - 750, P.z - 112) < 10, fine: m0 - game.econ.money };
+  // escape: wanted again, then leave the area and stay out of sight
+  game.police.crime('kill', P.x, P.z); game.teleport(-300, 520, 0, 0.3);
+  let t = 0; while (game.police.level > 0 && t < 60) { step(30, () => game.police.cars.forEach((c) => game.police._remove(c))); t++; if (t === 3) game.teleport(200, 560, 0, 0.3); }
+  const escaped = game.police.level === 0;
+  // wasted -> hospital
+  game.hurt(500, 'test'); step(3);
+  const hosp = Math.hypot(P.x - 150, P.z - 212) < 10 && game.econ.health > 50;
+  // dealership: buy a car, it appears next to the shop and is saved
+  const d = W.cellData(8, 3).buildings.find((b) => b.sign === 'סוכנות רכב');
+  game.teleport(d.door.x, d.door.z, 0, 0.3); step(10);
+  game.econ.money = 200000; game.openShop('dealer', 'סוכנות רכב');
+  const rows = document.querySelectorAll('#shopPanel .srow').length;
+  [...document.querySelectorAll('#shopPanel .srow')].find((r) => r.textContent.includes('רכב ספורט'))?.querySelector('.sbuy')?.click();
+  game.shop.close();
+  const car = game.vehicles.kept.find((v) => v.owned);
+  game.save();
+  const saved = JSON.parse(localStorage.getItem('azura_city_save_v1')).econ.ownedCars || [];
+  return { stations: [!!st, !!ho, !!d], lv, hud, maxCars, cop, busted, escaped, t, hosp, rows, car: car && Math.round(Math.hypot(car.x - d.door.x, car.z - d.door.z)), saved: saved.length, paid: 200000 - game.econ.money };
+});
+check('police station, hospital and car dealership exist', pol.stations.every(Boolean), JSON.stringify(pol.stations));
+check('wanted: a crime gives stars, shown on the HUD', pol.lv >= 1 && pol.hud > 0, `level ${pol.lv}`);
+check('wanted: patrol cars chase you, officers get out', pol.maxCars >= 2 && pol.cop, `cars ${pol.maxCars}, cop on foot ${pol.cop}`);
+check('wanted: standing still -> busted, fined, released at the police station', pol.busted.level === 0 && pol.busted.atStation && pol.busted.fine > 0, JSON.stringify(pol.busted));
+check('wanted: leaving the area and staying unseen loses the police', pol.escaped, `${pol.t}s`);
+check('wasted -> wake up at the hospital', pol.hosp);
+check('dealership: buying a car spawns it next to the shop and saves it', pol.rows >= 10 && pol.car !== undefined && pol.car < 40 && pol.saved >= 1 && pol.paid > 0, JSON.stringify({ rows: pol.rows, car: pol.car, saved: pol.saved, paid: pol.paid }));
+await shot('22-police');
 
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);

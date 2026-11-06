@@ -12,6 +12,8 @@ import { LunaPark, LUNA } from './world/lunapark.js';
 import { BoatTraffic } from './world/boats.js';
 import { Military } from './world/military.js';
 import { Crashes } from './game/crashes.js';
+import { Police, POLICE_STATION, HOSPITAL } from './game/police.js';
+import { VEHICLE_TYPES } from './vehicles/vehicleTypes.js';
 import { ShopUI, shopKind } from './game/shops.js';
 import { WeaponSystem, WEAPONS, WEAPON_ORDER } from './game/weapons.js';
 import { shared as vehicleMats } from './vehicles/vehicleModels.js';
@@ -91,6 +93,8 @@ class Game {
     this.boats = new BoatTraffic(this.scene, this.statics);
     this.military = new Military(this.scene, this.statics);
     this.crashes = new Crashes(this.scene);
+    this.police = new Police(this);
+    this.vehicleTypes = VEHICLE_TYPES;
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());
     this.rig = new CameraRig(this.camera, this.statics);
@@ -251,6 +255,8 @@ class Game {
     if (s.world) { this.env.hour = s.world.hour ?? 10; this.env.setWeather(s.world.weather || 'clear'); }
     this.gps.clear();
     this.missions.load(s.missions);
+    // cars you bought wait for you next to your villa
+    this.econ.ownedCars.forEach((c, i) => { const v = this.spawnVehicleNear(c.type, VILLA.door.x - 20 + i * 8, VILLA.door.z - 12); if (v) { v.owned = true; v.setColor(c.color); v.rebuildLod?.(); } });
     if (s.vehicle) {
       const vd = s.vehicle;
       this.chunks.update(vd.x, vd.z, true);
@@ -281,6 +287,9 @@ class Game {
       { short: 'הבית שלי', name: 'הבית שלי — וילה עם בריכה', icon: '🏠', color: '#e0533b', x: VILLA.door.x, z: VILLA.door.z - 1 },
       { short: 'נמל תעופה', name: 'נמל התעופה לוס אנטוס — טרמינל', icon: '✈', color: '#1f5fa8', x: -300, z: 514 },
       { short: 'מרינה', name: 'מרינה מזרח', icon: '⚓', color: '#0e7c86', x: 2500, z: 510 },
+      { short: 'משטרה', name: 'תחנת משטרה', icon: '🚓', color: '#1f3d7a', x: 750, z: 114 },
+      { short: 'בית חולים', name: 'בית חולים', icon: '🏥', color: '#c0392b', x: 150, z: 214 },
+      { short: 'סוכנות רכב', name: 'סוכנות רכב — קניית רכבים', icon: '🚗', color: '#2d6a4f', ...door(find([[8, 3]], (b) => b.sign === 'סוכנות רכב')) },
       { short: 'בל־ריב', name: 'בל־ריב, צרפת — שדה התעופה', icon: '🗼', color: '#23395b', x: 4500, z: 918 },
       { short: 'בסיס צבאי', name: 'בסיס צבאי — שער הכניסה', icon: '🪖', color: '#4b5320', x: -500, z: -20 },
       { short: 'לונה פארק', name: 'לונה פארק המרינה — גלגל ענק ורכבת הרים', icon: '🎡', color: '#d81b60', x: LUNA.x - 22, z: LUNA.z - 2 },
@@ -463,6 +472,7 @@ class Game {
   }
   // carjacking: the car leaves traffic / airport service and becomes a normal vehicle the player can keep
   jackCar(v) {
+    this.police.crime(v.T.police ? 'copHit' : 'carjack', v.x, v.z);
     this.traffic.release(v);
     const i = this.airport.service.indexOf(v);
     if (i >= 0) this.airport.service.splice(i, 1);
@@ -512,10 +522,28 @@ class Game {
   knockedOut(why) {
     const fee = Math.min(this.econ.money, 500);
     this.econ.money -= fee; this.econ.health = 100;
+    this.police.clear();
+    this.respawnAt(HOSPITAL, `התעלפת${why ? ' (' + why + ')' : ''} והתעוררת בבית החולים. טיפול רפואי: ${fmt(fee)}`);
+  }
+  // move the player (out of any vehicle) to a place in the city
+  respawnAt(place, msg) {
     this.previewVehicleSafe();
-    if (this.player.state !== 'foot') { const v = this.player.vehicle; if (v) v.driver = null; this.player.vehicle = null; this.player.state = 'foot'; this.player._detach?.(); }
-    this.teleport(START.x, START.z, START.facing);
-    this.toast(`התעלפת${why ? ' (' + why + ')' : ''} והתעוררת במרכז העיר. טיפול רפואי: ${fmt(fee)}`, 4);
+    const P = this.player;
+    if (P.state !== 'foot') { const v = P.vehicle; if (v) v.driver = null; P.vehicle = null; P.state = 'foot'; P._detach?.(); P.object.visible = true; P.object.rotation.set(0, P.facing, 0, 'XYZ'); }
+    this.teleport(place.x, place.z, Math.PI);
+    this.toast(msg, 4.5);
+    this.save();
+  }
+  // car dealership: the bought vehicle waits on the road next to the dealer and is saved as yours
+  buyVehicle(type) {
+    const b = WG.cellData(8, 3).buildings.find((q) => q.sign === 'סוכנות רכב');
+    const at = b ? b.door : this.playerPos();
+    const v = this.spawnVehicleNear(type, at.x, at.z);
+    if (!v) return 'אין מקום פנוי לרכב כרגע';
+    v.owned = true;
+    this.econ.ownedCars.push({ type, color: v.color });
+    this.save();
+    return `${v.T.name} חדש שלך! מחכה ליד הסוכנות (גם בטלפון ← הרכבים שלי)`;
   }
   openBag() {
     this.state = 'bag';
@@ -700,7 +728,7 @@ class Game {
     this.chunks.update(cx, cz);
     this._lighting(dt, cx, cz);
     this.env.update(new THREE.Vector3(cx, 0, cz), dt, this.camera);
-    const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list];
+    const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list, ...this.police.cars];
     for (const veh of all) veh.setFar(true);
     this.airport.update(dt, this.env.hour, cx, cz, all);
     this.traffic.update(dt, this.time, cx, cz, all, this.peds.obstacles());
@@ -762,7 +790,7 @@ class Game {
     if (input.wasPressed('light')) { if (this.econ.items.flashlight) this.econ.flashlightOn = !this.econ.flashlightOn; else this.toast('אין לך פנס — אפשר לקנות בחנות ציוד', 2); }
     input.fireByMouse = p.state === 'driving' && (p.vehicle?.T.tank || p.vehicle?.T.fighter) ? 'hold' : p.state !== 'foot' ? false : this.econ.equipped ? 'hold' : 'tap';
 
-    const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list];
+    const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list, ...this.police.cars];
     const pedObs = this.peds.obstacles();
     const world = {
       statics: this.statics, vehicles: all, benches: this.chunks.benches, peds: pedObs,
@@ -834,6 +862,7 @@ class Game {
     this.vehicles.update(dt, focusX, focusZ, all, (x, z) => this.chunks.isPhysicsReady(x, z), !!(v && v.isAir && v.airborne && v.y > 25));
     this.boats.update(dt, focusX, focusZ, all);
     this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
+      onCrime: (k, x, z) => this.police.crime(k, x, z),
       onPlayerHit: (who, n) => { this.hurt(n, 'קטטה'); this.rig.shake = Math.max(this.rig.shake, 0.3); p.combatT = 3; } });
     this.airport.update(dt, this.env.hour, focusX, focusZ, all);
     const ride = this.luna.update(dt, focusX, focusZ);
@@ -857,13 +886,14 @@ class Game {
       player: p, econ: this.econ, input, camera: this.camera, vehicles: all,
       peds: this.peds.peds.filter((q) => q.state !== 'inside' && !q.car && q.state !== 'pulled' && q.state !== 'thrown'),
       scare: (ped, src, hit) => this.peds.scare(ped, src, hit), hurtPlayer: (n) => this.hurt(n, 'פיצוץ'),
-      hitPed: (ped, dmg) => { const r = this.peds.hit(ped, p, dmg, true); if (r === 'dead') this.combat._drop(ped); },
-      onShot: (W) => this.audio.gunshot?.(W.kind),
+      hitPed: (ped, dmg) => { const r = this.peds.hit(ped, p, dmg, true); if (r === 'dead') this.combat._drop(ped); if (r) this.police.crime(ped.app.cop ? 'copHit' : r === 'dead' ? 'kill' : 'assault', ped.x, ped.z); },
+      onShot: (W) => this.audio.gunshot?.(W.kind), onCrime: (k, x, z) => this.police.crime(k, x, z),
       onRecoil: (k) => { this.rig.pitch -= k; },
       onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); }, message: (m) => this.toast(m, 2),
     });
+    this.police.update(dt, { vehicles: all });
     this.crashes.update(dt, { vehicles: all, player: p, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
-    this.military.update(dt, { player: p, input, vehicles: all, camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
+    this.military.update(dt, { player: p, input, vehicles: all, onCrime: (k, x, z) => this.police.crime(k, x, z), camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.rig.update(dt, input, p);
     // flashlight
     const fl = this.flashlight, on = this.econ.items.flashlight && this.econ.flashlightOn && p.state !== 'driving';

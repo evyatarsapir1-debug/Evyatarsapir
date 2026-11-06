@@ -32,10 +32,11 @@ export class Economy {
     this.equipped = null;       // weapon id or null
     this.flashlightOn = false;
     this.startOutfit = null;
+    this.ownedCars = [];        // bought vehicles [{ type, color }]
     this.wardrobe = [];         // clothes the player owns: [{ id, name, swatch, patch }]
     this.log = [];
   }
-  toJSON() { return { money: this.money, health: this.health, items: this.items, weapons: this.weapons, equipped: this.equipped, wardrobe: this.wardrobe, startOutfit: this.startOutfit }; }
+  toJSON() { return { money: this.money, health: this.health, items: this.items, weapons: this.weapons, equipped: this.equipped, wardrobe: this.wardrobe, startOutfit: this.startOutfit, ownedCars: this.ownedCars }; }
   load(o) {
     this.reset();
     if (!o) return;
@@ -45,6 +46,7 @@ export class Economy {
     if (this.items.snacks > 0) { this.items.food.snack = (this.items.food.snack || 0) + this.items.snacks; this.items.snacks = 0; }
     this.wardrobe = Array.isArray(o.wardrobe) ? o.wardrobe : [];
     this.startOutfit = o.startOutfit || null;
+    this.ownedCars = Array.isArray(o.ownedCars) ? o.ownedCars : [];
     this.weapons = o.weapons || {}; this.equipped = o.equipped && this.weapons[o.equipped] ? o.equipped : null;
   }
   ownsCloth(id) { return this.wardrobe.some((w) => w.id === id); }

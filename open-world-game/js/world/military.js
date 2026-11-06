@@ -85,7 +85,7 @@ export class Military {
         weapons._spark(muzzle, 0xffc860, 1.2, 0.12);
         for (let i = 0; i < 6; i++) this._puff(muzzle.clone().addScaledVector(dir.clone().normalize(), i * 0.5), 0.5 + i * 0.15, 1.6);
         v.pitch -= 0.06; v.parts.barrel.position.z = 2.2 - 0.5; this.recoilT = 0.3;
-        audio?.gunshot?.('heavy'); audio?.impact?.(10); onShake?.(0.45);
+        audio?.gunshot?.('heavy'); audio?.impact?.(10); onShake?.(0.45); ctx.onCrime?.('cannon', v.x, v.z);
       }
       if (this.recoilT > 0) { this.recoilT -= dt; v.parts.barrel.position.z = damp(v.parts.barrel.position.z, 2.2, 6, dt); }
     }
@@ -110,6 +110,7 @@ export class Military {
       this.scene.add(g);
       this.missiles ||= [];
       this.missiles.push({ obj: g, v: fwd.clone().multiplyScalar(Math.max(60, v.speed) + 10), t: 0, owner: v, target });
+      ctx.onCrime?.('missile', v.x, v.z);
       audio?.gunshot?.('heavy');
     }
     for (let i = (this.missiles || []).length - 1; i >= 0; i--) {

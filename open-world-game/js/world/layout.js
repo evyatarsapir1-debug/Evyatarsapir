@@ -20,8 +20,8 @@ export const RAIL = { z: 1046, platformZ0: 1010, platformZ1: 1036, platformX0: 4
 // G gas station, M garage, T train station, B beachfront
 const MAP = [
   'HHHPHHAACB',
-  'HHHHAACPCB',
-  'HPHACCCCAB',
+  'HHHHAACpCB',
+  'HmHACCCCAB',
   'AACDDDDCMB',
   'ACGDDDDCCB',
   'HACDDSDCGB',
@@ -45,6 +45,8 @@ const DISTRICTS = {
   B: 'טיילת החוף',
   V: 'וילת החוף — הבית שלי',
   U: 'לונה פארק המרינה',
+  p: 'תחנת המשטרה',
+  m: 'בית החולים',
   J: 'בל־ריב, צרפת',
   E: 'כיכר מגדל הברזל',
 };
@@ -55,7 +57,7 @@ const SHOP_NAMES = [
   'נעלי הצעד', 'בית הקפה הירוק', 'מסעדת הנמל', 'סושי גל', 'תכשיטי אור',
   'משקפי עין', 'פארם העיר', 'צעצועי קשת', 'יין ושמש', 'מכולת אבי',
 ];
-export const SPECIAL_SIGNS = ['פלאפל הכיכר', 'גלידת שקיעה', 'בגדי רחוב', 'חנות בגדים', 'תחנת רכבת מרכזית', 'מוסך לוס אנטוס', 'דלק+', 'נמל התעופה לוס אנטוס', 'מגדל לוס אנטוס', 'בית העירייה', 'מחסני הנמל', 'בית קפה החוף', 'קניון העיר', 'חניון', 'חוות השקד', 'מנהרת הרכס', 'חנות נשקים', 'צ׳ק-אין', 'שער 1', 'שער 2', 'שער 3', 'שירותים', 'דיוטי פרי', 'קפה טרמינל', 'מסוע מזוודות', 'האנגר לוס אנטוס', 'מגדל פיקוח', 'הגעות', 'ספריית העיר', 'הבית שלי', 'בסיס צבאי', 'מפקדה', 'מגורי חיילים', 'מרכז שליטה', 'האנגר', 'מוסך צבאי', 'בולנז׳רי', 'קפה דה לה פלאס', 'פטיסרי', 'ביסטרו', 'בוטיק', 'מסוף בל־ריב'];
+export const SPECIAL_SIGNS = ['פלאפל הכיכר', 'גלידת שקיעה', 'בגדי רחוב', 'חנות בגדים', 'תחנת רכבת מרכזית', 'מוסך לוס אנטוס', 'דלק+', 'נמל התעופה לוס אנטוס', 'מגדל לוס אנטוס', 'בית העירייה', 'מחסני הנמל', 'בית קפה החוף', 'קניון העיר', 'חניון', 'חוות השקד', 'מנהרת הרכס', 'חנות נשקים', 'צ׳ק-אין', 'שער 1', 'שער 2', 'שער 3', 'שירותים', 'דיוטי פרי', 'קפה טרמינל', 'מסוע מזוודות', 'האנגר לוס אנטוס', 'מגדל פיקוח', 'הגעות', 'ספריית העיר', 'הבית שלי', 'בסיס צבאי', 'מפקדה', 'מגורי חיילים', 'מרכז שליטה', 'האנגר', 'מוסך צבאי', 'בולנז׳רי', 'קפה דה לה פלאס', 'פטיסרי', 'ביסטרו', 'בוטיק', 'מסוף בל־ריב', 'תחנת משטרה', 'בית חולים', 'סוכנות רכב'];
 export const ALL_SIGNS = [...SHOP_NAMES, ...SPECIAL_SIGNS];
 
 const PASTELS = [0xf2e3c6, 0xe8d1b5, 0xd9c8a9, 0xf0d9c0, 0xc9d6df, 0xe4c9b6, 0xd8e2cf, 0xefe6d8, 0xd4b8a0, 0xbfcfd9];
@@ -69,7 +71,7 @@ export const FORCED_SHOPS = {
   '8,1': 'חנות נשקים', '5,2': 'חנות נשקים', '8,4': 'חנות נשקים', '3,8': 'חנות נשקים', '9,5': 'חנות נשקים',
   '6,2': 'גלידת שקיעה', '9,0': 'גלידת שקיעה', '9,7': 'גלידת שקיעה',
   '7,2': 'פלאפל הכיכר', '4,7': 'פלאפל הכיכר', '6,9': 'פלאפל הכיכר', '9,3': 'פלאפל הכיכר',
-  '2,3': 'ספריית העיר', '7,3': 'גלידת שקיעה', '7,5': 'חנות בגדים', '7,6': 'פלאפל הכיכר', '7,4': 'אלקטרו פלוס', '2,5': 'חנות נשקים', '2,6': 'מספרת סטייל' };
+  '8,3': 'סוכנות רכב', '2,3': 'ספריית העיר', '7,3': 'גלידת שקיעה', '7,5': 'חנות בגדים', '7,6': 'פלאפל הכיכר', '7,4': 'אלקטרו פלוס', '2,5': 'חנות נשקים', '2,6': 'מספרת סטייל' };
 
 // The player's own beach villa (block 8,8): house, pool deck, garden, two cars in the driveway.
 export const VILLA = { bx: 8, bz: 8, x: 850, z: 832, w: 26, d: 15, h: 7.6, door: { x: 850, z: 824.2 } };
@@ -331,6 +333,22 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
       for (let k = 0; k < 4; k++) PR.push({ kind: 'cafeTable', x: cx - 30 + k * 3, z: oz + 14 });
       break;
     }
+    case 'p': { // police station: HQ building, parked patrol cars, flag, barriers
+      blk.ground = 'plaza';
+      B.push({ x: cx, z: oz + 30, w: 44, d: 22, h: 12, style: 'concrete', color: 0xd9dde2, face: 'n', sign: 'תחנת משטרה', interior: 'hall', police: true });
+      for (let k = 0; k < 6; k++) blk.parking.push({ x: ox + 22 + k * 5.5, z: oz + 62, rot: 0, type: 'police', fixed: true });
+      PR.push({ kind: 'flagpole', x: cx + 26, z: oz + 16 });
+      for (let k = 0; k < 4; k++) PR.push({ kind: 'tree', x: ox + 16 + k * 22, z: oz + 84, s: 0.9 });
+      break;
+    }
+    case 'm': { // hospital: tall glass building, helipad and benches
+      blk.ground = 'plaza';
+      B.push({ x: cx, z: oz + 34, w: 56, d: 30, h: 26, style: 'glass', color: 0xf2f4f6, face: 'n', sign: 'בית חולים', interior: 'hall', hospital: true });
+      PR.push({ kind: 'helipad', x: ox + 78, z: oz + 76 });
+      for (let k = 0; k < 6; k++) PR.push({ kind: 'tree', x: ox + 14 + k * 9, z: oz + 76, s: 0.9 });
+      for (let k = 0; k < 3; k++) PR.push({ kind: 'bench', x: ox + 24 + k * 14, z: oz + 14, rot: Math.PI });
+      break;
+    }
     case 'T': {
       blk.ground = 'plaza';
       B.push({ x: cx, z: oz + 70, w: 64, d: 26, h: 16, style: 'glass', color: 0xc9d3db, face: 's', station: true, sign: 'תחנת רכבת מרכזית' });
@@ -366,7 +384,8 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
 // Which buildings can be entered (real interiors are generated from this flag)
 export function markInteriors(B, rng) {
   for (const b of B) {
-    if (b.sign === 'ספריית העיר') b.interior = 'library';
+    if (b.police || b.hospital) b.interior = 'hall';
+    else if (b.sign === 'ספריית העיר') b.interior = 'library';
     else if (b.villa) b.interior = 'villa';
     else if (b.forceShop) b.interior = 'shop';
     else if (b.mall) b.interior = 'mall';

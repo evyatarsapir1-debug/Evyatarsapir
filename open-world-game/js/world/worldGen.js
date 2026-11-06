@@ -13,7 +13,7 @@ import { interiorSpec, garageSpec } from './interiors.js';
 export const WATER_Y = -1.0;
 export const RIDGE = { x0: -60, x1: 1060, z0: -760, z1: -640, h: 42 };
 export const TUNNEL_H = 8, TUNNEL_HALF = 9.5;
-const URBAN = new Set('DSCAHPGMTBLKIVUJE'.split(''));
+const URBAN = new Set('DSCAHPGMTBLKIVUJEpm'.split(''));
 const TOWN_NAMES = ['נווה ים', 'כפר אלונים', 'רמת השקד', 'עין הדקל', 'קריית הגפן', 'נאות הברוש', 'גבעת הכלנית', 'כרם התאנה'];
 const COUNTRY_NAMES = ['עמק השקדים', 'שדות הזהב', 'יער האלונים', 'מישור הרוח', 'גבעות הכלנית', 'נחל הצפצפות'];
 const mod = (a, n) => ((a % n) + n) % n;
@@ -391,6 +391,12 @@ function generateCell(ix, iz) {
     for (let x = 4100; x <= 4900; x += 50) if (x >= ox && x < ox + P) for (const z of [928, 972]) PR.push({ kind: 'rlight', x, z, y: 0 });
     if (ix === 41) PR.push({ kind: 'windsock', x: 4120, z: 985 });
     if (ix === 45) { d.parking.push({ x: 4450, z: 918, rot: Math.PI / 2, type: 'fighter', fixed: true }, { x: 4480, z: 918, rot: Math.PI / 2, type: 'fighter', fixed: true }); B.push({ x: 4540, z: 985, w: 30, d: 14, h: 6, style: 'glass', color: 0xdfe6ea, face: 'n', sign: 'מסוף בל־ריב' }); }
+  } else if (kind === 'p') {
+    d.peopleSpots = [
+      { key: 'cop:0', x: ix * P + 42, z: iz * P + 16, yaw: Math.PI, state: 'guard', outfit: 'cop' },
+      { key: 'cop:1', x: ix * P + 58, z: iz * P + 16, yaw: Math.PI, state: 'guard', outfit: 'cop' },
+      { key: 'cop:2', x: ix * P + 30, z: iz * P + 70, state: 'wander', outfit: 'cop', pts: [[ix * P + 20, iz * P + 70], [ix * P + 80, iz * P + 70], [ix * P + 80, iz * P + 12], [ix * P + 20, iz * P + 12]] },
+    ];
   } else if (kind === 'N') {
     const BI = BASE_ITEMS, inCell = (q) => q.x >= ox && q.x < ox + P && q.z >= oz && q.z < oz + P;
     for (const b of BI.b) if (inCell(b)) B.push({ ...b });

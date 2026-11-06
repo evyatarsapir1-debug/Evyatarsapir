@@ -95,6 +95,7 @@ export class Combat {
       if (r) {
         hit = true;
         if (r === 'dead') this._drop(p);
+        this.game.police?.crime(p.app.cop ? 'copHit' : r === 'dead' ? 'kill' : 'punch', p.x, p.z);
         // bystanders react according to their personality
         // bystanders react according to their personality; after a death everyone nearby runs away
         for (const o of pedSys.peds) if (o !== p && !o.car && Math.hypot(o.x - player.x, o.z - player.z) < (r === 'dead' ? 22 : 14)) { if (r === 'dead') pedSys.scare(o, player, false); else pedSys.react(o, player, false); }

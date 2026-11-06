@@ -331,3 +331,11 @@ html, body { touch-action: manipulation; }
 #scope .m1 { left: 0; } #scope .m2 { right: 0; }
 #scope .m3, #scope .m4 { left: 50%; width: 6px; margin-left: -3px; height: 18%; }
 #scope .m3 { top: 0; } #scope .m4 { bottom: 0; }
+
+/* wanted level */
+#wanted { font-size: 20px; letter-spacing: 1px; color: #ffd84a; text-shadow: 0 0 4px #000, 0 2px 6px #000; line-height: 1.1; min-height: 0; }
+#wanted:empty { display: none; }
+#wanted s { text-decoration: none; color: #ffffff38; }
+#wanted i { font-style: normal; color: #ffd84a88; }
+#wanted.blink { animation: wblink 0.8s steps(2) infinite; }
+@keyframes wblink { 50% { opacity: 0.25; } }

@@ -52,7 +52,7 @@ export class VehicleManager {
     if (i >= 0) this.parked.splice(i, 1);
     if (!this.kept.includes(v)) this.kept.push(v);
     if (this.kept.length > 6) {
-      const old = this.kept.find((k) => k.driver !== 'player' && k !== v);
+      const old = this.kept.find((k) => k.driver !== 'player' && k !== v && !k.owned);
       if (old) this._dispose(old, this.kept);
     }
   }
@@ -85,7 +85,7 @@ export class VehicleManager {
       }
     }
     for (const v of [...this.kept]) {
-      if (v.driver !== 'player' && (v.x - px) ** 2 + (v.z - pz) ** 2 > 700 * 700) this._dispose(v, this.kept);
+      if (v.driver !== 'player' && !v.owned && (v.x - px) ** 2 + (v.z - pz) ** 2 > 700 * 700) this._dispose(v, this.kept);
     }
     for (const v of this.all()) {
       if (v.driver === 'player') continue;

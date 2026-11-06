@@ -5,7 +5,7 @@ import { cellData, cellKind, RIDGE } from '../world/worldGen.js';
 
 const TS = 50; // tile pixels per 100m cell (0.5 px / m)
 const S = TS / P;
-const KIND_COLORS = { J: '#d6c9ad', E: '#e3d7bd', j: '#9fbf7a', D: '#b9b2a6', S: '#d9cdb5', C: '#cbbfa8', A: '#c4cfb6', H: '#b9d39a', I: '#a9a39a', P: '#7fbf63', G: '#d0c3a8', M: '#b0a89c', T: '#c9c0b0', B: '#e0d2b0', L: '#cbbfa8', K: '#b8b4ac',
+const KIND_COLORS = { p: '#b9c4d6', m: '#e6e9ee', J: '#d6c9ad', E: '#e3d7bd', j: '#9fbf7a', D: '#b9b2a6', S: '#d9cdb5', C: '#cbbfa8', A: '#c4cfb6', H: '#b9d39a', I: '#a9a39a', P: '#7fbf63', G: '#d0c3a8', M: '#b0a89c', T: '#c9c0b0', B: '#e0d2b0', L: '#cbbfa8', K: '#b8b4ac',
   F: '#a8bf6a', W: '#5f8f45', O: '#8fb873', h: '#a8bf6a', X: '#a5ad95', Q: '#4f9dc9' };
 
 // Landmark badges (icon in a coloured circle + name) drawn on any of the maps.

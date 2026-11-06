@@ -150,7 +150,7 @@ export class Pedestrians {
       const a = p.app;
       const set = (m, idx, hex) => m.setColorAt(idx, c.setHex(hex));
       set(this.M.neck, i, a.skin); set(this.M.nose, i, a.skin); set(this.M.eyes, i, 0x1a1a1a); set(this.M.shoulders, i, a.swim ? a.skin : a.shirt);
-      set(this.M.helmet, i, 0x4b5320); set(this.M.vest, i, 0x3d4428); set(this.M.rifle, i, 0x1d1f1c);
+      set(this.M.helmet, i, a.cop ? 0x111d3a : 0x4b5320); set(this.M.vest, i, 0x3d4428); set(this.M.rifle, i, 0x1d1f1c);
       if (a.swim) {
         // swimwear: trunks / swimsuit in a bright colour, bare arms and legs, barefoot
         const sw = a.swimColor;
@@ -163,7 +163,7 @@ export class Pedestrians {
         return;
       }
       set(this.M.neck, i, a.skin); set(this.M.nose, i, a.skin); set(this.M.eyes, i, 0x1a1a1a); set(this.M.shoulders, i, a.swim ? a.skin : a.shirt);
-      set(this.M.helmet, i, 0x4b5320); set(this.M.vest, i, 0x3d4428); set(this.M.rifle, i, 0x1d1f1c);
+      set(this.M.helmet, i, a.cop ? 0x111d3a : 0x4b5320); set(this.M.vest, i, 0x3d4428); set(this.M.rifle, i, 0x1d1f1c);
       set(this.M.pelvis, i, a.pants); set(this.M.torso, i, a.shirt); set(this.M.head, i, a.skin);
       set(this.M.hairS, i, a.hair); set(this.M.hairL, i, a.hair); set(this.M.phone, i, 0x111111);
       set(this.M.bag, i, [0x2c3e50, 0xc0392b, 0x16a085, 0x7f8c8d][i % 4]);
@@ -183,7 +183,7 @@ export class Pedestrians {
       const cd = cellData(i, j);
       for (const b of [...(cd.beachSpots || []), ...(cd.peopleSpots || [])]) {
         if (Math.hypot(b.x - player.x, b.z - player.z) > (b.outfit === 'soldier' ? 260 : 130)) continue;
-        want.set(b.key, { x: b.x, z: b.z, y: b.y, yaw: b.yaw, state: b.state, swim: !b.outfit, soldier: b.outfit === 'soldier', pts: b.pts, seats: [] });
+        want.set(b.key, { x: b.x, z: b.z, y: b.y, yaw: b.yaw, state: b.state, swim: !b.outfit, soldier: b.outfit === 'soldier', cop: b.outfit === 'cop', pts: b.pts, seats: [] });
       }
     }
     for (const L of places || []) {
@@ -215,6 +215,7 @@ export class Pedestrians {
       if (this.peds.length >= MAX) break;
       if (this.deadKeys.has(k) || this.peds.some((p) => p.shopKey === k)) continue;
       const p = this._add({ x: w.x, z: w.z, y: w.y, state: w.state, shopKey: k, pts: w.pts, seats: w.seats, suitcase: !!w.suitcase });
+      if (w.cop) this._copLook(p);
       if (w.soldier) {
         // soldier: olive uniform, helmet (the short-hair cap in olive), dark boots
         Object.assign(p.app, { shirt: 0x4b5320, pants: 0x4b5320, shoes: 0x1f1f1f, hair: 0x3f4a2c, long: false, bald: false, soldier: true });
@@ -235,7 +236,7 @@ export class Pedestrians {
     for (let i = this.peds.length - 1; i >= 0; i--) {
       const p = this.peds[i];
       if (p.state === 'dead' && p.timer <= 0 && Math.hypot(p.x - px, p.z - pz) > 25) { this._release(p); this.peds.splice(i, 1); this._colors(); continue; }
-      const gone = p.state === 'dead' ? false : p.car ? p.state === 'driving' && (p.car.removed || (p.car.driver !== 'ai' && !p.car.jacking)) : !p.shopKey && Math.hypot(p.x - px, p.z - pz) > 140;
+      const gone = p.state === 'dead' ? false : p.car ? p.state === 'driving' && (p.car.removed || (p.car.driver !== 'ai' && p.car.driver !== 'police' && !p.car.jacking)) : !p.shopKey && Math.hypot(p.x - px, p.z - pz) > 140;
       if (gone) { if (p.car && p.car.driverPed === p) p.car.driverPed = null; this._release(p); this.peds.splice(i, 1); this._colors(); }
     }
     const walkers = this.peds.filter((p) => !p.shopKey && !p.car).length;
@@ -255,6 +256,18 @@ export class Pedestrians {
     return [p.ix * P + c[0], p.iz * P + c[1]];
   }
 
+  _copLook(p) {
+    Object.assign(p.app, { shirt: 0x1f3d7a, pants: 0x14213d, shoes: 0x111111, cop: true, long: false });
+    p.phone = false; p.suitcase = false; p.temper = 'fight'; p.walkSpeed = 1.35; p.hp = p.maxHp = 12;
+    this._colors();
+  }
+  // an officer who gets out of a patrol car and runs at the player to arrest them
+  addCop(x, z, chase = true) {
+    if (this.peds.length >= MAX) return null;
+    const p = this._add({ x, z, state: chase ? 'copChase' : 'walk', ix: Math.floor(x / P), iz: Math.floor(z / P), corner: 0, dir: 1 });
+    this._copLook(p); p.copChase = chase;
+    return p;
+  }
   // a person sitting at the wheel of a traffic car
   addDriver(v) {
     if (this.peds.length >= MAX) return null;
@@ -349,7 +362,7 @@ export class Pedestrians {
     if (p.hitT > 0) p.hitT -= dt;
     if (p.sayT > 0) p.sayT -= dt;
     if (p.barT > 0) p.barT -= dt;
-    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'driving', 'pulled', 'thrown', 'dead', 'swimmer', 'sunbathe', 'beachsit', 'guard'].includes(p.state)) {
+    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'driving', 'pulled', 'thrown', 'dead', 'swimmer', 'sunbathe', 'beachsit', 'guard', 'copChase'].includes(p.state)) {
       for (const v of vehicles) {
         const sp = Math.hypot(v.vx, v.vz);
         if (sp < 4 || Math.abs(v.x - p.x) > 12 || Math.abs(v.z - p.z) > 12 || v.y - p.y > 3) continue;
@@ -359,6 +372,7 @@ export class Pedestrians {
         if (v.collider && verticalOverlap(p.y, p.y + 1.7, v.collider) && circleVs(p.x, p.z, 0.35, v.collider).hit && sp > 3) {
           this._release(p);
           p.state = 'fall'; p.timer = 2.6; p.seat = null; p.fixedY = null; p.fallYaw = Math.atan2(v.vx, v.vz); p.bench = null;
+          if (v.driver === 'player') ctx.onCrime?.(p.app.cop ? 'copHit' : 'assault', p.x, p.z);
           p.vx = v.vx * 0.5; p.vz = v.vz * 0.5;
           break;
         }
@@ -378,6 +392,14 @@ export class Pedestrians {
       case 'resident':
         pose = 'sit'; speed = 0;
         break;
+      case 'copChase': {
+        const pl = ctx.player, dx = pl.x - p.x, dz = pl.z - p.z, d = Math.hypot(dx, dz);
+        if (!p.copChase) { p.state = 'walk'; break; }
+        if (pl.state === 'foot' || d > 4) { goal = [pl.x, pl.z]; speed = d > 2 ? 4.6 : 1.4; pose = d > 2 ? 'run' : 'guard'; }
+        else { speed = 0; pose = 'guard'; }
+        if (d > 160) p.copChase = false;
+        break;
+      }
       case 'guard': speed = 0; pose = Math.sin(time * 0.25 + p.x * 0.7) > 0.55 ? 'talk' : 'idle'; if (p.homeSpot) p.yaw = dampAngle(p.yaw, p.homeSpot.yaw, 4, dt); break;
       case 'sunbathe': speed = 0; pose = 'sunbathe'; p.y = damp(p.y, p.homeSpot?.y ?? p.y, 8, dt); break;
       case 'beachsit': speed = 0; pose = 'beachsit'; break;
@@ -835,7 +857,7 @@ export class Pedestrians {
       M.neck.setMatrixAt(i, a.neck.matrixWorld); M.shoulders.setMatrixAt(i, a.shoulders.matrixWorld);
       M.nose.setMatrixAt(i, a.nose.matrixWorld); M.eyes.setMatrixAt(i, a.eyes.matrixWorld);
       const sol = !!p.app.soldier;
-      M.helmet.setMatrixAt(i, sol ? a.helmet.matrixWorld : this.zero); M.vest.setMatrixAt(i, sol ? a.vest.matrixWorld : this.zero); M.rifle.setMatrixAt(i, sol ? a.rifle.matrixWorld : this.zero);
+      M.helmet.setMatrixAt(i, sol || p.app.cop ? a.helmet.matrixWorld : this.zero); M.vest.setMatrixAt(i, sol ? a.vest.matrixWorld : this.zero); M.rifle.setMatrixAt(i, sol ? a.rifle.matrixWorld : this.zero);
       if (sol) M.hairS.setMatrixAt(i, this.zero);
       M.bag.setMatrixAt(i, p.suitcase && p.pose !== 'sit' ? a.bag.matrixWorld : this.zero);
       for (let s = 0; s < 2; s++) {

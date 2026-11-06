@@ -7,12 +7,13 @@ import { TOP_STYLES, TOP_NAMES, BOTTOM_STYLES, BOTTOM_NAMES, HAIR_STYLES, HAIR_N
 const KINDS = [
   ['weapons', ['חנות נשקים', 'ארסנל']],
   ['mechanic', ['מוסך']],
+  ['dealer', ['סוכנות רכב']],
   ['barber', ['מספרת']],
   ['clothes', ['בוטיק', 'חנות בגדים', 'אופנת', 'בגדי', 'נעלי', 'תכשיטי']],
   ['equipment', ['אלקטרו', 'משקפי', 'פארם', 'צעצועי', 'ספרים', 'חדר כושר', 'דיוטי פרי']],
   ['food', ['בולנז׳רי', 'פטיסרי', 'ביסטרו', 'קפה טרמינל', 'קפה', 'פיצה', 'בורגר', 'פלאפל', 'מאפיית', 'סושי', 'גלידת', 'מסעדת', 'מכולת', 'סופר', 'יין', 'דלק+', 'פרחי']],
 ];
-export const KIND_NAMES = { wardrobe: 'ארון בגדים', weapons: 'נשקים ותחמושת', mechanic: 'מוסך', barber: 'מספרה', clothes: 'חנות בגדים', equipment: 'חנות ציוד', food: 'אוכל ושתייה' };
+export const KIND_NAMES = { dealer: 'סוכנות רכב — קניית רכבים', wardrobe: 'ארון בגדים', weapons: 'נשקים ותחמושת', mechanic: 'מוסך', barber: 'מספרה', clothes: 'חנות בגדים', equipment: 'חנות ציוד', food: 'אוכל ושתייה' };
 export function shopKind(sign) {
   if (!sign) return null;
   for (const [k, words] of KINDS) if (words.some((w) => sign.includes(w))) return k;
@@ -98,6 +99,15 @@ function catalogue(kind, ctx) {
       out.push({ id: 'repair', name: 'ערכת תיקון לרכב', desc: 'מתקנת את הרכב שאתה נוהג בו (מהתיק)', price: 600, buy: () => { econ.items.repairKit++; return 'ערכת תיקון נוספה לתיק'; } });
       out.push({ id: 'snack2', name: '🍫 חטיף ובקבוק מים', desc: 'נכנס לתיק', price: 20, buy: () => { econ.addFood('snack'); econ.addFood('drink'); return 'נוסף לתיק'; } });
       break;
+    case 'dealer': {
+      // buy a vehicle: it is delivered next to the dealership and stays yours (saved; in the phone's "my cars")
+      const LIST = [['hatch', 12000], ['sedan', 18000], ['taxi', 22000], ['van', 30000], ['pickup', 36000], ['coupe', 38000], ['suv', 45000], ['convertible', 60000], ['muscle', 70000], ['luxury', 85000], ['sports', 140000], ['moto', 15000], ['bicycle', 600], ['hyper', 900000], ['heli', 400000]];
+      for (const [type, price] of LIST) {
+        const T = game.vehicleTypes[type], have = econ.ownedCars.filter((c) => c.type === type).length;
+        out.push({ id: `car-${type}`, name: T.name, desc: have ? `יש לך ${have}` : `מהירות עד ${Math.round(T.maxSpeed * 3.6)} קמ״ש`, swatch: T.colors[0], price, buy: () => game.buyVehicle(type) });
+      }
+      break;
+    }
     case 'mechanic': {
       const v = game.myVehicleNear(45);
       if (!v) { out.push({ id: 'none', name: 'אין רכב שלך ליד המוסך', desc: 'הגע ברכב והחנה אותו קרוב למוסך', price: 0, disabled: true }); break; }

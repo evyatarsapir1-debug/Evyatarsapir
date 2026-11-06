@@ -218,6 +218,7 @@ export class WeaponSystem {
         if (!v.ai) { v.vy = 6; v.y += 0.3; }
         if (v.ai) { v.ai.cruise = 0; v.ai.baseCruise = 0; }
         this.burning.push({ v, t: 25 });
+        ctx.onCrime?.(v.T.police ? 'copHit' : 'explosion', v.x, v.z);
         ctx.onShake?.(0.4);
       }
     }
@@ -287,6 +288,7 @@ export class WeaponSystem {
             if (this.muzzleFlash) { this.muzzleFlash.visible = true; this.muzzleFlash.rotation.z = Math.random() * 3; this.muzzleFlash.scale.setScalar(0.8 + Math.random() * 0.5); this._mfT = 0.05; }
             this.flash.position.copy(muzzle); this.flash.intensity = 18; this._flashT = 0.06;
             ctx.onShot?.(W);
+            ctx.onCrime?.('gunfire', player.x, player.z);
             ctx.onShake?.(W.kind === 'long' ? 0.18 : W.kind === 'rifle' ? 0.06 : 0.1);
             ctx.onRecoil?.(W.kind === 'long' ? 0.05 : W.kind === 'pistol' ? 0.025 : 0.012);
             if (W.explosive) this.explode(r.point, W.explosive, W.damage, ctx);
