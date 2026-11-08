@@ -1,7 +1,8 @@
 // Procedural, rigged humanoid with customizable look and code-driven animation
 // (idle breathing, walk, run, jump, sit, drive, ride, door-open reach).
 import * as THREE from 'three';
-import { damp, clamp } from '../core/mathx.js';
+import { damp, clamp, lerp } from '../core/mathx.js';
+const _ikP = new THREE.Vector3();
 
 export const SKIN_TONES = [0xf6d7c3, 0xe9b98f, 0xc98e62, 0xa86f48, 0x7b4a2c, 0x4f2f1d];
 export const HAIR_COLORS = [0x1b1410, 0x3b2416, 0x6b4325, 0xa8743b, 0xd9b26a, 0xb5402a, 0x9a9a9a, 0x2a3f8f];
@@ -222,6 +223,26 @@ export class CharacterModel {
     this.torso.scale.set(1.18 * w, 1, 0.75 * (0.9 + w * 0.1));
   }
 
+  // Left-arm IK (post-process after animate): bends the left shoulder (pitch + side) and elbow until the hand
+  // touches a world-space point - used to put the support hand on a rifle's fore-end or around a pistol grip.
+  reachLeft(target, weight) {
+    if (weight <= 0.001) return;
+    const A = this.arms[0], sh = A.sh, el = A.elbow, hand = A.hand, p = _ikP;
+    const base = [sh.rotation.x, sh.rotation.z, el.rotation.x];
+    const set = (v) => { sh.rotation.x = v[0]; sh.rotation.z = v[1]; el.rotation.x = v[2]; };
+    const cost = (v) => { set(v); hand.updateWorldMatrix(true, false); p.setFromMatrixPosition(hand.matrixWorld); return p.distanceToSquared(target); };
+    const lo = [-3.0, -1.6, -2.7], hi = [1.0, 1.6, 0];
+    const v = base.slice(); let best = cost(v), d = 0.35;
+    for (let it = 0; it < 14 && best > 1e-5; it++, d *= 0.62) {
+      for (let k = 0; k < 3; k++) for (const sg of [1, -1]) {
+        const w = v.slice(); w[k] = Math.max(lo[k], Math.min(hi[k], w[k] + sg * d));
+        const c = cost(w); if (c < best) { best = c; v[k] = w[k]; }
+      }
+    }
+    set([lerp(base[0], v[0], weight), lerp(base[1], v[1], weight), lerp(base[2], v[2], weight)]);
+    hand.updateWorldMatrix(true, true);
+  }
+
   // state: { speed, run, grounded, vy, mode, steer, doorReach }
   animate(dt, s) {
     const t = this.cur;
@@ -276,6 +297,34 @@ export class CharacterModel {
           target.armSide = up ? -0.26 : 0.08;
         } else { target.armR = up ? -1.5 : -0.5; target.elbowR = up ? -0.05 : -0.6; }
       }
+      if (s.aim && s.hold) {
+        // walking with the weapon: a gentle bob and sway instead of a frozen pose; firing rocks the shoulders back
+        const b = Math.sin(ph * 2) * 0.05 * moveK;
+        target.armR += b; target.armL += b * 0.8; target.twist = (target.twist || 0) + Math.sin(ph) * 0.05 * moveK;
+        if (s.recoil) { target.spine = (target.spine || 0) - s.recoil * 0.1; target.twist += s.recoil * 0.05; }
+        const two = s.hold === 'rifle' || s.hold === 'heavy';
+        // draw: the weapon comes up from the hip / holster into the ready position
+        if (s.draw !== undefined && s.draw < 1) {
+          const k = s.draw * s.draw * (3 - 2 * s.draw);
+          target.armR = lerp(0.18, target.armR, k); target.elbowR = lerp(-0.75, target.elbowR, k);
+          if (two) { target.armL = lerp(0.05, target.armL, k); target.elbowL = lerp(-0.3, target.elbowL, k); }
+          target.armSide = lerp(0.12, target.armSide ?? 0.08, k); target.twist = lerp(0, target.twist || 0, k);
+        }
+        // reload: weapon canted at the chest, the support hand fetches a fresh magazine from the belt and racks it
+        if (s.reload > 0) {
+          const k = s.reload;
+          const key = (frames) => { for (let i = 1; i < frames.length; i++) if (k <= frames[i][0]) { const a = frames[i - 1], c = frames[i], u = (k - a[0]) / (c[0] - a[0]), e = u * u * (3 - 2 * u); return [lerp(a[1], c[1], e), lerp(a[2], c[2], e)]; } const l = frames[frames.length - 1]; return [l[1], l[2]]; };
+          if (s.hold === 'pistol') {
+            target.armR = -0.85; target.elbowR = -1.25; target.twist = 0.22; target.armSide = 0.02;
+            [target.armL, target.elbowL] = key([[0, -0.4, -0.6], [0.2, -0.72, -1.5], [0.32, -0.72, -1.5], [0.48, -0.08, -0.45], [0.6, -0.08, -0.45], [0.75, -0.72, -1.5], [0.82, -0.95, -1.75], [0.92, -0.95, -1.4], [1, -0.4, -0.6]]);
+          } else {
+            target.armR = -0.62; target.elbowR = -0.9; target.twist = 0.32; target.spine = (target.spine || 0) + 0.08; target.armSide = 0.02;
+            [target.armL, target.elbowL] = key([[0, -0.85, -0.55], [0.18, -0.85, -1.3], [0.32, -0.85, -1.3], [0.46, -0.1, -0.5], [0.58, -0.1, -0.5], [0.72, -0.85, -1.3], [0.84, -1.15, -1.7], [0.93, -1.15, -1.5], [1, -0.85, -0.55]]);
+          }
+        }
+      }
+      // holster: the hand takes the weapon back down to the hip before it is put away
+      if (s.holster > 0) { const k = s.holster; target.armR = lerp(0.18, -0.55, k); target.elbowR = lerp(-0.75, -0.75, k); target.armSide = lerp(0.12, 0.08, k); }
       if (s.throw > 0) {
         // overarm throw: wind back (arm up behind the head), then whip forward and follow through
         const k = 1 - s.throw / 0.55;

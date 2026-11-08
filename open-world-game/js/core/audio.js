@@ -69,6 +69,27 @@ export class GameAudio {
     const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.setValueAtTime(heavy ? 90 : 140, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.15);
     og.gain.setValueAtTime(heavy ? 0.5 : 0.3, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
     o.connect(og); og.connect(this.master); o.start(t); o.stop(t + 0.2);
+    // short outdoor echo tail (quiet, delayed, darker)
+    const e = ctx.createBufferSource(); e.buffer = buf; const ef = ctx.createBiquadFilter(); ef.type = 'lowpass'; ef.frequency.value = 900;
+    const eg = ctx.createGain(); eg.gain.value = heavy ? 0.16 : 0.09; e.connect(ef); ef.connect(eg); eg.connect(this.master); e.start(t + (heavy ? 0.16 : 0.11));
+  }
+  // weapon handling: metallic clicks (kind: 'out' magazine out, 'in' magazine in, 'rack' slide / bolt, 'draw', 'dry' empty)
+  mech(kind) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const hit = (at, freq, len, vol, q = 6) => {
+      const n = Math.floor(ctx.sampleRate * len), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 5);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+      const g = ctx.createGain(); g.gain.value = vol;
+      src.connect(f); f.connect(g); g.connect(this.master); src.start(t + at);
+    };
+    if (kind === 'out') { hit(0, 1800, 0.05, 0.35); hit(0.04, 900, 0.07, 0.2); }
+    else if (kind === 'in') { hit(0, 1400, 0.05, 0.4); hit(0.05, 2600, 0.03, 0.3); }
+    else if (kind === 'rack') { hit(0, 2200, 0.05, 0.4); hit(0.09, 3000, 0.05, 0.45); }
+    else if (kind === 'draw') { hit(0, 1200, 0.12, 0.12, 2); hit(0.1, 2800, 0.03, 0.2); }
+    else if (kind === 'dry') hit(0, 3400, 0.025, 0.35, 10);
   }
   mute(on) { if (this.master) this.master.gain.value = on ? 0 : this.volume; }
 }

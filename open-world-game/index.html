@@ -198,6 +198,7 @@
       <button class="tbtn ctx small" data-btn="light" id="tLight" style="grid-area:light">פנס</button>
       <button class="tbtn small" data-btn="cycle" style="grid-area:cyc">ציוד</button>
       <button class="tbtn ctx small aimbtn" data-btn="aim" id="tAim" style="grid-area:aim">כוון</button>
+      <button class="tbtn ctx small" data-btn="reload" id="tReload" style="grid-area:rel">טעינה</button>
       <button class="tbtn" data-btn="run" id="runBtn" style="grid-area:run">ריצה</button>
       <button class="tbtn big" data-btn="jump" style="grid-area:jump">קפיצה</button>
     </div>
@@ -215,12 +216,18 @@
       <button class="tbtn pedal" data-btn="up" style="grid-area:gas">למעלה</button>
     </div>
     <div class="tbtns plane">
+      <button class="tbtn fly assist" data-btn="assist" id="tAssist" style="grid-area:as">המראה אוטומטית</button>
       <button class="tbtn small" data-btn="camera" style="grid-area:cam">מצלמה</button>
-      <button class="tbtn small" data-btn="up" style="grid-area:up">משוך ▲</button>
-      <button class="tbtn small" data-btn="down" style="grid-area:dn">דחוף ▼</button>
+      <button class="tbtn fly" data-btn="up" style="grid-area:up">▲<small>טפס</small></button>
+      <button class="tbtn fly gas" data-btn="gas" style="grid-area:gas">+<small>מהירות</small></button>
+      <button class="tbtn small on" data-btn="stab" id="tStab" style="grid-area:st">יציב</button>
+      <button class="tbtn fly" data-btn="down" style="grid-area:dn">▼<small>רד</small></button>
+      <button class="tbtn fly brake" data-btn="brake" style="grid-area:brake">−<small>האט</small></button>
       <button class="tbtn ctx fire" data-btn="fire" id="tMissile" style="grid-area:fir">טיל</button>
-      <button class="tbtn pedal brake" data-btn="brake" style="grid-area:brake">בלם</button>
-      <button class="tbtn pedal gas" data-btn="gas" style="grid-area:gas">גז</button>
+    </div>
+    <div class="tbtns plane turn">
+      <button class="tbtn fly" data-btn="left" aria-label="פנה שמאלה">◀<small>שמאלה</small></button>
+      <button class="tbtn fly" data-btn="right" aria-label="פנה ימינה">▶<small>ימינה</small></button>
     </div>
     <button class="tbtn mapbtn" data-btn="map">מפה</button>
     <div id="actBar">

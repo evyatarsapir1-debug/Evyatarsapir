@@ -14,11 +14,12 @@ const ICONS = {
   music: '<path d="M9 18V5l11-2v13" fill="none" stroke="#fff" stroke-width="2"/><circle cx="6.5" cy="18" r="3" fill="#fff"/><circle cx="17.5" cy="16" r="3" fill="#fff"/>',
   missions: '<path d="M12 2l3 7 7 .6-5.3 4.6L18.4 21 12 17l-6.4 4 1.7-6.8L2 9.6 9 9z" fill="#fff"/>',
   cars: '<path d="M3 15l2-6h14l2 6v4H3z" fill="#fff"/><circle cx="7" cy="19" r="2" fill="#3a3f4a"/><circle cx="17" cy="19" r="2" fill="#3a3f4a"/>',
+  flight: '<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" fill="#fff"/>',
   settings: '<circle cx="12" cy="12" r="3.2" fill="none" stroke="#fff" stroke-width="2.4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8" stroke="#fff" stroke-width="2.4"/>',
 };
 const APPS = [
   ['map', 'מפה', '#2fa36b'], ['contacts', 'אנשי קשר', '#3f8cff'], ['messages', 'הודעות', '#34c759'], ['camera', 'מצלמה', '#5b6170'],
-  ['music', 'מוסיקה', '#ff375f'], ['missions', 'משימות', '#ff9f0a'], ['cars', 'הרכבים שלי', '#8e5cf7'], ['settings', 'הגדרות', '#6e7480'],
+  ['music', 'מוסיקה', '#ff375f'], ['missions', 'משימות', '#ff9f0a'], ['cars', 'הרכבים שלי', '#8e5cf7'], ['flight', 'אימון טיסה', '#0a84ff'], ['settings', 'הגדרות', '#6e7480'],
 ];
 const WALLS = ['linear-gradient(160deg,#1d2b64,#f8cdda)', 'linear-gradient(160deg,#0f2027,#2c5364)', 'linear-gradient(160deg,#ff7e5f,#2b1055)', 'linear-gradient(160deg,#134e5e,#71b280)'];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -170,6 +171,16 @@ export class Phone {
         s.querySelectorAll('[data-acc]').forEach((b) => { b.onclick = () => { M.accept(b.dataset.acc); this.show('missions'); }; });
         const nav = s.querySelector('[data-act="nav"]'); if (nav) nav.onclick = () => { M._target(); this.show('map'); };
         const quit = s.querySelector('[data-act="quit"]'); if (quit) quit.onclick = () => { M.abandon(); this.show('missions'); };
+        break;
+      }
+      case 'flight': {
+        // flight school: take off, fly through rings over the sea, land - with the assistance buttons
+        const F = g.flight, done = g.econ.flightSchool || 0;
+        s.innerHTML = head('אימון טיסה') + `<div class="pcard"><b>🎓 בית הספר לטיסה</b><div>המראה, מעבר דרך 4 טבעות מעל הים ונחיתה על המסלול. כפתורי "המראה אוטומטית", "נחיתה מסייעת" ו"יציב" עוזרים בכל שלב.${done ? `<br>סיימת ${done} אימונים ✔` : '<br>פרס על הסיום הראשון: ₪1,000'}</div></div>
+          <div class="plist"><button type="button" class="pbtn" data-tr="jet">✈️ אימון במטוס נוסעים · נמל התעופה</button><button type="button" class="pbtn" data-tr="fighter">🛩️ אימון במטוס קרב · הבסיס הצבאי</button>
+          ${F.train ? '<button type="button" class="pbtn warn" data-tr="stop">הפסק את האימון</button>' : ''}</div>
+          <div class="pinfo">שליטה: ג׳ויסטיק/חצים = פנייה וגובה · גז / האט = מהירות · מצלמה = תא טייס או מבחוץ</div>`;
+        s.querySelectorAll('[data-tr]').forEach((b) => { b.onclick = () => { const k = b.dataset.tr; if (k === 'stop') { F.stopTraining(); this.show('flight'); return; } this.toggle(false); F.startTraining(k); }; });
         break;
       }
       case 'cars': {

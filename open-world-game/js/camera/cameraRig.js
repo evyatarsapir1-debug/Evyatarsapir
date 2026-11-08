@@ -6,6 +6,7 @@ import { heightAt } from '../world/terrain.js';
 import { clamp, damp, dampAngle } from '../core/mathx.js';
 
 const _q = [];
+const _qx = new THREE.Quaternion(), _qy = new THREE.Quaternion(), _X = new THREE.Vector3(1, 0, 0), _Y = new THREE.Vector3(0, 1, 0);
 
 export class CameraRig {
   constructor(camera, statics) {
@@ -35,6 +36,7 @@ export class CameraRig {
     let tx, ty, tz, dist, lam = 14;
     if (v) {
       const L = v.T.L;
+      if (!(this.mode === 'first' && v.isPlane) && Math.abs(this.camera.fov - 62) > 0.05) { this.camera.fov = damp(this.camera.fov, 62, 8, dt); this.camera.updateProjectionMatrix(); }
       dist = clamp(this.dist, 2.2, 14) * 0.6 + L * 0.9 + 2.2;
       if (v.isHeli) dist += 4;
       if (v.isPlane) dist = clamp(this.dist, 2.2, 14) * 0.8 + (v.T.fighter ? 13 : 30);
@@ -86,6 +88,19 @@ export class CameraRig {
     const T = this.smoothTarget;
 
     const cam = this.camera;
+    if (v && this.mode === 'first' && v.isPlane && this.flight) {
+      // cockpit view: the camera sits at the pilot's eyes and banks / pitches with the plane; drag to look around
+      v.object.updateMatrixWorld();
+      this.flight.eye(v, cam.position);
+      if (this.idle > 1.2) { this.lookYaw = damp(this.lookYaw || 0, 0, 3, dt); this.lookPitch = damp(this.lookPitch || 0, 0, 3, dt); }
+      else { this.lookYaw = clamp((this.lookYaw || 0) - dx * sens, -2.2, 2.2); this.lookPitch = clamp((this.lookPitch || 0) - dy * sens, -0.7, 0.6); }
+      (v.parts.body || v.object).getWorldQuaternion(cam.quaternion);
+      cam.quaternion.multiply(_qy.setFromAxisAngle(_Y, Math.PI + this.lookYaw)).multiply(_qx.setFromAxisAngle(_X, this.lookPitch - 0.06));
+      if (Math.abs(cam.fov - 70) > 0.05) { cam.fov = damp(cam.fov, 70, 8, dt); cam.updateProjectionMatrix(); }
+      if (this.shake > 0) { this.shake = Math.max(0, this.shake - dt * 2.5); cam.position.x += (Math.random() - 0.5) * this.shake * 0.1; cam.position.y += (Math.random() - 0.5) * this.shake * 0.1; }
+      player.object.visible = false;
+      return;
+    }
     if (v && this.mode === 'first') {
       v.object.updateMatrixWorld();
       const seat = v.seatWorld(new THREE.Vector3());

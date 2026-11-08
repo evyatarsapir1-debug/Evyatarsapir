@@ -13,6 +13,7 @@ import { BoatTraffic } from './world/boats.js';
 import { Military } from './world/military.js';
 import { Crashes } from './game/crashes.js';
 import { HitFX } from './game/hitfx.js';
+import { Flight } from './game/flight.js';
 import { Police, POLICE_STATION, HOSPITAL } from './game/police.js';
 import { VEHICLE_TYPES } from './vehicles/vehicleTypes.js';
 import { ShopUI, shopKind } from './game/shops.js';
@@ -96,12 +97,15 @@ class Game {
     this.crashes = new Crashes(this.scene);
     this.hitfx = new HitFX(this.scene); this.hitStop = 0;
     this.police = new Police(this);
+    this.flight = new Flight(this);
     this.vehicleTypes = VEHICLE_TYPES;
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());
     this.rig = new CameraRig(this.camera, this.statics);
+    this.rig.flight = this.flight;
     this.econ = new Economy();
     this.weapons = new WeaponSystem(this.scene, this.statics);
+    this.weapons.audio = this.audio;
     this.combat = new Combat(this);
     this.flashlight = new THREE.SpotLight(0xfff2d8, 0, 40, 0.5, 0.5, 1.2);
     this.scene.add(this.flashlight, this.flashlight.target);
@@ -533,7 +537,7 @@ class Game {
     const P = this.player;
     if (P.state !== 'foot') { const v = P.vehicle; if (v) v.driver = null; P.vehicle = null; P.state = 'foot'; P._detach?.(); P.object.visible = true; P.object.rotation.set(0, P.facing, 0, 'XYZ'); }
     this.teleport(place.x, place.z, Math.PI);
-    this.toast(msg, 4.5);
+    if (msg) this.toast(msg, 4.5);
     this.save();
   }
   // car dealership: the bought vehicle waits on the road next to the dealer and is saved as yours
@@ -799,6 +803,7 @@ class Game {
     const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list, ...this.police.cars, ...(this.police.gone || [])];
     const pedObs = this.peds.obstacles();
     const world = {
+      flight: this.flight,
       statics: this.statics, vehicles: all, benches: this.chunks.benches, peds: pedObs,
       onVehicleUsed: (v) => this.vehicles.markUsed(v),
       econ: this.econ, onHurt: (n, why) => this.hurt(n, why), onMessage: (m) => this.toast(m, 2),
@@ -909,6 +914,7 @@ class Game {
     });
     this.police.update(dt, { vehicles: all });
     this.hitfx.update(dt);
+    this.flight.update(dt);
     this.crashes.update(dt, { vehicles: all, player: p, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.military.update(dt, { player: p, input, vehicles: all, onCrime: (k, x, z) => this.police.crime(k, x, z), camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.rig.update(dt, input, p);
@@ -971,13 +977,19 @@ class Game {
     $('hpFill').style.width = this.econ.health + '%';
     $('hpFill').classList.toggle('low', this.econ.health < 30);
     const wid = this.econ.equipped;
-    $('weaponHud').textContent = wid && p.state === 'foot' ? `${WEAPONS[wid].name} · ${this.econ.weapons[wid].ammo}` : '';
+    {
+      // weapon HUD: rounds in the magazine / spare rounds, and a reload indicator
+      const W = wid && WEAPONS[wid], inv = wid && this.econ.weapons[wid];
+      const txt = W && p.state === 'foot' ? (W.mag ? `${W.name} · ${inv.mag ?? Math.min(inv.ammo, W.mag)} / ${Math.max(0, inv.ammo - (inv.mag ?? Math.min(inv.ammo, W.mag)))}${this.weapons.reloading ? ' · טוען…' : inv.mag === 0 && inv.ammo > 0 ? ' · לחץ X לטעינה' : ''}` : `${W.name} · ${inv.ammo}`) : '';
+      if ($('weaponHud').textContent !== txt) $('weaponHud').textContent = txt;
+      const rb = $('tReload'); if (rb) rb.classList.toggle('show', !!(W?.mag && p.state === 'foot' && inv.ammo > (inv.mag ?? 0) && (inv.mag ?? 0) < W.mag));
+    }
     $('hud').classList.toggle('armed', !!wid && p.state === 'foot');
     $('hud').classList.toggle('aiming', this.rig.aimMode === 'aim');
     $('hud').classList.toggle('scoped', this.rig.aimMode === 'scope' && this.rig.scopeK > 0.6);
     // speedometer
     const sp = $('speedo');
-    if (v) {
+    if (v && !v.isPlane) {   // planes show the bigger flight HUD instead
       sp.classList.add('show');
       $('speedVal').textContent = Math.round(Math.abs(v.speed) * 3.6);
       $('vehName').textContent = v.isPlane ? `גובה ${Math.round(v.y)} מ׳ · מנוע ${Math.round((v.throttleSet || 0) * 100)}%` : v.isAir ? `${v.T.name} · גובה ${Math.round(v.y)} מ׳` : v.T.name;
@@ -994,6 +1006,12 @@ class Game {
       { const t = v?.isPlane ? 'צא מהמטוס' : v?.T.tank ? 'צא מהטנק' : v?.isBoat ? 'רד מהסירה' : 'צא מהרכב'; if ($('tExit').textContent !== t) $('tExit').textContent = t; }
       $('tCannon').classList.toggle('show', !!v?.T.tank);
       $('tMissile').classList.toggle('show', !!v?.T.fighter);
+      if (v?.isPlane) {
+        const F = this.flight, air = v.airborne;
+        const t = F.auto ? 'בטל טייס אוטומטי' : air ? 'נחיתה מסייעת' : 'המראה אוטומטית';
+        if ($('tAssist').textContent !== t) $('tAssist').textContent = t;
+        $('tAssist').classList.toggle('on', !!F.auto); $('tStab').classList.toggle('on', F.stab);
+      }
       $('tExit').classList.toggle('show', !!v && !v.isHeli && p.prompt?.key === 'vehicle');
       $('tExitHeli').classList.toggle('show', !!v && v.isHeli && p.prompt?.key === 'vehicle');
       $('runBtn').classList.toggle('on', p.sprint);

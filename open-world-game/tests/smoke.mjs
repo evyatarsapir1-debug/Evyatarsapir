@@ -351,7 +351,7 @@ await g(() => { __game.teleport(520, 590, Math.PI); });
 await page.click('#phoneBtn');
 await sim(1);
 const ph = await g(() => ({ open: __game.phone.open, apps: document.querySelectorAll('#phone .papp').length }));
-check('phone opens from its button', ph.open && ph.apps === 8, `${ph.apps} apps`);
+check('phone opens from its button', ph.open && ph.apps === 9, `${ph.apps} apps`);
 await page.click('#phone .papp[data-go="map"]');
 await page.click('#phone .prow[data-place="0"]');
 const gps = await g(() => ({ dest: __game.gps.dest?.name, pts: __game.gps.route?.points.length, len: Math.round(__game.gps.route?.length || 0) }));
@@ -454,7 +454,7 @@ check('fight: people have different personalities', fight.tempers.length >= 4, f
 // ---------------------------------------------------------------- punching people indoors + guard drops after 3 s
 const indoor = await g(() => {
   const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
-  const ped = game.peds.peds.find((q) => q.state === 'resident' || q.state === 'shopkeeper'); if (ped) ped.temper = 'flee';
+  const ped = game.peds.peds.find((q) => q.state === 'resident' || q.state === 'shopkeeper'); if (ped) ped.temper = 'call';   // a person who never fights back (others may get angry and join in)
   if (!ped) return { err: 'no indoor person', states: [...new Set(game.peds.peds.map((q) => q.state))] };
   const s0 = ped.state, hp0 = ped.hp;
   game.player.setPosition(ped.x - Math.sin(ped.yaw) * -1.1, ped.z - Math.cos(ped.yaw) * -1.1, 0, ped.y + 0.3);
@@ -784,7 +784,7 @@ await shot('22-police');
 const esc = await g(() => {
   const game = __game, P = game.player, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
   game.teleport(530, 545, 0, 0.3); step(10);
-  game.police.crime('kill', P.x, P.z); step(30 * 8);
+  game.police.crime('kill', P.x, P.z); step(30 * 8, () => { game.police.arrestT = 0; });   // dodge the officers while the chase builds up
   const chased = game.police.cars.length;
   game.teleport(415, 452, 0, 0.3);                     // run off around the corner, out of their sight
   let blinkAt = -1, t = 0;
@@ -816,6 +816,56 @@ const brawl = await g(() => {
 check('fight: a hit person fights back with several different strikes', brawl.states?.includes('fight') && brawl.atks?.length >= 2 && brawl.tookDmg, JSON.stringify(brawl));
 check('fight: fighters block / slip punches, get knocked down and get back up', brawl.states?.some((s) => s === 'block' || s === 'slip') && brawl.states?.includes('knocked') && brawl.states?.includes('getup'), JSON.stringify(brawl.states));
 check('fight: impact effects appear when blows land (no blood)', brawl.fx > 0);
+
+// ---------------------------------------------------------------- flight assistance + flight school
+const fly2 = await g(() => {
+  const game = __game, P = game.player, F = game.flight, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  F.startTraining('jet'); step(3);
+  const v = P.vehicle, inPlane = !!v?.isPlane;
+  game.input.pressed.add('assist'); step(1);
+  let t = 0; while (t < 30 * 90 && (F.auto || v.y < 5)) { step(1); t++; }
+  const takeoff = { alt: Math.round(v.y), auto: !!F.auto, trainStep: F.train?.step };
+  const y0 = v.y; let maxRoll = 0; step(30 * 15, () => { maxRoll = Math.max(maxRoll, Math.abs(v.roll)); });
+  const stable = { dAlt: Math.round(v.y - y0), maxRoll };
+  const m0 = game.econ.money;
+  for (const R of F.train.rings) { v.x = R.x + 40; v.z = R.z; v.y = R.y; step(2); v.x = R.x; step(2); }
+  v.x = -5000; v.z = 790; v.y = 320; v.heading = Math.PI / 2; v.pitch = 0; v.roll = 0; v.vy = 0; v.speed = 80; v.throttleSet = 0.6;
+  game.input.pressed.add('assist'); step(1);
+  t = 0; while (t < 30 * 200 && F.auto) { step(1); t++; }
+  const landed = { stopped: Math.abs(v.speed) < 2, runway: F.onRunway(v)?.id, dmg: Math.round(v.damage), paid: game.econ.money - m0, school: game.econ.flightSchool };
+  const hud = !!document.querySelector('#flightHud.show') && !!document.getElementById('fhGuide');
+  game.input.pressed.add('vehicle'); step(60);
+  return { inPlane, takeoff, stable, landed, hud };
+});
+check('flight school: starts in a plane on the runway with the flight HUD', fly2.inPlane && fly2.hud, JSON.stringify(fly2));
+check('flight: assisted take-off climbs to a safe height by itself', fly2.takeoff.alt > 100 && !fly2.takeoff.auto && fly2.takeoff.trainStep >= 1, JSON.stringify(fly2.takeoff));
+check('flight: stability mode keeps the plane level and at its altitude hands-off', Math.abs(fly2.stable.dAlt) < 25 && fly2.stable.maxRoll < 0.1, JSON.stringify(fly2.stable));
+check('flight: assisted landing lines up, slows down and stops on the runway undamaged', fly2.landed.stopped && fly2.landed.runway === 'air' && fly2.landed.dmg < 10, JSON.stringify(fly2.landed));
+check('flight school: rings + landing complete the course and pay the reward', fly2.landed.paid >= 250 && fly2.landed.school >= 1);
+
+// ---------------------------------------------------------------- weapons: magazines, reload, draw / holster
+const gun = await g(() => {
+  const game = __game, P = game.player, W = game.weapons, step = (n, f) => { for (let i = 0; i < n; i++) { if (game.police.level) game.police.clear(); f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.teleport(530, 562, 0, 0.3); step(5);
+  game.econ.weapons.x4 = { ammo: 70 }; game.equip('x4');
+  const d0 = P.drawK; step(25); const drawn = P.drawK === 1 && W.gun.visible;
+  const inv = game.econ.weapons.x4;
+  step(30 * 5, () => game.input.keys.add('KeyT')); game.input.keys.clear();
+  const emptied = inv.mag === 0 && !!W.reloading;
+  let magOut = false; step(30 * 3, () => { if (W.gunMag && !W.gunMag.visible) magOut = true; });
+  const reloaded = inv.mag === 30 && inv.ammo === 40;
+  step(5, () => game.input.keys.add('KeyT')); game.input.keys.clear(); step(10);
+  game.input.pressed.add('reload'); step(1); const manual = !!W.reloading; step(30 * 2.2);
+  const ik = W.ikW > 0.9;
+  game.equip(null); step(1); const holstering = !!W.holstering; step(15);
+  return { d0, drawn, emptied, magOut, reloaded, manual, full: inv.mag === 30, ik, holstering, gone: !W.gun && !W.holstering };
+});
+check('weapons: drawing the weapon is animated (it comes up from the hip)', gun.d0 === 0 && gun.drawn, JSON.stringify(gun));
+check('weapons: a magazine runs empty and reloads by itself (magazine drops out, a new one goes in)', gun.emptied && gun.magOut && gun.reloaded);
+check('weapons: manual reload (X / "טעינה") tops the magazine up', gun.manual && gun.full);
+check('weapons: two-handed weapons keep the support hand on the gun (IK)', gun.ik);
+check('weapons: putting the weapon away is animated too', gun.holstering && gun.gone);
 
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);

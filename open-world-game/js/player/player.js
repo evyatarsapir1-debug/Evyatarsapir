@@ -130,7 +130,7 @@ export class Player {
       this.prompt = { key: 'interact', text: this.nearSeat.kind === 'sleep' ? 'לישון' : 'לשבת', seat: this.nearSeat.label };
       if (input.wasPressed('interact')) this.useSeat(this.nearSeat);
     }
-    this.model.animate(dt, { speed: this.parachute ? 0 : Math.hypot(this.vx, this.vz), grounded: this.grounded || this.parachute, vy: this.vy, mode: this.swimming ? 'swim' : 'foot', aim: this.armed ? (this.firing > 0 || this.aimT > 0 ? 2 : 1) : 0, hold: this.hold, aimPitch: this.aimPitch || 0, recoil: this.recoil || 0, throw: this.throwT > 0 ? this.throwT : 0, chute: this.parachute, attack: this.attack, stance: this.combatT > 0 && !this.armed, eat: this.eatT > 0 && !this.attack ? this.eating : null, hit: this.hitT > 0 ? { k: this.hitT / 0.4, kind: this.hitKind, side: this.hitSide } : null });
+    this.model.animate(dt, { speed: this.parachute ? 0 : Math.hypot(this.vx, this.vz), grounded: this.grounded || this.parachute, vy: this.vy, mode: this.swimming ? 'swim' : 'foot', aim: this.armed ? (this.firing > 0 || this.aimT > 0 ? 2 : 1) : 0, hold: this.hold, aimPitch: this.aimPitch || 0, recoil: this.recoil || 0, throw: this.throwT > 0 ? this.throwT : 0, chute: this.parachute, attack: this.attack, stance: this.combatT > 0 && !this.armed, eat: this.eatT > 0 && !this.attack ? this.eating : null, hit: this.hitT > 0 ? { k: this.hitT / 0.4, kind: this.hitKind, side: this.hitSide } : null, draw: this.drawK ?? 1, reload: this.reloadK || 0, holster: this.holsterK || 0 });
     if (this.hitT > 0) this.hitT -= dt;
     if (this.eatT > 0) this.eatT -= dt;
     if (this.canopy) this.canopy.visible = !!this.parachute;
@@ -359,7 +359,8 @@ export class Player {
   _driving(dt, input, world) {
     const v = this.vehicle;
     const throttle = input.isHeld('gas') ? 1 : input.isHeld('brake') ? -1 : input.moveY;
-    const ctl = { throttle, steer: input.moveX, handbrake: input.isHeld('handbrake'), lift: (input.isHeld('up') ? 1 : 0) - (input.isHeld('down') || input.isHeld('run') ? 1 : 0) };
+    const turn = (input.isHeld('right') ? 1 : 0) - (input.isHeld('left') ? 1 : 0);   // big turn buttons (touch)
+    const ctl = { throttle, steer: clamp(input.moveX + turn, -1, 1), handbrake: input.isHeld('handbrake'), lift: (input.isHeld('up') ? 1 : 0) - (input.isHeld('down') || input.isHeld('run') ? 1 : 0) };
     if (v.isHeli) ctl.handbrake = false;
     if (v.isPlane) {
       // like a real plane: joystick forward = nose down, joystick back = nose up, sideways = bank & turn.
@@ -367,6 +368,13 @@ export class Player {
       const jy = Math.abs(input.joyY) > 0.12 ? input.joyY : 0;
       ctl.lift = clamp(-jy + (input.isHeld('up') || input.isHeld('jump') ? 1 : 0) - (input.isHeld('down') ? 1 : 0), -1, 1);
       ctl.throttle = input.isHeld('gas') ? 1 : input.isHeld('brake') ? -1 : input.keyY || 0;
+      // flight assistance: stability mode, assisted take-off / landing (buttons "יציב" and "המראה"/"נחיתה")
+      const F = world.flight;
+      if (F) {
+        if (input.wasPressed('stab')) F.toggleStab();
+        if (input.wasPressed('assist')) F.toggleAssist(v);
+        F.control(v, ctl, dt, input);
+      }
     }
     this.controls = ctl;
     const preSpeed = v.speed, preHeading = v.heading;

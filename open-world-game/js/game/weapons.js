@@ -6,10 +6,10 @@ import { segmentVsBox, verticalOverlap } from '../physics/collision.js';
 import { heightAt } from '../world/terrain.js';
 
 export const WEAPONS = {
-  p7: { name: 'אקדח', kind: 'pistol', price: 1200, ammoPack: 30, ammoPrice: 80, rate: 3, damage: 9, pedDmg: 4, range: 90, color: 0x3a3f45, hold: 'pistol' },
-  x4: { name: 'רובה סער', kind: 'rifle', price: 4800, ammoPack: 90, ammoPrice: 160, rate: 9, damage: 6, pedDmg: 3, range: 120, auto: true, color: 0x4a4f3a, hold: 'rifle' },
-  nz: { name: 'רובה צלפים', kind: 'long', price: 7500, ammoPack: 12, ammoPrice: 140, rate: 0.9, damage: 34, pedDmg: 8, range: 260, color: 0x2f3b2a, hold: 'rifle' },
-  hp: { name: 'מטול', kind: 'heavy', price: 14000, ammoPack: 6, ammoPrice: 600, rate: 0.7, damage: 60, range: 160, explosive: 6, color: 0x5a6148, hold: 'heavy' },
+  p7: { name: 'אקדח', kind: 'pistol', price: 1200, ammoPack: 30, ammoPrice: 80, rate: 3, damage: 9, pedDmg: 4, range: 90, color: 0x3a3f45, hold: 'pistol', mag: 12, reloadT: 1.35 },
+  x4: { name: 'רובה סער', kind: 'rifle', price: 4800, ammoPack: 90, ammoPrice: 160, rate: 9, damage: 6, pedDmg: 3, range: 120, auto: true, color: 0x4a4f3a, hold: 'rifle', mag: 30, reloadT: 1.9 },
+  nz: { name: 'רובה צלפים', kind: 'long', price: 7500, ammoPack: 12, ammoPrice: 140, rate: 0.9, damage: 34, pedDmg: 8, range: 260, color: 0x2f3b2a, hold: 'rifle', mag: 5, reloadT: 2.3 },
+  hp: { name: 'מטול', kind: 'heavy', price: 14000, ammoPack: 6, ammoPrice: 600, rate: 0.7, damage: 60, range: 160, explosive: 6, color: 0x5a6148, hold: 'heavy', mag: 1, reloadT: 2.4 },
   gr: { name: 'רימון', kind: 'grenade', price: 300, ammoPack: 4, ammoPrice: 300, rate: 1.2, explosive: 7, damage: 70, thrown: true, color: 0x4f5a3c, hold: 'hand' },
   fc: { name: 'מטען נפץ', kind: 'charge', price: 450, ammoPack: 3, ammoPrice: 450, rate: 1, explosive: 8, damage: 80, placed: true, color: 0xb03a2e, hold: 'hand' },
 };
@@ -17,6 +17,7 @@ export const WEAPON_ORDER = ['p7', 'x4', 'nz', 'hp', 'gr', 'fc'];
 
 const _q = [];
 const _v = new THREE.Vector3(), _d = new THREE.Vector3();
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
 export class WeaponSystem {
   constructor(scene, statics) {
@@ -75,8 +76,11 @@ export class WeaponSystem {
   // realistic hand-held model in the player's right hand (barrel along +z from the hand at y = -0.3)
   attachGun(player, id) {
     const hand = player.model.arms[1].elbow;
+    if (this.holstering) { this.holstering.mount.parent?.remove(this.holstering.mount); this.holstering = null; player.holsterK = 0; }
+    if (this.gun && !id && player.state === 'foot') { this.holstering = { mount: this.gun, t: 0.32 }; this.gun = null; }   // put it away with a short animation
     if (this.gun) { this.gun.parent?.remove(this.gun); this.gun = null; this.gunInner = null; }
-    if (!id) return;
+    this.gunMag = null; this.gunSlide = null; this.gunBolt = null; this.leftFingers = null; this.reloading = null; player.reloadK = 0;
+    if (!id) { player.drawK = 1; return; }
     const W = WEAPONS[id];
     const g = new THREE.Group();
     const steel = new THREE.MeshStandardMaterial({ color: 0x24272b, metalness: 0.75, roughness: 0.35 });
@@ -93,32 +97,71 @@ export class WeaponSystem {
       add(bx(0.16, 0.08, 0.11), new THREE.MeshStandardMaterial({ color: 0x8a6f4a, roughness: 0.8 }), 0, -0.3, 0.04);
       add(bx(0.05, 0.03, 0.04), new THREE.MeshStandardMaterial({ color: 0x1d1d1f, emissive: 0xff2020, emissiveIntensity: 0.6 }), 0, -0.25, 0.04);
     } else if (W.kind === 'pistol') {
-      add(bx(0.034, 0.042, 0.19), steel, 0, -0.262, 0.07);                 // slide
+      const slide = add(bx(0.034, 0.042, 0.19), steel, 0, -0.262, 0.07);   // slide (kicks back on every shot)
+      for (let i = 0; i < 5; i++) { const sr = new THREE.Mesh(bx(0.036, 0.03, 0.004), poly); sr.position.set(0, 0, -0.07 + i * 0.008); slide.add(sr); }   // rear grip serrations
+      const port = new THREE.Mesh(bx(0.002, 0.016, 0.04), poly); port.position.set(0.018, 0.006, 0.02); slide.add(port);   // ejection port
+      const sf = new THREE.Mesh(bx(0.006, 0.01, 0.01), steel); sf.position.set(0, 0.025, 0.08); slide.add(sf);           // front sight
+      const sb = new THREE.Mesh(bx(0.016, 0.01, 0.01), steel); sb.position.set(0, 0.025, -0.085); slide.add(sb);         // rear sight
       add(bx(0.03, 0.03, 0.15), poly, 0, -0.293, 0.065);                   // frame
-      add(bx(0.03, 0.11, 0.05), poly, 0, -0.34, -0.005, 0.22);             // grip
+      add(bx(0.026, 0.01, 0.05), poly, 0, -0.308, 0.12);                   // accessory rail
+      add(bx(0.031, 0.11, 0.05), poly, 0, -0.34, -0.005, 0.22);            // grip
+      for (let i = 0; i < 4; i++) add(bx(0.033, 0.004, 0.044), steel, 0, -0.305 - i * 0.022, -0.012 + i * 0.005, 0.22);   // grip texture lines
       add(bx(0.006, 0.03, 0.05), steel, 0, -0.318, 0.04);                  // trigger guard
+      add(bx(0.004, 0.018, 0.006), steel, 0, -0.312, 0.035, 0.3);          // trigger
+      add(bx(0.01, 0.014, 0.012), steel, 0, -0.248, -0.03);                // hammer
       add(cy(0.008, 0.02), steel, 0, -0.262, 0.17);                        // muzzle
-      add(bx(0.006, 0.01, 0.01), steel, 0, -0.237, 0.15); add(bx(0.016, 0.01, 0.01), steel, 0, -0.237, -0.015); // sights
+      this.gunMag = add(bx(0.026, 0.11, 0.04), steel, 0, -0.35, -0.008, 0.22);   // magazine in the grip (drops out on reload)
+      add(bx(0.034, 0.012, 0.054), poly, 0, -0.402, -0.02, 0.22);          // magazine base plate
+      this.gunSlide = slide;
       muzzle = 0.18;
     } else if (W.kind === 'heavy') {
       add(cy(0.055, 0.95, 14), new THREE.MeshStandardMaterial({ color: 0x5a6148, roughness: 0.6 }), 0, -0.26, 0.2);
       add(cy(0.07, 0.12, 14), poly, 0, -0.26, 0.66); add(cy(0.065, 0.1, 14), poly, 0, -0.26, -0.27);
       add(bx(0.03, 0.1, 0.04), poly, 0, -0.33, 0.0, 0.2); add(bx(0.03, 0.09, 0.04), poly, 0, -0.33, 0.25, 0.1);
-      add(bx(0.03, 0.05, 0.08), steel, 0.05, -0.2, 0.12);
+      add(bx(0.03, 0.05, 0.08), steel, 0.05, -0.2, 0.12);                  // sight
+      add(cy(0.012, 0.03), glass, 0.05, -0.2, 0.17);                      // sight lens
+      add(bx(0.11, 0.02, 0.1), poly, 0, -0.2, -0.12);                     // shoulder rest
+      for (const z of [-0.1, 0.5]) add(new THREE.TorusGeometry(0.058, 0.006, 5, 14), steel, 0, -0.26, z);   // tube bands
+      // the projectile's nose sits in the front of the tube (gone after the shot, back on reload)
+      this.gunMag = add(new THREE.ConeGeometry(0.05, 0.16, 12).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x6b6f4f, roughness: 0.5 }), 0, -0.26, 0.76);
       muzzle = 0.72;
     } else {
       const long = W.kind === 'long';
       add(bx(0.045, 0.07, 0.3), steel, 0, -0.27, 0.08);                    // receiver
+      add(bx(0.002, 0.022, 0.06), poly, 0.0235, -0.262, 0.1);              // ejection port
       add(bx(0.05, 0.055, long ? 0.26 : 0.2), furn, 0, -0.275, long ? 0.36 : 0.32); // handguard / fore-end
+      if (!long) for (let i = 0; i < 6; i++) add(bx(0.052, 0.008, 0.012), poly, 0, -0.245, 0.24 + i * 0.03);   // top rail ridges
       add(cy(0.011, long ? 0.42 : 0.28), steel, 0, -0.262, long ? 0.66 : 0.55);     // barrel
       add(cy(0.016, 0.05), steel, 0, -0.262, long ? 0.88 : 0.7);           // muzzle device
       add(bx(0.03, 0.09, 0.045), poly, 0, -0.33, -0.01, 0.3);              // pistol grip
       add(bx(0.006, 0.03, 0.05), steel, 0, -0.31, 0.03);                   // trigger guard
+      add(bx(0.004, 0.018, 0.006), steel, 0, -0.305, 0.03, 0.3);           // trigger
       add(bx(0.04, 0.075, 0.27), furn, 0, -0.285, -0.2);                   // stock
       add(bx(0.044, 0.09, 0.03), poly, 0, -0.285, -0.335);                 // butt pad
-      if (!long) { add(bx(0.03, 0.13, 0.055), poly, 0, -0.355, 0.14, 0.25); add(bx(0.012, 0.035, 0.012), steel, 0, -0.218, 0.42); add(bx(0.02, 0.025, 0.04), steel, 0, -0.226, 0.0); }
-      else { add(bx(0.03, 0.06, 0.05), poly, 0, -0.32, 0.13); add(cy(0.022, 0.26), steel, 0, -0.205, 0.08); add(cy(0.027, 0.05), glass, 0, -0.205, 0.22); add(cy(0.025, 0.05), glass, 0, -0.205, -0.06); for (const z of [0.0, 0.16]) add(bx(0.02, 0.03, 0.02), steel, 0, -0.228, z); }
+      add(bx(0.008, 0.012, 0.03), steel, -0.024, -0.29, -0.3);             // sling swivel
+      this.gunBolt = add(long ? new THREE.SphereGeometry(0.012, 8, 6) : bx(0.03, 0.012, 0.02), steel, long ? 0.04 : 0, long ? -0.255 : -0.236, long ? -0.01 : -0.06);   // bolt knob / charging handle
+      if (!long) { this.gunMag = add(bx(0.03, 0.13, 0.055), poly, 0, -0.355, 0.14, 0.25); add(bx(0.012, 0.035, 0.012), steel, 0, -0.218, 0.42); add(bx(0.02, 0.025, 0.04), steel, 0, -0.226, 0.0); }
+      else { this.gunMag = add(bx(0.03, 0.06, 0.05), poly, 0, -0.32, 0.13); add(cy(0.022, 0.26), steel, 0, -0.205, 0.08); add(cy(0.027, 0.05), glass, 0, -0.205, 0.22); add(cy(0.025, 0.05), glass, 0, -0.205, -0.06); for (const z of [0.0, 0.16]) add(bx(0.02, 0.03, 0.02), steel, 0, -0.228, z);
+        for (const sx of [-1, 1]) add(bx(0.008, 0.008, 0.16), steel, sx * 0.015, -0.31, 0.5);   // folded bipod legs
+      }
       muzzle = long ? 0.92 : 0.73;
+    }
+    // fingers wrapped around the grip (and the support hand's fingers on the fore-end for two-handed weapons)
+    if (!W.thrown && !W.placed) {
+      const skin = player.model.mats.skin;
+      const fg = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+      const gz = W.kind === 'pistol' ? -0.005 : W.kind === 'heavy' ? 0.0 : -0.01, tilt = W.kind === 'pistol' ? 0.22 : 0.3;
+      const rf = new THREE.Group(); rf.position.set(0, -0.33, gz); rf.rotation.x = tilt; g.add(rf);
+      for (let i = 0; i < 3; i++) { const f = new THREE.Mesh(fg(0.042, 0.017, 0.022), skin); f.position.set(0, -0.006 - i * 0.02, 0.028); rf.add(f); }   // middle, ring, little finger
+      const th = new THREE.Mesh(fg(0.016, 0.018, 0.05), skin); th.position.set(-0.022, 0.012, 0.0); rf.add(th);    // thumb along the left side
+      const trig = new THREE.Mesh(fg(0.014, 0.014, 0.045), skin); trig.position.set(0.006, 0.03, 0.045); trig.rotation.x = -tilt; rf.add(trig);   // index finger on the trigger
+      this.leftFingers = null;
+      if (W.hold === 'rifle' || W.hold === 'heavy') {
+        const lf = new THREE.Group(); lf.position.set(0, -0.3, W.kind === 'heavy' ? 0.25 : W.kind === 'long' ? 0.36 : 0.3); g.add(lf);
+        for (let i = 0; i < 4; i++) { const f = new THREE.Mesh(fg(0.064, 0.015, 0.017), skin); f.position.set(0.004, 0, -0.03 + i * 0.02); lf.add(f); }   // fingers curl under the fore-end
+        const lt = new THREE.Mesh(fg(0.015, 0.05, 0.02), skin); lt.position.set(-0.03, 0.03, 0); lf.add(lt);   // thumb up the left side
+        this.leftFingers = lf;
+      }
     }
     // muzzle flash (hidden until a shot)
     if (!W.thrown && !W.placed) {
@@ -134,6 +177,32 @@ export class WeaponSystem {
     g.position.set(0, 0.29, 0); mount.add(g);
     hand.add(mount);
     this.gun = mount; this.gunInner = g; this.gunMuzzle = muzzle;
+    this.magRest = this.gunMag?.position.clone(); this.slideRest = this.gunSlide?.position.clone(); this.boltRest = this.gunBolt?.position.clone();
+    // draw: the weapon comes out of the holster / off the back into the hands
+    this.drawDur = W.hold === 'pistol' || W.hold === 'hand' ? 0.42 : 0.6; this.drawT = this.drawDur; player.drawK = 0; mount.visible = false;
+    this.audio?.mech('draw');
+    const inv = this.lastCtx?.econ?.weapons?.[id];
+    if (inv && W.mag && inv.mag === undefined) inv.mag = Math.min(inv.ammo, W.mag);
+    if (W.kind === 'heavy' && inv && !inv.mag && this.gunMag) this.gunMag.visible = false;
+  }
+
+  // reload: only for magazine weapons, when the magazine isn't full and there is spare ammunition
+  startReload(id, inv) {
+    const W = WEAPONS[id];
+    if (!W?.mag || this.reloading || !this.gun) return false;
+    if (inv.mag === undefined) inv.mag = Math.min(inv.ammo, W.mag);
+    if (inv.mag >= W.mag || inv.ammo <= inv.mag) return false;
+    this.reloading = { t: 0, dur: W.reloadT, id };
+    return true;
+  }
+  _dropMag() {
+    // the empty magazine falls out of the gun and bounces on the ground
+    const m = this.gunMag; if (!m) return;
+    m.updateWorldMatrix(true, false);
+    const c = new THREE.Mesh(m.geometry, m.material); m.matrixWorld.decompose(c.position, c.quaternion, c.scale);
+    this.scene.add(c);
+    this.casings.push({ obj: c, v: new THREE.Vector3((Math.random() - 0.5) * 0.6, -0.5, (Math.random() - 0.5) * 0.6), spin: new THREE.Vector3(Math.random() * 6, Math.random() * 6, 0), t: 8 });
+    if (this.casings.length > 40) { const o = this.casings.shift(); this.scene.remove(o.obj); }
   }
 
   // ray from the camera; returns { point, vehicle?, ped? }
@@ -242,13 +311,18 @@ export class WeaponSystem {
     const canUse = id && player.state === 'foot' && econ.weapons[id];
     if (canUse) {
       const W = WEAPONS[id], inv = econ.weapons[id];
+      if (W.mag && inv.mag === undefined) inv.mag = Math.min(inv.ammo, W.mag);
+      if (inv.mag > inv.ammo) inv.mag = inv.ammo;
       const want = W.auto ? input.isHeld('fire') : input.wasPressed('fire');
       if (want && this.cool <= 0) {
         if (W.placed && this.charges.length) { // second press detonates placed charges
           for (const c of this.charges) { this.scene.remove(c.obj); this.explode(c.obj.position.clone(), W.explosive, W.damage, ctx); }
           this.charges = []; this.cool = 0.5;
-        } else if (inv.ammo > 0) {
-          inv.ammo--;
+        } else if (inv.ammo > 0 && (!W.mag || inv.mag > 0) && !this.reloading && !(this.drawT > this.drawDur * 0.4)) {
+          inv.ammo--; if (W.mag) inv.mag--;
+          this.kickT = 0.07;                                       // slide / bolt snaps back
+          if (W.mag && inv.mag === 0 && inv.ammo > 0) this.autoReloadT = 0.35;   // empty: reload by itself
+          if (W.kind === 'heavy' && this.gunMag) this.gunMag.visible = false;
           this.cool = 1 / W.rate;
           player.firing = 0.35; player.aimT = 2.5;
           camera.getWorldDirection(_d);
@@ -296,9 +370,60 @@ export class WeaponSystem {
             if (r.ped) ctx.hitPed?.(r.ped, W.pedDmg || 4);
             for (const ped of ctx.peds) if (ped !== r.ped && Math.hypot(ped.x - player.x, ped.z - player.z) < 35) ctx.scare?.(ped, origin, false);
           }
-        } else if (input.wasPressed('fire')) ctx.message?.('נגמרה התחמושת — אפשר לקנות עוד בחנות');
+        } else if (input.wasPressed('fire') && !this.reloading && !(this.drawT > 0)) {
+          if (inv.ammo <= 0) { this.audio?.mech('dry'); ctx.message?.('נגמרה התחמושת — אפשר לקנות עוד בחנות'); }
+          else if (W.mag && inv.mag <= 0) this.startReload(id, inv);
+        }
       }
     }
+    if (canUse && input.wasPressed('reload') && this.startReload(id, econ.weapons[id])) player.aimT = 0;
+    if (this.autoReloadT > 0) { this.autoReloadT -= dt; if (this.autoReloadT <= 0 && canUse) this.startReload(id, econ.weapons[id]); }
+    // draw animation: the weapon appears in the hand part-way through the movement
+    if (this.drawT > 0) {
+      this.drawT -= dt; player.drawK = clamp01(1 - this.drawT / this.drawDur);
+      if (this.gun) this.gun.visible = player.drawK > 0.3;
+    } else player.drawK = 1;
+    if (this.holstering) {
+      this.holstering.t -= dt; player.holsterK = Math.max(0, this.holstering.t / 0.32);
+      if (this.holstering.t <= 0) { this.holstering.mount.parent?.remove(this.holstering.mount); this.holstering = null; player.holsterK = 0; }
+    }
+    // reload sequence
+    const R = this.reloading;
+    if (R) {
+      const W = WEAPONS[R.id], inv = econ.weapons[R.id];
+      if (!canUse || id !== R.id) { this.reloading = null; player.reloadK = 0; if (this.gunMag) { this.gunMag.visible = true; this.gunMag.position.copy(this.magRest); } if (this.leftFingers) this.leftFingers.visible = true; }
+      else {
+        R.t += dt; const k = Math.min(1, R.t / R.dur); player.reloadK = k;
+        if (this.leftFingers) this.leftFingers.visible = k < 0.12 || k > 0.95;
+        if (!R.out && k > 0.3) { R.out = true; if (W.kind !== 'heavy') this._dropMag(); if (this.gunMag) this.gunMag.visible = false; this.audio?.mech('out'); }
+        if (!R.in && k > 0.6) { R.in = true; if (this.gunMag) this.gunMag.visible = true; }
+        if (R.in && this.gunMag && this.magRest) {   // the new magazine slides up into place
+          const u = clamp01((k - 0.6) / 0.12); this.gunMag.position.copy(this.magRest);
+          if (W.kind === 'heavy') this.gunMag.position.z += (1 - u) * 0.25; else this.gunMag.position.y -= (1 - u) * 0.09;
+          if (u >= 1 && !R.click) { R.click = true; this.audio?.mech('in'); }
+        }
+        if (!R.rack && k > 0.84 && W.kind !== 'heavy') { R.rack = true; this.kickT = 0.16; this.audio?.mech('rack'); }
+        if (R.t >= R.dur) { inv.mag = Math.min(W.mag, inv.ammo); this.reloading = null; player.reloadK = 0; if (this.leftFingers) this.leftFingers.visible = true; }
+      }
+    }
+    // slide / bolt movement (shot or racking during the reload)
+    if (this.kickT > 0) this.kickT -= dt;
+    const kk = this.kickT > 0 ? 1 : 0;
+    if (this.gunSlide && this.slideRest) this.gunSlide.position.z = this.slideRest.z - kk * 0.035;
+    if (this.gunBolt && this.boltRest) this.gunBolt.position.z = this.boltRest.z - kk * 0.06;
+    // support hand: IK puts the left hand on the fore-end (rifles, launcher) or around the grip (pistol, aimed)
+    if (this.gun && this.gunInner && player.state === 'foot' && player.armed) {
+      const W = WEAPONS[econ.equipped];
+      const two = W && (W.hold === 'rifle' || W.hold === 'heavy'), pistolAim = W?.hold === 'pistol' && (player.firing > 0 || player.aimT > 0);
+      const want = (two || pistolAim) && !this.reloading && this.gun.visible ? 1 : 0;
+      this.ikW = (this.ikW || 0) + (want - (this.ikW || 0)) * Math.min(1, dt * 12);
+      if (this.ikW > 0.01) {
+        this.gunInner.updateWorldMatrix(true, false);
+        if (two) _v.set(-0.03, -0.335, W.kind === 'heavy' ? 0.25 : W.kind === 'long' ? 0.36 : 0.3); else _v.set(-0.05, -0.355, -0.01);
+        _v.applyMatrix4(this.gunInner.matrixWorld);
+        player.model.reachLeft(_v, this.ikW * Math.min(1, player.drawK ?? 1));
+      }
+    } else this.ikW = 0;
     if (player.firing > 0) player.firing -= dt;
     if (player.aimT > 0) player.aimT -= dt;
     if (player.recoil > 0) player.recoil = Math.max(0, player.recoil - dt * 6);

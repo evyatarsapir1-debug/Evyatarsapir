@@ -170,7 +170,7 @@ export class Vehicle {
     let v = this.speed;
     // throttle lever (0..100%): gas moves it up, brake moves it down; the engines spool towards it
     this.throttleSet = clamp((this.throttleSet || 0) + thr * (thr < 0 ? 0.9 : 0.5) * dt, 0, 1);
-    this.airbrake = thr < 0;
+    this.airbrake = thr < 0 || !!this.forceAirbrake;
     if (!this.driver) this.throttleSet = 0;
     this.thrust = damp(this.thrust || 0, this.throttleSet, 0.9, dt);
     if (!(onGround && this.throttleSet < 0.3)) v += T.accel * this.thrust * dt;   // on the ground, a low throttle is idle
@@ -178,7 +178,7 @@ export class Vehicle {
     if (onGround) {
       // wheel brakes once the throttle is at idle and you keep pulling back
       if (thr < 0 && this.throttleSet === 0) v = v > 0.3 ? Math.max(0, v - T.brake * 2.2 * -thr * dt) : Math.max(-4, v - 1.5 * dt);   // stopped + brake held = slow reverse (taxi back)
-      else if (this.throttleSet < 0.3) v -= Math.sign(v) * Math.min(Math.abs(v), (Math.abs(v) > 6 ? 7 : 2) * dt);   // wheel brakes + air brakes after touchdown   // rolls to a stop after landing
+      else if (this.throttleSet < 0.3 && !this.autoTaxi) v -= Math.sign(v) * Math.min(Math.abs(v), (Math.abs(v) > 6 ? 7 : 2) * dt);   // wheel brakes + air brakes after touchdown   // rolls to a stop after landing
       if (ctl.handbrake) v -= Math.sign(v) * Math.min(Math.abs(v), 14 * dt);
       // nose-wheel steering, less effective at speed
       const steer = (ctl.steer || 0) * T.steerMax / (1 + Math.abs(v) * 0.06);
