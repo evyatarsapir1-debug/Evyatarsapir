@@ -57,6 +57,14 @@ class Rig {
   }
 }
 
+// fist-fight moves for people who fight back (game damage, no gore)
+const NPC_MOVES = {
+  jab: { dur: 0.36, hitAt: 0.14, reach: 1.55, dmg: 3 },
+  cross: { dur: 0.46, hitAt: 0.19, reach: 1.6, dmg: 4 },
+  hook: { dur: 0.52, hitAt: 0.24, reach: 1.45, dmg: 5 },
+  kick: { dur: 0.62, hitAt: 0.3, reach: 1.85, dmg: 6 },
+};
+
 export class Pedestrians {
   constructor(scene) {
     this.scene = scene;
@@ -136,7 +144,8 @@ export class Pedestrians {
     p.y = heightAt(p.x, p.z, (o.y ?? 0) + 0.5);
     // fight-system personality: how this person reacts to a brawl
     const r = this.rng.float();
-    p.temper = r < 0.24 ? 'dodge' : r < 0.52 ? 'flee' : r < 0.70 ? 'freeze' : r < 0.83 ? 'call' : 'fight';
+    p.temper = r < 0.17 ? 'dodge' : r < 0.36 ? 'flee' : r < 0.47 ? 'freeze' : r < 0.58 ? 'call' : 'fight';
+    p.skill = this.rng.float(0.3, 1);   // how good a fighter: blocks, dodges and combos more often
     p.wealth = this.rng.float() < 0.2 ? 'rich' : this.rng.float() < 0.5 ? 'worker' : 'regular';
     p.hp = p.maxHp = 8;
     this.peds.push(p);
@@ -362,7 +371,7 @@ export class Pedestrians {
     if (p.hitT > 0) p.hitT -= dt;
     if (p.sayT > 0) p.sayT -= dt;
     if (p.barT > 0) p.barT -= dt;
-    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'driving', 'pulled', 'thrown', 'dead', 'swimmer', 'sunbathe', 'beachsit', 'guard', 'copChase'].includes(p.state)) {
+    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'driving', 'pulled', 'thrown', 'dead', 'swimmer', 'sunbathe', 'beachsit', 'guard', 'copChase', 'knocked', 'getup'].includes(p.state)) {
       for (const v of vehicles) {
         const sp = Math.hypot(v.vx, v.vz);
         if (sp < 4 || Math.abs(v.x - p.x) > 12 || Math.abs(v.z - p.z) > 12 || v.y - p.y > 3) continue;
@@ -395,8 +404,18 @@ export class Pedestrians {
       case 'copChase': {
         const pl = ctx.player, dx = pl.x - p.x, dz = pl.z - p.z, d = Math.hypot(dx, dz);
         if (!p.copChase) { p.state = 'walk'; break; }
-        if (pl.state === 'foot' || d > 4) { goal = [pl.x, pl.z]; speed = d > 2 ? 4.6 : 1.4; pose = d > 2 ? 'run' : 'guard'; }
-        else { speed = 0; pose = 'guard'; }
+        if (p.chaseTo) {
+          // lost sight of you: run to where you were last seen and look around
+          const cd = Math.hypot(p.chaseTo.x - p.x, p.chaseTo.z - p.z);
+          if (cd > 2) { goal = [p.chaseTo.x, p.chaseTo.z]; speed = 3.6; pose = 'run'; }
+          else { speed = 0; pose = 'idle'; p.yaw += dt * 1.2; }
+        } else if (pl.state === 'foot' || d > 4) {
+          goal = [pl.x, pl.z]; speed = d > 2 ? 4.6 : 1.4; pose = d > 2 ? 'run' : 'guard';
+          // blocked (a car or wall between you): go around it for a moment
+          if (p.copBest === undefined || d < p.copBest - 0.4) { p.copBest = d; p.copStuck = 0; } else p.copStuck = (p.copStuck || 0) + dt;
+          if (p.copStuck > 1.2 && d > 1.6) { p.detour = { t: 1.3, s: this.rng.chance(0.5) ? 1 : -1 }; p.copStuck = 0; p.copBest = undefined; }
+          if (p.detour) { p.detour.t -= dt; goal = [p.x + (-dz / d) * p.detour.s * 3 + dx / d, p.z + (dx / d) * p.detour.s * 3 + dz / d]; if (p.detour.t <= 0) p.detour = null; }
+        } else { speed = 0; pose = 'guard'; }
         if (d > 160) p.copChase = false;
         break;
       }
@@ -494,24 +513,71 @@ export class Pedestrians {
         break;
       // ------------------------------------------------ fight-system states
       case 'fight': {
-        // fights back: keep close, guard up, throw punches
+        // fights back: footwork around you, guard up, combos of jabs / crosses / hooks / kicks, blocks and slips your punches
         const pl = ctx.player, dx = pl.x - p.x, dz = pl.z - p.z, d = Math.hypot(dx, dz);
-        p.yaw = dampAngle(p.yaw, Math.atan2(dx, dz), 10, dt);
+        p.yaw = dampAngle(p.yaw, Math.atan2(dx, dz), 12, dt);
         pose = 'guard'; speed = 0;
-        if (pl.state !== 'foot' || d > 18 || p.hp <= 2) { p.state = 'flee'; p.timer = 7; p.fleeFrom = [pl.x, pl.z]; this.say(p, p.hp <= 2 ? 'מספיק, מספיק!' : 'ברחתי!'); break; }
-        if (d > 1.15) { goal = [pl.x, pl.z]; speed = d > 3 ? 3.2 : 1.6; }
-        p.atkCool = (p.atkCool ?? 0.8) - dt;
+        if (pl.state !== 'foot' || d > 18 || p.hp <= 1.5) { p.state = 'flee'; p.timer = 7; p.fleeFrom = [pl.x, pl.z]; p.atk = null; this.say(p, p.hp <= 1.5 ? 'מספיק, מספיק! ניצחת!' : 'ברחתי!'); break; }
+        p.atkCool = (p.atkCool ?? 0.7) - dt;
+        // react to your strike: block or slip it (better fighters do it more)
+        const A = pl.attack;
+        if (A && !A.seen && d < 2.4 && !p.atk) {
+          A.seen = true;
+          const r = this.rng.float();
+          if (r < 0.28 * p.skill) { p.block = 0.5; }
+          else if (r < 0.45 * p.skill) { const side = this.rng.chance(0.5) ? 1 : -1; p.slip = { t: 0.32, x: (-dz / d) * side - dx / d * 0.6, z: (dx / d) * side - dz / d * 0.6 }; }
+        }
+        if (p.block > 0) { p.block -= dt; pose = 'block'; }
+        if (p.slip) {
+          p.slip.t -= dt; pose = 'slip'; p.x += p.slip.x * 3.2 * dt; p.z += p.slip.z * 3.2 * dt;
+          if (p.slip.t <= 0) { p.slip = null; p.atkCool = Math.min(p.atkCool, 0.1); }   // counter right after a slip
+          break;
+        }
         if (p.atk) {
+          const M = NPC_MOVES[p.atk.type];
           p.atk.t += dt; pose = 'punch';
-          if (!p.atk.done && p.atk.t >= 0.17) {
+          // step into the strike so a punch thrown from a little too far still reaches
+          if (!p.atk.done && d > M.reach * 0.7) { const st = Math.min(d - M.reach * 0.7, 3.5 * dt); p.x += dx / d * st; p.z += dz / d * st; }
+          if (!p.atk.done && p.atk.t >= M.hitAt) {
             p.atk.done = true;
             const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
-            if (d < 1.45 && (dx * fx + dz * fz) / (d || 1) > 0.5 && Math.abs(pl.y - p.y) < 1) ctx.onPlayerHit?.(p, 4);
+            if (d < M.reach && (dx * fx + dz * fz) / (d || 1) > 0.45 && Math.abs(pl.y - p.y) < 1) ctx.onPlayerHit?.(p, M.dmg, p.atk.type);
+            else this.say(p, '', 0);
           }
-          if (p.atk.t >= 0.42) p.atk = null;
-        } else if (d < 1.4 && p.atkCool <= 0) { p.atk = { t: 0, side: (p.atkSide = !p.atkSide) }; p.atkCool = 0.9 + this.rng.float(0, 0.6); }
+          if (p.atk.t >= M.dur) {
+            p.atk = null;
+            // keep the combo going?
+            if (p.combo > 0 && d < 1.9) { p.combo--; p.atk = { t: 0, type: this.rng.pick(p.combo ? ['jab', 'cross', 'hook'] : ['cross', 'hook', 'kick']) }; }
+            else p.atkCool = 0.75 + this.rng.float(0, 0.7) * (1.3 - p.skill);
+          }
+          break;
+        }
+        // footwork: close in, then circle you at striking range
+        if (d > 1.7) { goal = [pl.x, pl.z]; speed = d > 3.5 ? 3.4 : 1.8; }
+        else if (d < 1.0) { goal = [p.x - dx / d, p.z - dz / d]; speed = 1.2; }
+        else if (p.block <= 0) {
+          p.circle = p.circle || (this.rng.chance(0.5) ? 1 : -1);
+          if (this.rng.chance(dt * 0.4)) p.circle = -p.circle;
+          goal = [p.x + (-dz / d) * p.circle, p.z + (dx / d) * p.circle]; speed = 0.9;
+        }
+        if (d < 1.9 && p.atkCool <= 0 && p.block <= 0) {
+          p.combo = this.rng.float() < 0.25 + p.skill * 0.45 ? this.rng.int(1, 2) : 0;
+          p.atk = { t: 0, type: this.rng.pick(['jab', 'jab', 'cross', 'hook', 'kick']) };
+          if (this.rng.chance(0.15)) this.say(p, this.rng.pick(['קח!', 'הנה לך!', 'עוד אחד?', 'בוא!']), 1.2);
+        }
         break;
       }
+      case 'knocked': {
+        // knocked to the ground (not injured): slides back, lies a moment, then gets up and continues
+        speed = 0; pose = 'fall';
+        p.x += (p.vx || 0) * dt; p.z += (p.vz || 0) * dt; p.vx *= Math.exp(-5 * dt); p.vz *= Math.exp(-5 * dt);
+        if (p.timer <= 0) { p.state = 'getup'; p.timer = 0.9; }
+        break;
+      }
+      case 'getup':
+        speed = 0; pose = 'getup';
+        if (p.timer <= 0) { p.state = 'fight'; p.atkCool = 0.6; this.say(p, this.rng.pick(['זה כל מה שיש לך?', 'עכשיו אני כועס!', 'סיבוב שני!']), 1.8); }
+        break;
       case 'evade': {
         // step back / sideways out of reach
         goal = p.evadeTo; speed = 3.4; pose = 'run';
@@ -617,9 +683,19 @@ export class Pedestrians {
   // a person got hit in a fist fight
   hit(p, src, dmg, kick) {
     if (p.state === 'down' || p.state === 'dazed' || p.state === 'dead' || p.state === 'driving' || p.state === 'pulled' || p.state === 'thrown') return false;
+    if (p.state === 'getup') return false;                                  // can't hit someone while they get up
     this._release(p); p.seat = null; p.fixedY = null;
-    p.hp = Math.max(0, p.hp - dmg); p.barT = 6; p.hitT = 0.35;
     const dx = p.x - src.x, dz = p.z - src.z, L = Math.hypot(dx, dz) || 1;
+    // guard up: the blow lands on the arms
+    if (p.state === 'fight' && p.block > 0 && kick !== true) {
+      p.hp = Math.max(0.5, p.hp - dmg * 0.25); p.barT = 6; p.hitT = 0.15; p.hitKind = 'block';
+      p.x += dx / L * 0.2; p.z += dz / L * 0.2; p.block = 0.25; p.atkCool = Math.min(p.atkCool ?? 0, 0.15);
+      this.say(p, this.rng.pick(['חסמתי!', 'לא כל כך מהר', 'הא!']), 1.1);
+      return 'block';
+    }
+    p.hp = Math.max(0, p.hp - dmg); p.barT = 6; p.hitT = 0.4; p.hitKind = kick === 'kick' || kick === true ? 'body' : 'head';
+    p.hitSide = (this.rng.chance(0.5) ? 1 : -1);
+    p.atk = null; p.slip = null; p.block = 0;
     p.x += dx / L * (kick ? 0.7 : 0.35); p.z += dz / L * (kick ? 0.7 : 0.35);
     if (p.hp <= 0) {
       // out of health: the person collapses and stays down for good (no blood, no gore)
@@ -628,16 +704,30 @@ export class Pedestrians {
       if (p.shopKey) this.deadKeys.add(p.shopKey);
       return 'dead';
     }
-    if (p.state !== 'fight') {
-      if (p.temper === 'fight') { p.state = 'fight'; this.say(p, ['רוצה מכות?!', 'בוא נראה אותך!', 'טעית בבן אדם!'][this.rng.int(0, 2)]); }
-      else this.react(p, src, true);
+    // a hard kick (or a hit when almost out) sends a fighter to the ground; they get back up
+    if (p.state === 'fight' && ((kick === true || kick === 'hook') && this.rng.chance(0.4) || p.hp <= 2.5 && this.rng.chance(0.5))) {
+      p.state = 'knocked'; p.timer = 1.4 + this.rng.float(0, 0.8); p.vx = dx / L * 3.2; p.vz = dz / L * 3.2; p.fallYaw = Math.atan2(-dx, -dz);
+      this.say(p, this.rng.pick(['אאוץ׳!', 'אוף!', 'וואו...']), 1.2);
+      return 'knock';
+    }
+    if (p.state !== 'fight' && p.state !== 'knocked') {
+      // fighters fight back; some others get angry enough to fight too
+      if (p.temper === 'fight' || (p.temper !== 'call' && !p.app.cop && this.rng.chance(0.3) && p.hp > 4)) {
+        p.state = 'fight'; p.atkCool = 0.35; this.say(p, ['רוצה מכות?!', 'בוא נראה אותך!', 'טעית בבן אדם!', 'עכשיו אתה בצרות!'][this.rng.int(0, 3)]);
+        // friends nearby who like a fight join in
+        let joined = 0;
+        for (const o of this.peds) {
+          if (joined >= 2 || o === p || o.temper !== 'fight' || o.car || o.app.cop || ['fight', 'dead', 'down', 'inside', 'driving', 'knocked', 'getup', 'shopkeeper', 'resident'].includes(o.state)) continue;
+          if (Math.hypot(o.x - p.x, o.z - p.z) < 9 && this.rng.chance(0.4)) { this._release(o); o.seat = null; o.fixedY = null; o.state = 'fight'; o.atkCool = 1 + joined; this.say(o, this.rng.pick(['אני איתך!', 'עוזב אותו!', 'שניים על אחד!']), 1.8); joined++; }
+        }
+      } else this.react(p, src, true);
     }
     return 'hit';
   }
 
   // someone saw (or felt) a fight: every personality reacts differently
   react(p, src, wasHit = false) {
-    if (['fight', 'down', 'dazed', 'dead', 'inside', 'driving', 'pulled', 'thrown'].includes(p.state)) return;
+    if (['fight', 'down', 'dazed', 'dead', 'inside', 'driving', 'pulled', 'thrown', 'knocked', 'getup'].includes(p.state)) return;
     // people sitting at home or standing at work only react when they are hit or the fight is right next to them
     if ((p.state === 'shopkeeper' || p.state === 'resident') && !wasHit && Math.hypot(p.x - src.x, p.z - src.z) > 4) return;
     if (!wasHit && p.reactedAt && performance.now() - p.reactedAt < 8000) return;
@@ -754,7 +844,7 @@ export class Pedestrians {
     t.kneeL = Math.max(0, c) * (0.3 + runK) * moveK + 0.05; t.kneeR = Math.max(0, -c) * (0.3 + runK) * moveK + 0.05;
     t.armL = s * (0.35 + runK * 0.5) * moveK; t.armR = -s * (0.35 + runK * 0.5) * moveK;
     t.elbowL = -0.15 - runK; t.elbowR = -0.15 - runK; t.side = 0.08; t.spine = 0.03 + runK * 0.15; t.head = 0;
-    t.bodyX = 0;
+    t.bodyX = 0; t.twist = 0;
     const now = performance.now() * 0.001;
     switch (p.pose) {
       case 'phone': case 'phoneWalk':
@@ -803,28 +893,47 @@ export class Pedestrians {
       case 'fall':
         t.bodyX = -1.45; t.armL = -2.6; t.armR = -2.4; t.legL = 0.1; t.legR = -0.2; hipsY = 0.2;
         break;
-      case 'guard': case 'punch': {
-        // boxing guard, knees soft; punch: one arm drives forward and back
-        t.armL = -1.0; t.armR = -1.0; t.elbowL = -1.9; t.elbowR = -1.9; t.side = 0.25; t.spine = 0.12; t.kneeL = t.kneeR = 0.25 + (sp > 0.2 ? Math.max(0, c) * 0.4 : 0); hipsY = 0.9;
+      case 'guard': case 'punch': case 'block': case 'slip': {
+        // boxing guard, knees soft, light bounce; strikes drive from the hips
+        const bob = Math.sin(now * 7 + p.phase) * 0.025;
+        t.armL = -1.0; t.armR = -1.0; t.elbowL = -1.9; t.elbowR = -1.9; t.side = 0.25; t.spine = 0.12; t.kneeL = t.kneeR = 0.28 + (sp > 0.2 ? Math.max(0, c) * 0.4 : 0); hipsY = 0.9 + bob;
+        t.legL = -0.15; t.legR = 0.1;
+        if (p.pose === 'block') { t.armL = t.armR = -1.45; t.elbowL = t.elbowR = -2.35; t.side = 0.05; t.spine = 0.28; t.head = 0.2; hipsY = 0.86; }
+        if (p.pose === 'slip') { t.spine = 0.35; t.kneeL = t.kneeR = 0.6; hipsY = 0.8; t.head = 0.15; }
         if (p.pose === 'punch' && p.atk) {
-          const k2 = Math.min(1, p.atk.t / 0.42), e = k2 < 0.4 ? Math.sin(k2 / 0.4 * Math.PI / 2) : Math.cos((k2 - 0.4) / 0.6 * Math.PI / 2);
-          if (p.atk.side) { t.armR = -1.0 - 0.6 * e; t.elbowR = -1.9 + 1.85 * e; } else { t.armL = -1.0 - 0.6 * e; t.elbowL = -1.9 + 1.85 * e; }
-          t.spine = 0.12 + 0.12 * e;
+          const M = NPC_MOVES[p.atk.type] || NPC_MOVES.jab, k2 = Math.min(1, p.atk.t / M.dur);
+          const pk = M.hitAt / M.dur, e = k2 < pk ? Math.sin(k2 / pk * Math.PI / 2) : Math.cos((k2 - pk) / (1 - pk) * Math.PI / 2);
+          if (p.atk.type === 'jab') { t.armL = -1.0 - 0.62 * e; t.elbowL = -1.9 + 1.85 * e; t.spine = 0.12 + 0.1 * e; t.twist = -0.3 * e; }
+          else if (p.atk.type === 'cross') { t.armR = -1.0 - 0.65 * e; t.elbowR = -1.9 + 1.88 * e; t.spine = 0.12 + 0.2 * e; t.legR = 0.1 + 0.15 * e; t.kneeR = 0.28 + 0.25 * e; t.twist = 0.5 * e; }
+          else if (p.atk.type === 'hook') { t.armR = -1.0 - 0.5 * e; t.elbowR = -1.9 + 0.55 * e; t.side = 0.25 + 0.9 * e; t.spine = 0.12 + 0.15 * e; t.kneeL = 0.4; t.twist = 0.8 * e - 0.25; }
+          else { t.legR = -1.45 * e; t.kneeR = 1.3 - 1.2 * e; t.legL = 0.15 * e; t.spine = 0.1 - 0.3 * e; t.armL = -1.2; t.armR = -0.6; t.elbowL = t.elbowR = -1.6; }
         }
         break;
       }
+      case 'getup':
+        // pushing up from the ground onto one knee, then standing
+        { const k2 = Math.max(0, Math.min(1, 1 - p.timer / 0.9));
+          t.bodyX = -1.2 * (1 - k2); t.legL = -1.3 * (1 - k2 * 0.8); t.kneeL = 1.9 * (1 - k2 * 0.8); t.legR = 0.4 * (1 - k2); t.kneeR = 1.2 * (1 - k2);
+          t.armL = t.armR = -0.7; t.elbowL = t.elbowR = -0.4; t.spine = 0.5 * (1 - k2); hipsY = 0.35 + 0.55 * k2; }
+        break;
       case 'surprised':
         t.armL = t.armR = -2.3; t.elbowL = t.elbowR = -1.2; t.side = 0.5; t.spine = -0.12; t.head = -0.15;
         break;
     }
-    if (p.hitT > 0) { const k2 = p.hitT / 0.35; t.spine -= 0.45 * k2; t.head -= 0.35 * k2; t.armL -= 0.4 * k2; t.armR -= 0.4 * k2; }
+    if (p.hitT > 0) {
+      // hit reaction: head snaps back / to the side for punches, doubles over for kicks, arms jolt on a blocked hit
+      const k2 = Math.min(1, p.hitT / 0.4);
+      if (p.hitKind === 'block') { t.spine -= 0.12 * k2; t.head -= 0.1 * k2; }
+      else if (p.hitKind === 'body') { t.spine += 0.55 * k2; t.head += 0.25 * k2; t.kneeL += 0.35 * k2; t.kneeR += 0.35 * k2; t.armL += 0.5 * k2; t.armR += 0.5 * k2; hipsY -= 0.08 * k2; }
+      else { t.spine -= 0.4 * k2; t.head -= 0.5 * k2; t.twist += 0.5 * (p.hitSide || 1) * k2; t.armL -= 0.35 * k2; t.armR += 0.3 * k2; t.kneeL += 0.2 * k2; }
+    }
     const k = 12;
     for (const key of Object.keys(t)) j[key] = damp(j[key] ?? t[key], t[key], k, dt);
     j.hipsY = damp(j.hipsY ?? hipsY, hipsY, k, dt);
     const R = this.rig;
     R.hips.position.y = j.hipsY;
     R.body.rotation.x = j.bodyX;
-    R.spine.rotation.x = j.spine;
+    R.spine.rotation.x = j.spine; R.spine.rotation.y = j.twist;
     R.head.rotation.x = j.head;
     R.hip[0].rotation.x = j.legL; R.hip[1].rotation.x = j.legR;
     R.knee[0].rotation.x = j.kneeL; R.knee[1].rotation.x = j.kneeR;
@@ -839,7 +948,7 @@ export class Pedestrians {
     this.peds.forEach((p, i) => {
       this._pose(p, dt);
       R.root.position.set(p.x, p.y, p.z);
-      R.root.rotation.set(0, p.state === 'fall' || p.state === 'dead' ? p.fallYaw : p.yaw, 0);
+      R.root.rotation.set(0, p.state === 'fall' || p.state === 'dead' || p.state === 'knocked' ? p.fallYaw : p.yaw, 0);
       if (p.state === 'thrown') {
         // somersault around the hips while flying, settling on the ground
         // rotate about the hips: keep the hip point at its height above the road (lower when lying flat)

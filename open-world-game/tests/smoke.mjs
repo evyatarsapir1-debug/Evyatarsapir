@@ -780,6 +780,43 @@ check('wasted -> wake up at the hospital', pol.hosp);
 check('dealership: buying a car spawns it next to the shop and saves it', pol.rows >= 10 && pol.car !== undefined && pol.car < 40 && pol.saved >= 1 && pol.paid > 0, JSON.stringify({ rows: pol.rows, car: pol.car, saved: pol.saved, paid: pol.paid }));
 await shot('22-police');
 
+// ---------------------------------------------------------------- GTA-style escape: out of sight -> stars blink -> gone, police leave
+const esc = await g(() => {
+  const game = __game, P = game.player, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  game.teleport(530, 545, 0, 0.3); step(10);
+  game.police.crime('kill', P.x, P.z); step(30 * 8);
+  const chased = game.police.cars.length;
+  game.teleport(415, 452, 0, 0.3);                     // run off around the corner, out of their sight
+  let blinkAt = -1, t = 0;
+  while (game.police.level > 0 && t < 40 * 30) { step(1); t++; if (blinkAt < 0 && document.getElementById('wanted').classList.contains('blink')) blinkAt = t / 30; }
+  const leaving = (game.police.gone || []).length;
+  step(30 * 16);
+  return { chased, blinkAt, escapedAt: t / 30, level: game.police.level, leaving, left: (game.police.gone || []).length + game.police.cars.length, hud: document.getElementById('wanted').innerHTML, atStation: Math.hypot(P.x - 750, P.z - 112) < 10 };
+});
+check('escape: stars blink as soon as the police lose sight of you', esc.blinkAt > 0 && esc.blinkAt < 4, JSON.stringify(esc));
+check('escape: after hiding long enough the stars disappear (not arrested)', esc.level === 0 && !esc.atStation && esc.escapedAt < 30 && esc.hud === '');
+check('escape: the patrol cars switch off their sirens and drive away, then are gone', esc.left === 0);
+
+// ---------------------------------------------------------------- fist fights: people fight back with real moves
+const brawl = await g(() => {
+  const game = __game, P = game.player, step = (n) => { for (let i = 0; i < n; i++) { if (game.police.level) game.police.clear(); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  game.equip(null); game.teleport(311, 309, 0, 0.3); step(20);
+  const q = game.peds.peds.filter((o) => !o.car && !['inside', 'shopkeeper', 'resident', 'dead', 'guard'].includes(o.state)).sort((a, b) => Math.hypot(a.x - P.x, a.z - P.z) - Math.hypot(b.x - P.x, b.z - P.z))[0];
+  if (!q) return {};
+  q.temper = 'fight'; q.skill = 1; q.hp = q.maxHp = 16; q.state = 'walk';
+  game.teleport(q.x, q.z - 1.3, 0, 0.3); step(2);
+  const states = new Set(), atks = new Set(); const h0 = game.econ.health; let fx = 0, minH = 100;
+  for (let i = 0; i < 30 * 16 && q.state !== 'dead' && q.state !== 'flee'; i++) {
+    if (i % 9 === 0 && q.state !== 'knocked' && q.state !== 'getup') game.input.pressed.add('fire');
+    minH = Math.min(minH, game.econ.health); if (game.econ.health < 30) game.econ.health = 100;
+    step(1); states.add(q.state); if (q.atk) atks.add(q.atk.type); if (q.pose === 'block' || q.pose === 'slip') states.add(q.pose); fx = Math.max(fx, game.hitfx.live.length);
+  }
+  return { states: [...states], atks: [...atks], tookDmg: minH < h0, fx };
+});
+check('fight: a hit person fights back with several different strikes', brawl.states?.includes('fight') && brawl.atks?.length >= 2 && brawl.tookDmg, JSON.stringify(brawl));
+check('fight: fighters block / slip punches, get knocked down and get back up', brawl.states?.some((s) => s === 'block' || s === 'slip') && brawl.states?.includes('knocked') && brawl.states?.includes('getup'), JSON.stringify(brawl.states));
+check('fight: impact effects appear when blows land (no blood)', brawl.fx > 0);
+
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);
 await g(() => __game.save());

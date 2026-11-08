@@ -132,7 +132,7 @@ function buildFighter(color) {
 // Military ground vehicles (olive, matte): tank with a turret that turns, 8-wheel APC, jeep, covered truck.
 function milModel(T, parts, g, body, paint) {
   const L = T.L, W = T.W, H = T.H;
-  paint.roughness = 0.85; paint.metalness = 0.15;
+  paint.roughness = 0.85; paint.metalness = 0.15; paint.clearcoat = 0;   // matte military paint
   const olive = paint, dark = new THREE.MeshStandardMaterial({ color: 0x2a2d24, roughness: 0.9 });
   const track = new THREE.MeshStandardMaterial({ color: 0x1d1e1a, roughness: 0.95 });
   const canvas = new THREE.MeshStandardMaterial({ color: 0x6b6a4a, roughness: 1 });
@@ -220,7 +220,8 @@ export function buildVehicleModel(type, color) {
   if (type.kind === 'plane') return type.fighter ? buildFighter(color) : buildJet(color);
   const T = type, g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
-  const paint = new THREE.MeshStandardMaterial({ color, metalness: 0.55, roughness: 0.32, envMapIntensity: 1.1 });
+  // car paint: metallic base under a glossy clear coat that mirrors the street and sky
+  const paint = new THREE.MeshPhysicalMaterial({ color, metalness: 0.5, roughness: 0.38, clearcoat: 1, clearcoatRoughness: 0.06, envMapIntensity: 1.15 });
   const parts = { root: g, body, paint, baseColor: new THREE.Color(color), wheels: [], door: null, rotor: null, tailRotor: null, panels: {}, lights: [], seat: new THREE.Vector3(), seatMode: 'drive', doorSide: 1, glassParts: [] };
   const L = T.L, W = T.W, H = T.H;
 

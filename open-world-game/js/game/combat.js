@@ -9,9 +9,11 @@ import { fmt } from './economy.js';
 const MOVES = {
   jabR: { dur: 0.42, hitAt: 0.15, reach: 1.6, dmg: 1, name: 'אגרוף ימני' },
   jabL: { dur: 0.42, hitAt: 0.15, reach: 1.6, dmg: 1, name: 'אגרוף שמאלי' },
+  hook: { dur: 0.5, hitAt: 0.2, reach: 1.5, dmg: 1.5, name: 'הוק' },
   kick: { dur: 0.66, hitAt: 0.28, reach: 1.9, dmg: 2, name: 'בעיטה' },
 };
-const COMBO = ['jabR', 'jabL', 'kick'];
+// jab -> cross -> kick; a fourth press inside the combo window throws a hook to finish
+const COMBO = ['jabR', 'jabL', 'kick', 'hook'];
 const _v = new THREE.Vector3();
 
 function billTexture(amount) {
@@ -77,7 +79,7 @@ export class Combat {
     const fx = Math.sin(player.facing), fz = Math.cos(player.facing);
     let best = null, bd = reach;
     for (const p of peds) {
-      if (p.car || p.state === 'inside' || p.state === 'down' || p.state === 'dead' || p.state === 'dazed' || p.state === 'pulled' || p.state === 'thrown') continue;
+      if (p.car || p.state === 'inside' || p.state === 'down' || p.state === 'dead' || p.state === 'dazed' || p.state === 'pulled' || p.state === 'thrown' || p.state === 'knocked' || p.state === 'getup') continue;
       if (Math.abs(p.y - player.y) > 1) continue;
       const dx = p.x - player.x, dz = p.z - player.z, d = Math.hypot(dx, dz);
       if (d < bd && (dx * fx + dz * fz) / (d || 1) > cone) { bd = d; best = p; }
@@ -91,9 +93,14 @@ export class Combat {
     const p = A.tgt && Math.hypot(A.tgt.x - player.x, A.tgt.z - player.z) < m.reach + 0.3 && Math.abs(A.tgt.y - player.y) < 1 && A.tgt.state !== 'down' && A.tgt.state !== 'dead' && A.tgt.state !== 'dazed' ? A.tgt : this._target(player, pedSys.peds, m.reach, 0.35);
     let hit = false;
     if (p) {
-      const r = pedSys.hit(p, player, m.dmg, A.type === 'kick');
+      const r = pedSys.hit(p, player, m.dmg, A.type === 'kick' ? true : A.type === 'hook' ? 'hook' : false);
       if (r) {
         hit = true;
+        // impact burst at the head (punch) or body (kick); blocked blows flash blue
+        const hy = p.y + (A.type === 'kick' ? 1.05 : 1.55), hx = p.x - Math.sin(player.facing) * 0.25, hz = p.z - Math.cos(player.facing) * 0.25;
+        const fx = this.game.hitfx;
+        if (fx) { fx.impact(hx, hy, hz, r === 'block' ? 'block' : (A.type === 'kick' || A.type === 'hook' || r === 'dead' || r === 'knock') ? 'heavy' : 'hit'); if (r === 'knock' || r === 'dead') fx.dustPuff(p.x, p.y, p.z); }
+        if (r !== 'block') this.game.hitStop = A.type === 'kick' || r === 'knock' || r === 'dead' ? 0.09 : 0.05;
         if (r === 'dead') this._drop(p);
         this.game.police?.crime(p.app.cop ? 'copHit' : r === 'dead' ? 'kill' : 'punch', p.x, p.z);
         // bystanders react according to their personality
@@ -108,7 +115,7 @@ export class Combat {
       const y = player.y + (A.type === 'kick' ? 0.6 : 1.25);
       if (segmentVsBox(player.x, y, player.z, player.x + fx * m.reach * 0.8, y, player.z + fz * m.reach * 0.8, v.collider, 0.05) < 1) { v.addDamage(4 * m.dmg, -fx, -fz); hit = true; }
     }
-    if (hit) { ctx.onShake?.(A.type === 'kick' ? 0.25 : 0.12); this.game.audio?.impact(A.type === 'kick' ? 6 : 3.5); }
+    if (hit) { ctx.onShake?.(A.type === 'kick' || A.type === 'hook' ? 0.25 : 0.12); this.game.audio?.impact(A.type === 'kick' || A.type === 'hook' ? 6 : 3.5); }
   }
 
   // ------------------------------------------------------------------ money drops

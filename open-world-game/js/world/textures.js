@@ -43,7 +43,7 @@ function facade(style) {
       g.fillStyle = '#d9e4ec'; g.fillRect(0, 0, 256, 256);
       for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
         const grd = g.createLinearGradient(x * bw, y * fh, x * bw + bw, y * fh + fh);
-        grd.addColorStop(0, '#5c7891'); grd.addColorStop(0.5, '#86a3ba'); grd.addColorStop(1, '#46617a');
+        grd.addColorStop(0, '#8ea7bb'); grd.addColorStop(0.5, '#b9cddb'); grd.addColorStop(1, '#7590a6');   // bright = strong reflection (metallic F0)
         g.fillStyle = grd; g.fillRect(x * bw + 2, y * fh + 3, bw - 4, fh - 6);
       }
       g.fillStyle = 'rgba(255,255,255,0.15)';
@@ -133,6 +133,52 @@ function facadeLit(style) {
   return tex(c);
 }
 export function getFacadeLit(style) { return cache['fl_' + style] ||= facadeLit(style); }
+
+// ---- realism maps (PBR): windows are smooth reflective glass, walls are rough; window recesses / tile grout get depth
+function linear(c, repeat = true) { const t = tex(c, repeat); t.colorSpace = THREE.NoColorSpace; return t; }
+// window rectangles of each facade style (same layout as the colour + night maps)
+function facadeWindows(style, cb) {
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
+    switch (style) {
+      case 'glass': cb(x * 64 + 2, y * 64 + 3, 60, 58); break;
+      case 'office': if (x === 0) cb(0, y * 64 + 18, 256, 36); break;
+      case 'concrete': case 'plaster': cb(x * 64 + 16, y * 64 + 16, 32, 36); break;
+      case 'brick': cb(x * 64 + 18, y * 64 + 14, 28, 38); break;
+      case 'industrial': if (y === 0) cb(x * 64 + 8, 8, 48, 14); break;
+      case 'storefront': if (x === 0 && y === 0) cb(12, 60, 150, 186); break;
+    }
+  }
+}
+// G = roughness, B = metalness (three.js reads those channels)
+function facadeRM(style) {
+  const [c, g] = canvas(256, 256);
+  const r = new RNG(style.length * 13 + 5);
+  g.fillStyle = style === 'glass' ? 'rgb(0,150,40)' : style === 'industrial' ? 'rgb(0,170,60)' : 'rgb(0,220,0)'; g.fillRect(0, 0, 256, 256);
+  // weathering: patches a little smoother/rougher
+  for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(0,${r.int(150, 255)},0,0.25)`; g.fillRect(r.float(0, 256), r.float(0, 256), r.float(4, 22), r.float(4, 22)); }
+  facadeWindows(style, (x, y, w, h) => { g.fillStyle = `rgb(0,${r.int(10, 30)},${style === 'glass' ? 235 : 200})`; g.fillRect(x, y, w, h); });
+  if (style === 'office') { g.fillStyle = 'rgb(0,200,10)'; for (let y = 0; y < 4; y++) for (let x = 0; x < 8; x++) g.fillRect(x * 32, y * 64 + 18, 2, 36); }
+  if (style === 'glass') { g.fillStyle = 'rgb(0,90,180)'; for (let y = 0; y < 4; y++) g.fillRect(0, y * 64, 256, 3); }
+  return linear(c);
+}
+export function getFacadeRM(style) { return cache['frm_' + style] ||= facadeRM(style); }
+// height: walls high, window glass recessed, frames slightly raised
+function facadeBump(style) {
+  const [c, g] = canvas(256, 256);
+  noise(g, 256, 256, '#c8c8c8', style === 'glass' ? 4 : 18, 2600, 2, style.length * 7);
+  if (style === 'brick') { g.fillStyle = '#8a8a8a'; for (let y = 0; y < 256; y += 6) { g.fillRect(0, y, 256, 1); for (let x = ((y / 6) % 2) * 6; x < 256; x += 12) g.fillRect(x, y, 1, 6); } }
+  if (style === 'industrial') { g.fillStyle = '#7a7a7a'; for (let x = 0; x < 256; x += 8) g.fillRect(x, 0, 3, 256); }
+  facadeWindows(style, (x, y, w, h) => { g.fillStyle = '#ececec'; g.fillRect(x - 3, y - 3, w + 6, h + 6); g.fillStyle = '#2a2a2a'; g.fillRect(x, y, w, h); });
+  return linear(c);
+}
+export function getFacadeBump(style) { return cache['fb_' + style] ||= facadeBump(style); }
+// bump map from any colour texture (dark grout / cracks become recesses)
+export function bumpOf(t) {
+  const b = new THREE.CanvasTexture(t.image); b.colorSpace = THREE.NoColorSpace;
+  b.wrapS = t.wrapS; b.wrapT = t.wrapT; b.anisotropy = t.anisotropy; b.repeat.copy(t.repeat);
+  return b;
+}
+
 
 export function getRoof() {
   return cache.roof ||= (() => { const [c, g] = canvas(128, 128); noise(g, 128, 128, '#8b8b88', 30, 2500, 2, 11); return tex(c); })();

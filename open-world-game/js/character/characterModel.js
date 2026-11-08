@@ -293,12 +293,19 @@ export class CharacterModel {
         const A = s.attack, k = Math.min(1, A.t / A.m.dur);
         // smooth extension curve: fast out, slower return
         const e = k < 0.36 ? Math.sin((k / 0.36) * Math.PI / 2) : Math.cos(((k - 0.36) / 0.64) * Math.PI / 2);
-        if (A.type === 'jabR') { target.armR = -1.0 - 0.62 * e; target.elbowR = -1.85 + 1.8 * e; target.twist = 0.38 * e; target.spine = 0.12 + 0.12 * e; }
+        if (A.type === 'hook') { target.armR = -1.0 - 0.5 * e; target.elbowR = -1.85 + 0.5 * e; target.armSide = 0.25 + 0.85 * e; target.twist = 0.75 * e - 0.2; target.spine = 0.12 + 0.12 * e; target.kneeL = 0.4; }
+        else if (A.type === 'jabR') { target.armR = -1.0 - 0.62 * e; target.elbowR = -1.85 + 1.8 * e; target.twist = 0.38 * e; target.spine = 0.12 + 0.12 * e; }
         else if (A.type === 'jabL') { target.armL = -1.0 - 0.62 * e; target.elbowL = -1.85 + 1.8 * e; target.twist = -0.38 * e; target.spine = 0.12 + 0.12 * e; }
         else { // front kick with the right leg
           target.legR = -1.5 * e; target.kneeR = 1.35 - 1.25 * e; target.legL = 0.18 * e; target.kneeL = 0.25;
           target.spine = 0.1 - 0.3 * e; target.twist = -0.1 * e; target.armL = -1.2; target.armR = -0.6;
         }
+      }
+      if (s.hit) {
+        // got hit: head snaps back / sideways, or doubles over from a kick to the body
+        const k = s.hit.k;
+        if (s.hit.kind === 'body') { target.spine += 0.5 * k; target.kneeL += 0.3 * k; target.kneeR += 0.3 * k; target.armL += 0.4 * k; target.armR += 0.4 * k; hipsY -= 0.07 * k; }
+        else { target.spine -= 0.35 * k; target.twist = (target.twist || 0) + 0.45 * (s.hit.side || 1) * k; target.armL -= 0.3 * k; target.armR += 0.25 * k; }
       }
       if (s.chute) { target.armL = target.armR = -2.8; target.elbowL = target.elbowR = -0.2; target.legL = -0.2; target.legR = 0.1; }
     } else if (mode === 'sit' || mode === 'drive' || mode === 'passenger') {

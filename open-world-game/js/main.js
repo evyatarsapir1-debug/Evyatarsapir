@@ -12,6 +12,7 @@ import { LunaPark, LUNA } from './world/lunapark.js';
 import { BoatTraffic } from './world/boats.js';
 import { Military } from './world/military.js';
 import { Crashes } from './game/crashes.js';
+import { HitFX } from './game/hitfx.js';
 import { Police, POLICE_STATION, HOSPITAL } from './game/police.js';
 import { VEHICLE_TYPES } from './vehicles/vehicleTypes.js';
 import { ShopUI, shopKind } from './game/shops.js';
@@ -93,6 +94,7 @@ class Game {
     this.boats = new BoatTraffic(this.scene, this.statics);
     this.military = new Military(this.scene, this.statics);
     this.crashes = new Crashes(this.scene);
+    this.hitfx = new HitFX(this.scene); this.hitStop = 0;
     this.police = new Police(this);
     this.vehicleTypes = VEHICLE_TYPES;
     this.interiors.boardTexture = this.airport.boardTexture;
@@ -587,6 +589,7 @@ class Game {
   // Teleport helper (used by automated tests / debugging); loads the area first so you never fall through the world.
   teleport(x, z, facing = 0, y = 1000) {
     this.chunks.update(x, z, true);
+    this.env.probeAll = true;          // refresh every reflection face at the new spot on the next frame
     this.player.setPosition(x, z, facing, y);
     this.interiors.update(0, this.player, true);
     this.rig.yaw = facing; this.rig.first = true;
@@ -685,6 +688,7 @@ class Game {
     else if (this.state === 'playing') this._playFrame(dt);
     this._lights();
     this.fx.render();
+    this.env.probe(this.camera);   // live reflections: one cube-map face per frame
   }
 
   // time of day + weather -> every light-dependent material
@@ -728,7 +732,7 @@ class Game {
     this.chunks.update(cx, cz);
     this._lighting(dt, cx, cz);
     this.env.update(new THREE.Vector3(cx, 0, cz), dt, this.camera);
-    const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list, ...this.police.cars];
+    const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list, ...this.police.cars, ...(this.police.gone || [])];
     for (const veh of all) veh.setFar(true);
     this.airport.update(dt, this.env.hour, cx, cz, all);
     this.traffic.update(dt, this.time, cx, cz, all, this.peds.obstacles());
@@ -771,6 +775,8 @@ class Game {
   }
 
   _playFrame(dt) {
+    // hit-stop: a heavy blow freezes the action for a split second (feels like a real impact)
+    if (this.hitStop > 0) { this.hitStop -= dt; dt *= 0.15; }
     this._leaveCreatorView();
     const input = this.input, p = this.player;
     input.poll();
@@ -790,7 +796,7 @@ class Game {
     if (input.wasPressed('light')) { if (this.econ.items.flashlight) this.econ.flashlightOn = !this.econ.flashlightOn; else this.toast('אין לך פנס — אפשר לקנות בחנות ציוד', 2); }
     input.fireByMouse = p.state === 'driving' && (p.vehicle?.T.tank || p.vehicle?.T.fighter) ? 'hold' : p.state !== 'foot' ? false : this.econ.equipped ? 'hold' : 'tap';
 
-    const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list, ...this.police.cars];
+    const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list, ...this.police.cars, ...(this.police.gone || [])];
     const pedObs = this.peds.obstacles();
     const world = {
       statics: this.statics, vehicles: all, benches: this.chunks.benches, peds: pedObs,
@@ -863,7 +869,17 @@ class Game {
     this.boats.update(dt, focusX, focusZ, all);
     this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
       onCrime: (k, x, z) => this.police.crime(k, x, z),
-      onPlayerHit: (who, n) => { this.hurt(n, 'קטטה'); this.rig.shake = Math.max(this.rig.shake, 0.3); p.combatT = 3; } });
+      onPlayerHit: (who, n, type) => {
+        // you got hit: flinch, impact burst, camera jolt, a short hit-stop; a kick shoves you back
+        this.hurt(n, 'קטטה'); p.combatT = 3;
+        p.hitT = 0.4; p.hitKind = type === 'kick' ? 'body' : 'head'; p.hitSide = Math.random() < 0.5 ? 1 : -1;
+        const dx = p.x - who.x, dz = p.z - who.z, L = Math.hypot(dx, dz) || 1, push = type === 'kick' ? 0.6 : type === 'hook' ? 0.35 : 0.2;
+        p.x += dx / L * push; p.z += dz / L * push;
+        this.hitfx.impact(p.x - dx / L * 0.2, p.y + (type === 'kick' ? 1.05 : 1.6), p.z - dz / L * 0.2, type === 'kick' || type === 'hook' ? 'heavy' : 'hit');
+        this.rig.shake = Math.max(this.rig.shake, type === 'kick' || type === 'hook' ? 0.45 : 0.28);
+        this.hitStop = type === 'kick' || type === 'hook' ? 0.08 : 0.045;
+        this.audio.impact?.(type === 'kick' ? 6 : 4);
+      } });
     this.airport.update(dt, this.env.hour, focusX, focusZ, all);
     const ride = this.luna.update(dt, focusX, focusZ);
     if (ride?.done) this.toast(ride.done, 3);
@@ -892,6 +908,7 @@ class Game {
       onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); }, message: (m) => this.toast(m, 2),
     });
     this.police.update(dt, { vehicles: all });
+    this.hitfx.update(dt);
     this.crashes.update(dt, { vehicles: all, player: p, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.military.update(dt, { player: p, input, vehicles: all, onCrime: (k, x, z) => this.police.crime(k, x, z), camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.rig.update(dt, input, p);

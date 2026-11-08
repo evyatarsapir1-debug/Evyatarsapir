@@ -7,7 +7,7 @@ const C = (h) => new THREE.Color(h);
 const SKY = {
   night: { top: C(0x050912), hor: C(0x18233a) },
   dusk: { top: C(0x2c3f78), hor: C(0xf0905a) },
-  day: { top: C(0x3d7fd6), hor: C(0xcfe3f2) },
+  day: { top: C(0x2a68c9), hor: C(0xd8e8f4) },
   overcast: { top: C(0x7d8794), hor: C(0xb8c0c8) },
 };
 export const WEATHER = {
@@ -44,7 +44,8 @@ export class Environment {
         float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { v += a * noise(p); p *= 2.1; a *= 0.5; } return v; }
         void main(){ vec3 d = normalize(vDir); float h = clamp(d.y, -0.1, 1.0);
           vec3 c = mix(horizon, top, pow(max(h,0.0), 0.55));
-          float s = max(dot(d, sunDir), 0.0); c += sunColor * (pow(s, 600.0) * 2.5 + pow(s, 8.0) * 0.25) * (1.0 - cloud * 0.8);
+          float s = max(dot(d, sunDir), 0.0); c += sunColor * (pow(s, 900.0) * 4.0 + pow(s, 64.0) * 0.35 + pow(s, 6.0) * 0.22) * (1.0 - cloud * 0.8);
+          c = mix(c, horizon * 1.08, (1.0 - smoothstep(0.0, 0.12, abs(d.y))) * 0.35);   // bright haze right at the horizon
           float m = max(dot(d, moonDir), 0.0); c += vec3(0.85, 0.9, 1.0) * pow(m, 900.0) * 1.6 * night;
           if (h > 0.0) {
             vec2 sp = d.xz / (d.y + 0.15);
@@ -93,12 +94,25 @@ export class Environment {
     envScene.add(s);
     const ground = new THREE.Mesh(new THREE.CircleGeometry(80, 16), new THREE.MeshBasicMaterial({ color: 0x5a5a55 }));
     ground.rotation.x = -Math.PI / 2; ground.position.y = -5; envScene.add(ground);
-    this.scene.environment = pm.fromScene(envScene, 0.02).texture;
+    this.staticEnv = this.scene.environment = pm.fromScene(envScene, 0.02).texture;
     this.scene.environmentIntensity = 0.7;
     pm.dispose();
   }
 
   setQuality(q) {
+    // live reflection probe (medium / high): a small cube map of the real city around the camera, refreshed one face
+    // per frame, so glass towers, windows, cars and wet roads reflect the actual buildings and sky
+    this.probeQ = q;
+    if (q !== 'low') {
+      const res = q === 'high' ? 256 : 128;
+      if (!this.cubeRT || this.cubeRT.width !== res) {
+        this.cubeRT?.dispose();
+        // 8-bit on purpose: a stray NaN pixel (it happens at grazing angles) can't be stored, so it can't smear across all reflections
+        this.cubeRT = new THREE.WebGLCubeRenderTarget(res, { type: THREE.UnsignedByteType, generateMipmaps: false });
+        this.cubeCam = new THREE.CubeCamera(0.5, 3200, this.cubeRT);
+        this.probeFace = 0; this.probeReady = false;
+      }
+    } else { this.scene.environment = this.staticEnv; this.probeReady = false; }
     const size = q === 'high' ? 4096 : 2048;
     this.sun.castShadow = q !== 'low';
     if (this.sun.shadow.mapSize.x !== size) {
@@ -160,7 +174,8 @@ export class Environment {
     this.hemi.intensity = 0.18 + day * 0.95 * (1 - cl * 0.25);
     this.hemi.color.setHex(0xcfe6ff).lerp(C(0x5a6b8f), this.night);
     this.hemi.groundColor.setHex(0x6b6250).lerp(C(0x1b1d24), this.night);
-    this.scene.environmentIntensity = 0.12 + 0.6 * day + this.wet * 0.3;
+    // the live probe already contains the real brightness (dark at night); the static fallback needs scaling
+    this.scene.environmentIntensity = this.probeReady ? 0.45 + 0.45 * day + this.wet * 0.35 : 0.12 + 0.6 * day + this.wet * 0.3;
     this.scene.fog.color.copy(hor);
     const ff = this.fogFar * this.w.fog;
     this.scene.fog.far = ff * 0.97; this.scene.fog.near = ff * 0.25 * this.w.fog;
@@ -168,6 +183,27 @@ export class Environment {
     this.rain.material.opacity = this.w.rain * 0.45;
     this.rain.visible = this.w.rain > 0.02;
     return { night: this.night, wet: this.wet, rain: this.w.rain };
+  }
+
+  // render one face of the reflection probe per call (call once per frame after the main render)
+  probe(camera) {
+    if (this.probeQ === 'low' || !this.cubeCam) return;
+    if (this.probeAll) { this.probeAll = false; this.probeFace = 0; this.probeAllRun = true; for (let i = 0; i < 6; i++) this.probe(camera); this.probeAllRun = false; return; }
+    const r = this.renderer, cc = this.cubeCam;
+    if (cc.coordinateSystem !== r.coordinateSystem) { cc.coordinateSystem = r.coordinateSystem; cc.updateCoordinateSystem(); }
+    if (this.probeFace === 0) { cc.position.set(camera.position.x, Math.max(camera.position.y, 1.6), camera.position.z); cc.updateMatrixWorld(); }
+    const prevT = r.getRenderTarget(), auto = r.shadowMap.autoUpdate, env = this.scene.environment, rain = this.rain.visible;
+    r.shadowMap.autoUpdate = false;                           // reuse this frame's shadow map
+    this.scene.environment = this.staticEnv; this.rain.visible = false;
+    r.setRenderTarget(this.cubeRT, this.probeFace);
+    r.render(this.scene, cc.children[this.probeFace]);
+    r.setRenderTarget(prevT);
+    r.shadowMap.autoUpdate = auto; this.rain.visible = rain; this.scene.environment = env;
+    this.probeFace = (this.probeFace + 1) % 6;
+    if (this.probeFace === 0) {
+      this.cubeRT.texture.needsPMREMUpdate = true;
+      if (!this.probeReady) { this.probeReady = true; this.scene.environment = this.cubeRT.texture; }
+    }
   }
 
   _mix(a, b, t) { return new THREE.Color().copy(a).lerp(b, t); }
