@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Vehicle } from '../vehicles/vehicle.js';
 import { heightAt } from '../world/terrain.js';
 import { segmentVsBox } from '../physics/collision.js';
+import { P } from '../world/layout.js';
 
 export const POLICE_STATION = { x: 750, z: 112, name: 'תחנת משטרה' };
 export const HOSPITAL = { x: 150, z: 212, name: 'בית חולים' };
@@ -32,7 +33,7 @@ export class Police {
     this.level = Math.min(5, Math.max(this.level, 1) + (this.level > 0 ? sev * 0.5 : sev - 1));
     this.level = Math.round(this.level * 2) / 2;
     if (Math.floor(this.level) > Math.floor(before)) this.game.toast(`${'★'.repeat(Math.floor(this.level))} המשטרה מחפשת אותך!`, 2.5);
-    this.unseen = 0; this.lastKnown = { x, z }; this.sinceCrime = 0;
+    this.unseen = 0; this.lastKnown = { x, z }; this.sinceCrime = 0; if (!before) this.noReach = 0;
   }
   _copNear(x, z, r) {
     for (const c of this.cars) if (!c.removed && Math.hypot(c.x - x, c.z - z) < r) return true;
@@ -42,7 +43,7 @@ export class Police {
   }
 
   clear(msg) {
-    this.level = 0; this.heat = 0; this.unseen = 0; this.arrestT = 0; this.lastKnown = null;
+    this.level = 0; this.heat = 0; this.unseen = 0; this.noReach = 0; this.arrestT = 0; this.lastKnown = null;
     this.gone = this.gone || [];
     for (const c of this.cars) { if (msg && !c.wrecked) { c.siren = false; c.leaveT = 15; this.gone.push(c); } else this._remove(c); }
     this.cars = [];
@@ -62,6 +63,33 @@ export class Police {
     return d < 18 || (d < r && this._los(x, z, pos.x, pos.z, (y || 0) + 1.5, pos.y + 1.4));
   }
 
+  // A* over the street network (junction nodes every 100 m) from the road nearest to (x0,z0) to the one nearest (x1,z1)
+  _roadNode(x, z) {
+    const G = this.game.graph, gx = Math.round(x / P), gz = Math.round(z / P);
+    let best = null, bd = Infinity;
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const n = G.node(gx + i, gz + j); if (!n.nbrs.length) continue; const d = Math.hypot(n.x - x, n.z - z); if (d < bd) { bd = d; best = n; } }
+    return best;
+  }
+  _route(x0, z0, x1, z1) {
+    const G = this.game.graph, s = this._roadNode(x0, z0), t = this._roadNode(x1, z1);
+    if (!s || !t) return null;
+    if (s === t) return [t];   // same junction: go there, then straight to the goal
+    const open = [s], came = new Map(), gS = new Map([[s.key, 0]]), h = (n) => Math.hypot(n.x - t.x, n.z - t.z);
+    const fS = new Map([[s.key, h(s)]]), closed = new Set();
+    for (let it = 0; it < 900 && open.length; it++) {
+      let bi = 0; for (let i = 1; i < open.length; i++) if (fS.get(open[i].key) < fS.get(open[bi].key)) bi = i;
+      const cur = open.splice(bi, 1)[0];
+      if (cur === t) { const path = [t]; let k = t.key; while (came.has(k)) { const p = came.get(k); path.unshift(p); k = p.key; } return path; }   // starts with the junction nearest the car
+      closed.add(cur.key);
+      for (const nk of cur.nbrs) {
+        if (closed.has(nk)) continue;
+        const n = G.get(nk), gv = gS.get(cur.key) + Math.hypot(n.x - cur.x, n.z - cur.z);
+        if (gv < (gS.get(nk) ?? Infinity)) { came.set(nk, cur); gS.set(nk, gv); fS.set(nk, gv + h(n)); if (!open.includes(n)) open.push(n); }
+      }
+    }
+    return null;
+  }
+
   update(dt, ctx) {
     const g = this.game, P = g.player, pos = g.playerPos(), stars = Math.floor(this.level);
     this._leaving(dt, ctx, pos);
@@ -75,56 +103,93 @@ export class Police {
     const nearSpot = Math.hypot(pos.x - this.lastKnown.x, pos.z - this.lastKnown.z) < 40;
     const informed = hunting || this.sinceCrime < 4 || nearSpot;
     this.cars = this.cars.filter((c) => !c.removed);
-    // ---- reinforcements only while they can see you; once you are out of sight no new cars appear
+    // ---- reinforcements: a new patrol car sets off from a street 120-180 m away and drives to you along the roads
     this.spawnT -= dt;
     if (this.cars.length < want && this.spawnT <= 0 && informed) {
-      this.spawnT = 2.5;
-      const a = Math.random() * Math.PI * 2, d = 75 + Math.random() * 40;
+      this.spawnT = 0.4;                       // keep trying until a good street is found
+      const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 60;
       const s = g.roadsideSpot(this.lastKnown.x + Math.cos(a) * d, this.lastKnown.z + Math.sin(a) * d);
-      if (s && Math.hypot(s.x - pos.x, s.z - pos.z) > 55) {
+      const sd = s ? Math.hypot(s.x - pos.x, s.z - pos.z) : 0;
+      if (s && sd > 90 && (sd > 130 || !this._los(s.x, s.z, pos.x, pos.z))) {
+        this.spawnT = 3;
         const v = new Vehicle('police', 0xf5f5f5, s.x, s.z, s.heading, 0);
         v.driver = 'police'; v.siren = true; v.stuck = 0;
         g.scene.add(v.object); this.cars.push(v);
         g.peds.addDriver?.(v);
       }
     }
-    // ---- pursuit: drive at you while they see you; otherwise search around where you were last seen
-    let seen = false;
+    // ---- pursuit along the streets: plan a route over the road network, follow it, slow down for corners;
+    //      the last stretch (you in sight, close) is driven straight at you
+    let seen = false, reached = false;
     for (const c of this.cars) {
       const dP = Math.hypot(pos.x - c.x, pos.z - c.z);
-      if (dP > 360) { this._remove(c); continue; }
+      if (dP > 420) { this._remove(c); continue; }
       const sees = !c.wrecked && this._sees(c.x, c.z, c.y, pos, 70);
       if (sees) seen = true;
-      let tx = pos.x, tz = pos.z;
+      if (dP < 25) reached = true;
+      // goal: you (while they know where you are) or a search point around where you were last seen
+      let gx = pos.x, gz = pos.z;
       if (!hunting) {
-        // search: drive to the last known spot, then cruise around it
-        if (!c.search || Math.hypot(c.search.x - c.x, c.search.z - c.z) < 12 || c.searchT <= 0) {
-          const a = Math.random() * Math.PI * 2, r = c.search ? 25 + Math.random() * 55 : 0;
-          c.search = { x: this.lastKnown.x + Math.cos(a) * r, z: this.lastKnown.z + Math.sin(a) * r }; c.searchT = 9;
+        if (!c.search || Math.hypot(c.search.x - c.x, c.search.z - c.z) < 15 || c.searchT <= 0) {
+          const a = Math.random() * Math.PI * 2, r = c.search ? 30 + Math.random() * 70 : 0;
+          c.search = { x: this.lastKnown.x + Math.cos(a) * r, z: this.lastKnown.z + Math.sin(a) * r }; c.searchT = 14; c.route = null;
         }
-        c.searchT -= dt; tx = c.search.x; tz = c.search.z;
+        c.searchT -= dt; gx = c.search.x; gz = c.search.z;
       } else c.search = null;
+      const direct = hunting && (dP < 40 && sees || dP < 16);
+      c.routeT = (c.routeT || 0) - dt;
+      if (!direct && (!c.route || c.routeT <= 0 || !c.route.length)) {
+        const r = this._route(c.x, c.z, gx, gz); c.routeT = 2;
+        // already driving away from the first junction towards the second one? skip the first
+        if (r && r.length > 1) { const a = r[0], b = r[1], sx = b.x - a.x, sz = b.z - a.z, u = ((c.x - a.x) * sx + (c.z - a.z) * sz) / (sx * sx + sz * sz || 1); if (u > 0.05 && u < 1) { c.lastNode = a; r.shift(); } }
+        c.route = r;
+      }
+      let tx = gx, tz = gz, corner = false;
+      if (!direct && c.route && c.route.length) {
+        while (c.route.length && Math.hypot(c.route[0].x - c.x, c.route[0].z - c.z) < 9) c.lastNode = c.route.shift();
+        if (c.route.length) {
+          // pure pursuit: project the car onto the street it is on, then aim 12 m further along the route
+          const n0 = c.route[0], prev = c.lastNode && Math.hypot(c.lastNode.x - n0.x, c.lastNode.z - n0.z) < 160 ? c.lastNode : null;
+          let px = c.x, pz = c.z;
+          if (prev) {
+            const sx = n0.x - prev.x, sz = n0.z - prev.z, L2 = sx * sx + sz * sz || 1;
+            const u = Math.max(0, Math.min(1, ((c.x - prev.x) * sx + (c.z - prev.z) * sz) / L2));
+            px = prev.x + sx * u; pz = prev.z + sz * u;
+          }
+          let left = 12, ax = px, az = pz;
+          const pts = [n0, ...c.route.slice(1, 3)];
+          tx = n0.x; tz = n0.z;
+          for (const q of pts) {
+            const seg = Math.hypot(q.x - ax, q.z - az);
+            if (seg >= left) { tx = ax + (q.x - ax) * left / seg; tz = az + (q.z - az) * left / seg; left = 0; break; }
+            left -= seg; ax = q.x; az = q.z; tx = q.x; tz = q.z;
+          }
+          if (left > 0 && c.route.length <= 1) { const gd = Math.hypot(gx - ax, gz - az) || 1; tx = ax + (gx - ax) * Math.min(1, left / gd); tz = az + (gz - az) * Math.min(1, left / gd); }
+          const n1 = c.route[1];
+          if (n1) {   // a turn coming up at the next junction: brake into it
+            const a1 = prev ? Math.atan2(n0.x - prev.x, n0.z - prev.z) : Math.atan2(n0.x - c.x, n0.z - c.z), a2 = Math.atan2(n1.x - n0.x, n1.z - n0.z);
+            corner = Math.abs(Math.atan2(Math.sin(a2 - a1), Math.cos(a2 - a1))) > 0.6 && Math.hypot(n0.x - c.x, n0.z - c.z) < 35;
+          }
+        }
+      }
       const dx = tx - c.x, dz = tz - c.z, d = Math.hypot(dx, dz);
       let e = Math.atan2(dx, dz) - c.heading; e = Math.atan2(Math.sin(e), Math.cos(e));
-      const close = hunting && d < 14;
-      const cruise = hunting ? 1 : 0.55;
-      const ctl = { throttle: close ? (Math.abs(c.speed) > 2 ? -1 : 0) : (Math.abs(e) > 1.4 ? 0.4 : cruise), steer: Math.max(-1, Math.min(1, -e * 2.2)), handbrake: false };
+      const close = hunting && dP < 13;
+      const vWant = close ? 0 : corner ? 11 : Math.abs(e) > 0.9 ? 8 : (hunting || informed) ? (dP < 60 ? 18 : 30) : 15;   // racing in with the siren, slower when searching
+      const sp = c.speed;
+      const ctl = { throttle: sp < vWant - 1 ? (Math.abs(e) > 1.4 ? 0.5 : 1) : sp > vWant + 2 ? -0.8 : 0.15, steer: Math.max(-1, Math.min(1, -e * 2.2)), handbrake: false };
+      if (close && Math.abs(sp) < 1.5) ctl.throttle = 0;
       if (c.wrecked) { ctl.throttle = 0; c.siren = false; }
       c.update(dt, ctl, g.statics, ctx.vehicles);
-      c.stuck = Math.abs(c.speed) < 1 && !close ? c.stuck + dt : 0;
-      if (c.stuck > 2.5 && c.stuck < 4) c.update(dt, { throttle: -1, steer: -ctl.steer }, g.statics, ctx.vehicles);
-      if (c.stuck > 8 && dP > 60) this._remove(c);
-      // blocked by buildings while they can see you: reappear on a road closer (only while hunting)
-      if (c.best === undefined || dP < c.best - 5) { c.best = dP; c.prog = 0; } else c.prog += dt;
-      if (c.prog > 5 && dP > 45 && !c.wrecked && informed) {
-        const a = Math.random() * Math.PI * 2, r = 40 + Math.random() * 25;
-        const s = g.roadsideSpot(pos.x + Math.cos(a) * r, pos.z + Math.sin(a) * r);
-        if (s && Math.hypot(s.x - pos.x, s.z - pos.z) > 30) { c.x = s.x; c.z = s.z; c.heading = Math.atan2(pos.x - s.x, pos.z - s.z); c.speed = 0; c.vx = 0; c.vz = 0; c.object.position.set(c.x, c.y || 0, c.z); }
-        c.best = undefined;
-      }
+      // stuck against something: back up and try again; a car that stays stuck out of sight is replaced by another unit
+      c.stuck = Math.abs(c.speed) < 1 && !close ? c.stuck + dt : (c.stuck > 1.5 && c.stuck < 3.6 ? c.stuck + dt : 0);
+      if (c.stuck > 1.5 && c.stuck < 3.6) c.update(dt, { throttle: -1, steer: ctl.steer > 0 ? -1 : 1 }, g.statics, ctx.vehicles);
+      if (c.stuck > 3.6 && c.stuck < 4) c.route = null;
+      if (c.stuck > 10 && dP > 60 && !sees) this._remove(c);
       // officers get out when the car is next to you and you are on foot
-      if ((dP < 26 || (dP < 42 && Math.abs(c.speed) < 1.5 && sees)) && hunting && (close || c.prog > 2 || Math.abs(c.speed) < 2) && P.state === 'foot' && !c.deployed && !c.wrecked) { c.deployed = true; g.peds.addCop?.(c.x + 2, c.z, true); }
+      if ((dP < 26 || (dP < 42 && Math.abs(c.speed) < 1.5 && sees)) && hunting && (close || Math.abs(c.speed) < 2) && P.state === 'foot' && !c.deployed && !c.wrecked) { c.deployed = true; g.peds.addCop?.(c.x + 2, c.z, true); }
     }
+    for (const p of g.peds.peds) if (p.app.cop && p.copChase && p.state !== 'dead' && Math.hypot(p.x - pos.x, p.z - pos.z) < 25) reached = true;
     for (const p of g.peds.peds) if (p.app.cop && p.copChase && p.state !== 'dead' && this._sees(p.x, p.z, p.y, pos, 45)) seen = true;
     // officers on foot who lost you go to the last place they saw you
     for (const p of g.peds.peds) if (p.app.cop && p.copChase) p.chaseTo = hunting ? null : this.lastKnown;
@@ -146,13 +211,15 @@ export class Police {
         if (Math.random() < 0.45) g.hurt(P.state === 'driving' ? 3 : 6, 'משטרה');
       }
     }
-    // ---- escaping: out of sight -> the stars blink; stay hidden until the timer runs out and they give up for good
-    // hiding right where they last saw you barely helps: you have to get away from that spot
-    this.unseen = seen ? 0 : this.unseen + dt * (nearSpot ? 0.35 : 1);
+    // ---- escaping: out of sight -> the stars blink. They give up after 50 s without seeing you,
+    //      or after 50 s in which no officer managed to get to you (you are out of their reach)
+    this.unseen = seen ? 0 : this.unseen + dt;
+    this.noReach = reached ? 0 : (this.noReach || 0) + dt;
     if (seen) this.lastKnown = { x: pos.x, z: pos.z };
     if (this.unseen > this.escapeTime) this.clear('התחמקת! הכוכבים נעלמו — המשטרה הפסיקה לחפש אותך.');
+    else if (this.noReach > this.escapeTime) this.clear('המשטרה לא הצליחה להגיע אליך — הם עזבו. הכוכבים נעלמו.');
   }
-  get escapeTime() { return 6 + Math.floor(this.level) * 2.5; }   // 1 star: 8.5 s ... 5 stars: 18.5 s out of sight
+  get escapeTime() { return 50; }   // seconds out of sight (or out of reach) before the police give up
 
   // cars that gave up: siren off, drive away from you, then disappear out of the way
   _leaving(dt, ctx, pos) {
@@ -177,7 +244,10 @@ export class Police {
   _hud(stars, dt) {
     if (!this.hud) return;
     const half = this.level - stars >= 0.5;
-    const html = stars || half ? '★'.repeat(stars) + (half ? '<i>★</i>' : '') + '<s>' + '★'.repeat(5 - stars - (half ? 1 : 0)) + '</s>' : '';
+    // countdown to escape: shown once they lost sight of you (or have not reached you for a while)
+    const lost = Math.max(this.unseen > 1.5 ? this.unseen : 0, (this.noReach || 0) > 20 ? this.noReach : 0);
+    const left = lost > 0 ? Math.max(0, Math.ceil(this.escapeTime - lost)) : 0;
+    const html = stars || half ? '<span class="st">' + '★'.repeat(stars) + (half ? '<i>★</i>' : '') + '<s>' + '★'.repeat(5 - stars - (half ? 1 : 0)) + '</s></span>' + (left ? `<b>${this.unseen > 1.5 ? 'מסתתר' : 'מחוץ להישג'} · ${left}</b>` : '') : '';
     if (this.hud.dataset.h !== html) { this.hud.innerHTML = html; this.hud.dataset.h = html; }
     this.hud.classList.toggle('blink', stars > 0 && this.unseen > 1.5);
   }

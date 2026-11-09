@@ -872,7 +872,7 @@ class Game {
     for (const car of all) if (car.driver === 'ai' && !car.driverPed && !car.isAir && !car.removed) this.peds.addDriver(car);
     this.vehicles.update(dt, focusX, focusZ, all, (x, z) => this.chunks.isPhysicsReady(x, z), !!(v && v.isAir && v.airborne && v.y > 25));
     this.boats.update(dt, focusX, focusZ, all);
-    this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
+    this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, copsArmed: this.police.level >= 3, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
       onCrime: (k, x, z) => this.police.crime(k, x, z),
       onPlayerHit: (who, n, type) => {
         // you got hit: flinch, impact burst, camera jolt, a short hit-stop; a kick shoves you back

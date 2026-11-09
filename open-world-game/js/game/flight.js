@@ -69,6 +69,7 @@ export class Flight {
     } else {
       const rw = this._pickLanding(v);
       this.auto = { mode: 'land', rw, phase: 'approach' };
+      if (rw.r.id === 'air' && !this.train) this.game.airport.clearRunway(this.holdToken ||= { player: true });   // the tower clears the runway for you
       this.game.toast(`נחיתה מסייעת: ${rw.r.name}. המטוס יתיישר עם המסלול ויאט בהדרגה`, 3.5);
     }
   }
@@ -195,7 +196,7 @@ export class Flight {
     const sd = r.side, z = r.z;
     const rings = [[-1700, z, 110], [-2450, z + sd * 380, 170], [-3350, z + sd * 260, 170], [-3300, z, 140]].map(([x, zz, y]) => ({ x, z: zz, y: heightAt(x, zz, 2) + y }));
     this.train = { kind, r, v, rings, step: 0, t: 0 };
-    if (r.id === 'air') g.airport.runway = this.train;      // airport traffic holds while you train
+    if (r.id === 'air') g.airport.clearRunway(this.train);  // airport traffic gets out of the way and holds while you train
     this.stab = true;
     this._ringMeshes(rings);
     g.toast('ברוך הבא לבית הספר לטיסה! עקוב אחרי ההוראות למעלה', 3.5);
@@ -319,6 +320,8 @@ export class Flight {
   update(dt) {
     const g = this.game, P = g.player, v = P.state === 'driving' && P.vehicle?.isPlane ? P.vehicle : null;
     if (this.warnT > 0) this.warnT -= dt;
+    // release the runway reservation once the assisted landing is over
+    if (this.holdToken && g.airport.runway === this.holdToken && !(this.auto?.mode === 'land' && this.auto.rw.r.id === 'air')) g.airport.runway = null;
     if (this.train) this._trainUpdate(dt);
     this.hud.classList.toggle('show', !!v);
     if (!v) { if (this.lastPlane?.parts.jetMesh) this.lastPlane.parts.jetMesh.visible = true; this.marker.style.display = 'none'; this.gateGroup.visible = false; if (this.auto) this.auto = null; return; }

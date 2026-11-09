@@ -433,9 +433,12 @@ export class Vehicle {
       this.parts.door.rotation.y = -this.doorAngle * 1.1 * (this.isHeli ? 1 : 1);
     }
     if (this.parts.sirenR) {
-      const on = this.siren && Math.floor(performance.now() / 250) % 2 === 0;
-      this.parts.sirenR.material.emissiveIntensity = this.siren ? (on ? 2 : 0.1) : 0.3;
-      this.parts.sirenB.material.emissiveIntensity = this.siren ? (on ? 0.1 : 2) : 0.3;
+      // realistic double-flash pattern: red-red ... blue-blue, each car slightly out of step with the others
+      this.flashOff ??= Math.random();
+      const ph = (performance.now() / 1000 * 1.6 + this.flashOff) % 1;
+      const r = (ph < 0.08 || (ph > 0.16 && ph < 0.24)), b = ((ph > 0.5 && ph < 0.58) || (ph > 0.66 && ph < 0.74));
+      this.parts.sirenR.material.emissiveIntensity = this.siren ? (r ? 4 : 0.08) : 0.15;
+      this.parts.sirenB.material.emissiveIntensity = this.siren ? (b ? 4 : 0.08) : 0.15;
     }
     if (this.lastImpact > 0) this.lastImpact = Math.max(0, this.lastImpact - (dt || 0) * 10);
     if (this.bumped > 0) this.bumped -= dt || 0;

@@ -53,6 +53,16 @@ class Rig {
     this.a.vest = g(this.spine, 0, 0.27, 0.0);
     this.a.rifle = g(this.spine, 0.02, 0.3, -0.17); this.a.rifle.rotation.z = 0.85;
     this.a.phone = g(this.a.hand[1], 0, -0.02, 0.05);
+    // police uniform parts
+    this.a.cap = g(this.head, 0, 0.075, -0.005);
+    this.a.brim = g(this.head, 0, 0.055, 0.11); this.a.brim.rotation.x = 0.12;
+    this.a.badge = g(this.head, 0, 0.1, 0.118);
+    this.a.cvest = g(this.spine, 0, 0.27, 0.0);
+    this.a.stripe = g(this.spine, 0, 0.22, 0.0);
+    this.a.belt = g(this.spine, 0, 0.0, 0.0);
+    this.a.holster = g(this.spine, 0.17, -0.04, 0.02);
+    this.a.radio = g(this.spine, -0.12, 0.38, 0.12);
+    this.a.pistol = g(this.a.hand[1], 0, -0.02, 0.07); this.a.pistol.rotation.x = Math.PI / 2;
     this.a.bag = g(this.a.hand[0], -0.12, -0.3, 0);
   }
 }
@@ -101,6 +111,16 @@ export class Pedestrians {
       vest: mk(new THREE.BoxGeometry(0.36, 0.34, 0.25), MAX, 0x3d4428),
       rifle: mk(new THREE.BoxGeometry(0.05, 0.75, 0.06), MAX, 0x1d1f1c),
       bag: mk(new THREE.BoxGeometry(0.22, 0.55, 0.38), MAX, 0x2c3e50),
+      // police: peaked cap, visor, cap badge, tactical vest with a reflective band, duty belt, holster, radio, pistol
+      cap: mk(new THREE.CylinderGeometry(0.128, 0.118, 0.085, 14), MAX, 0x141c33),
+      brim: mk(new THREE.BoxGeometry(0.2, 0.014, 0.085), MAX, 0x0b0f1a),
+      badge: mk(new THREE.BoxGeometry(0.035, 0.035, 0.008), MAX, 0xd8b84a),
+      cvest: mk(new THREE.BoxGeometry(0.37, 0.33, 0.255), MAX, 0x1b1e26),
+      stripe: mk(new THREE.BoxGeometry(0.375, 0.035, 0.26), MAX, 0xd9e8a0),
+      belt: mk(new THREE.BoxGeometry(0.33, 0.06, 0.23), MAX, 0x111111),
+      holster: mk(new THREE.BoxGeometry(0.05, 0.13, 0.09), MAX, 0x111111),
+      radio: mk(new THREE.BoxGeometry(0.05, 0.08, 0.03), MAX, 0x222222),
+      pistol: mk(new THREE.BoxGeometry(0.03, 0.05, 0.17).translate(0, 0, 0.04), MAX, 0x1a1c1f),
     };
     this.zero = new THREE.Matrix4().makeScale(0, 0, 0);
     this.benchesTaken = new Set();
@@ -160,6 +180,8 @@ export class Pedestrians {
       const set = (m, idx, hex) => m.setColorAt(idx, c.setHex(hex));
       set(this.M.neck, i, a.skin); set(this.M.nose, i, a.skin); set(this.M.eyes, i, 0x1a1a1a); set(this.M.shoulders, i, a.swim ? a.skin : a.shirt);
       set(this.M.helmet, i, a.cop ? 0x111d3a : 0x4b5320); set(this.M.vest, i, 0x3d4428); set(this.M.rifle, i, 0x1d1f1c);
+      set(this.M.cap, i, 0x141c33); set(this.M.brim, i, 0x0b0f1a); set(this.M.badge, i, 0xd8b84a); set(this.M.cvest, i, 0x1b1e26); set(this.M.stripe, i, 0xd9e8a0);
+      set(this.M.belt, i, 0x111111); set(this.M.holster, i, 0x111111); set(this.M.radio, i, 0x222222); set(this.M.pistol, i, 0x1a1c1f);
       if (a.swim) {
         // swimwear: trunks / swimsuit in a bright colour, bare arms and legs, barefoot
         const sw = a.swimColor;
@@ -266,7 +288,7 @@ export class Pedestrians {
   }
 
   _copLook(p) {
-    Object.assign(p.app, { shirt: 0x1f3d7a, pants: 0x14213d, shoes: 0x111111, cop: true, long: false });
+    Object.assign(p.app, { shirt: 0x7ea6d8, pants: 0x1a2440, shoes: 0x0e0e0e, cop: true, long: false });
     p.phone = false; p.suitcase = false; p.temper = 'fight'; p.walkSpeed = 1.35; p.hp = p.maxHp = 12;
     this._colors();
   }
@@ -416,6 +438,8 @@ export class Pedestrians {
           if (p.copStuck > 1.2 && d > 1.6) { p.detour = { t: 1.3, s: this.rng.chance(0.5) ? 1 : -1 }; p.copStuck = 0; p.copBest = undefined; }
           if (p.detour) { p.detour.t -= dt; goal = [p.x + (-dz / d) * p.detour.s * 3 + dx / d, p.z + (dx / d) * p.detour.s * 3 + dz / d]; if (p.detour.t <= 0) p.detour = null; }
         } else { speed = 0; pose = 'guard'; }
+        if (ctx.copsArmed && d < 30 && d > 3 && !p.chaseTo && p.aimFor > 0) { speed = 0; pose = 'aimGun'; goal = null; p.yaw = dampAngle(p.yaw, Math.atan2(dx, dz), 10, dt); }
+        p.aimFor = (p.aimFor ?? 0) - dt; if (p.aimFor < -3) p.aimFor = 2.5;   // alternate: run closer, then stop and aim
         if (d > 160) p.copChase = false;
         break;
       }
@@ -893,6 +917,10 @@ export class Pedestrians {
       case 'fall':
         t.bodyX = -1.45; t.armL = -2.6; t.armR = -2.4; t.legL = 0.1; t.legR = -0.2; hipsY = 0.2;
         break;
+      case 'aimGun':
+        // officer covering you with a pistol: two-handed grip, arms straight out
+        t.armR = -1.5; t.elbowR = -0.08; t.armL = -1.42; t.elbowL = -0.2; t.side = -0.22; t.spine = 0.05; t.kneeL = t.kneeR = 0.18; hipsY = 0.92;
+        break;
       case 'guard': case 'punch': case 'block': case 'slip': {
         // boxing guard, knees soft, light bounce; strikes drive from the hips
         const bob = Math.sin(now * 7 + p.phase) * 0.025;
@@ -966,7 +994,11 @@ export class Pedestrians {
       M.neck.setMatrixAt(i, a.neck.matrixWorld); M.shoulders.setMatrixAt(i, a.shoulders.matrixWorld);
       M.nose.setMatrixAt(i, a.nose.matrixWorld); M.eyes.setMatrixAt(i, a.eyes.matrixWorld);
       const sol = !!p.app.soldier;
-      M.helmet.setMatrixAt(i, sol || p.app.cop ? a.helmet.matrixWorld : this.zero); M.vest.setMatrixAt(i, sol ? a.vest.matrixWorld : this.zero); M.rifle.setMatrixAt(i, sol ? a.rifle.matrixWorld : this.zero);
+      const cop = !!p.app.cop;
+      for (const k of ['cap', 'brim', 'badge', 'cvest', 'stripe', 'belt', 'holster', 'radio']) M[k].setMatrixAt(i, cop ? a[k].matrixWorld : this.zero);
+      M.pistol.setMatrixAt(i, cop && p.pose === 'aimGun' ? a.pistol.matrixWorld : this.zero);
+      if (cop) M.hairS.setMatrixAt(i, this.zero);
+      M.helmet.setMatrixAt(i, sol ? a.helmet.matrixWorld : this.zero); M.vest.setMatrixAt(i, sol ? a.vest.matrixWorld : this.zero); M.rifle.setMatrixAt(i, sol ? a.rifle.matrixWorld : this.zero);
       if (sol) M.hairS.setMatrixAt(i, this.zero);
       M.bag.setMatrixAt(i, p.suitcase && p.pose !== 'sit' ? a.bag.matrixWorld : this.zero);
       for (let s = 0; s < 2; s++) {

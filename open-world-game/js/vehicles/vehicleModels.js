@@ -216,6 +216,22 @@ function milModel(T, parts, g, body, paint) {
   parts.panels.rear = m(box(W * 0.8, 0.2, 0.12), dark, body, 0, 0.7, -L / 2 - 0.02);
 }
 
+// police livery: a blue band with white "משטרה" lettering and a blue / yellow checker line (canvas textures)
+let _band = null;
+function policeBand() {
+  if (_band) return _band;
+  const mk = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return new THREE.MeshStandardMaterial({ map: t, roughness: 0.4, metalness: 0.2, polygonOffset: true, polygonOffsetFactor: -2, transparent: true }); };
+  const side = mk(1024, 128, (g, w, h) => {
+    g.fillStyle = '#123a9c'; g.fillRect(0, 10, w, 74);
+    const s = 18; for (let x = 0; x < w; x += s) { g.fillStyle = (x / s) % 2 ? '#123a9c' : '#f2d12e'; g.fillRect(x, 90, s, 16); g.fillStyle = (x / s) % 2 ? '#f2d12e' : '#123a9c'; g.fillRect(x, 106, s, 16); }
+    g.fillStyle = '#fff'; g.font = 'bold 58px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.direction = 'rtl';
+    g.fillText('משטרה', w / 2, 49);
+    g.font = 'bold 26px Arial'; g.fillText('100', w * 0.13, 49); g.fillText('לוס אנטוס', w * 0.86, 49);
+  });
+  const hood = mk(512, 128, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = '#123a9c'; g.font = 'bold 84px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.direction = 'rtl'; g.fillText('משטרה', w / 2, h / 2); });
+  return (_band = { side, hood });
+}
+
 export function buildVehicleModel(type, color) {
   if (type.kind === 'plane') return type.fighter ? buildFighter(color) : buildJet(color);
   const T = type, g = new THREE.Group();
@@ -347,9 +363,26 @@ export function buildVehicleModel(type, color) {
         m(box(W + 0.01, 0.08, L * 0.6), shared.dark, body, 0, clear + lowH * 0.6, 0);
       }
       if (T.police) {
-        parts.sirenR = m(box(0.45, 0.14, 0.25), shared.red, body, -0.25, H + 0.06, cabZ);
-        parts.sirenB = m(box(0.45, 0.14, 0.25), shared.blue, body, 0.25, H + 0.06, cabZ);
-        m(box(W + 0.01, 0.22, L * 0.8), new THREE.MeshStandardMaterial({ color: 0x1f3d8a }), body, 0, clear + lowH * 0.55, 0);
+        // each patrol car has its own light materials so the lights flash independently
+        const lr = new THREE.MeshStandardMaterial({ color: 0x5a0000, emissive: 0xff1a1a, emissiveIntensity: 0.15, roughness: 0.3 });
+        const lb = new THREE.MeshStandardMaterial({ color: 0x00104f, emissive: 0x2060ff, emissiveIntensity: 0.15, roughness: 0.3 });
+        // light bar: black base, red / blue segments, a small white centre light
+        m(box(W * 0.84, 0.07, 0.34), shared.dark, body, 0, H + 0.035, cabZ);
+        parts.sirenR = m(box(0.34, 0.11, 0.27), lr, body, -0.21, H + 0.12, cabZ); m(box(0.18, 0.1, 0.25), lr, body, -0.55, H + 0.115, cabZ);
+        parts.sirenB = m(box(0.34, 0.11, 0.27), lb, body, 0.21, H + 0.12, cabZ); m(box(0.18, 0.1, 0.25), lb, body, 0.55, H + 0.115, cabZ);
+        m(box(0.07, 0.09, 0.27), shared.white, body, 0, H + 0.11, cabZ);
+        // grille strobes (flash with the bar)
+        m(box(0.12, 0.05, 0.03), lr, body, -0.32, clear + lowH * 0.68, L / 2 + 0.03, false); m(box(0.12, 0.05, 0.03), lb, body, 0.32, clear + lowH * 0.68, L / 2 + 0.03, false);
+        // livery: blue band with "משטרה" on both doors, checker line, lettering on the bonnet
+        const band = policeBand();
+        for (const sx of [-1, 1]) {
+          const pl = new THREE.Mesh(new THREE.PlaneGeometry(L * 0.7, lowH * 0.42), band.side); pl.position.set(sx * (W / 2 + 0.05), clear + lowH * 0.58, -0.05); pl.rotation.y = sx * Math.PI / 2; body.add(pl);
+        }
+        const hood = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.55, 0.2), band.hood); hood.position.set(0, clear + lowH + 0.015, L / 2 - 0.55); hood.rotation.x = -Math.PI / 2; body.add(hood);
+        // push bar + antenna
+        for (const sx of [-1, 1]) m(box(0.05, 0.34, 0.05), shared.dark, body, sx * 0.33, clear + 0.28, L / 2 + 0.16, false);
+        m(box(0.76, 0.045, 0.05), shared.dark, body, 0, clear + 0.42, L / 2 + 0.16, false); m(box(0.76, 0.045, 0.05), shared.dark, body, 0, clear + 0.16, L / 2 + 0.16, false);
+        m(new THREE.CylinderGeometry(0.006, 0.006, 0.7, 4), shared.dark, body, 0.35, clear + lowH + 0.35, -L / 2 + 0.4, false);
       }
     }
     const fz = wb / 2, rz = -wb / 2, wx = W / 2 - 0.12;

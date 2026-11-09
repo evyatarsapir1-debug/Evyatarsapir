@@ -375,7 +375,8 @@ html, body { touch-action: manipulation; }
 #wanted:empty { display: none; }
 #wanted s { text-decoration: none; color: #ffffff38; }
 #wanted i { font-style: normal; color: #ffd84a88; }
-#wanted.blink { animation: wblink 0.8s steps(2) infinite; }
+#wanted.blink .st { animation: wblink 0.8s steps(2) infinite; }
+#wanted b { display: block; font-size: 11px; letter-spacing: 0; color: #fff; font-weight: 600; animation: none; }
 @keyframes wblink { 50% { opacity: 0.25; } }
 
 #fhKeys { margin-top: 4px; font-size: 10px; opacity: .75; }

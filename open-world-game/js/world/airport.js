@@ -214,6 +214,19 @@ export class AirportManager {
     }
   }
 
+  // the player needs the runway (flight school / assisted landing): send the AI plane that is using it out of the way
+  // and keep the runway reserved for `token` until it is released
+  clearRunway(token) {
+    const p = this.runway;
+    if (p && p !== token && p.route) {
+      if (p.state === 'depart') { p.state = 'away'; p.mesh.visible = false; p.gate = null; p.timer = 120 + Math.random() * 90; }
+      else if (p.state === 'arrive') {
+        p.place(AIRPORT.gates[p.gate], AIRPORT.gateZ, Math.PI); p.state = 'parked'; p.speed = 0; p.timer = 90 + Math.random() * 90; p.i = p.route.length; p.sync();
+      }
+    }
+    this.runway = token;
+  }
+
   _follow(p, dt) {
     const w = p.route[p.i];
     if (!w) return;

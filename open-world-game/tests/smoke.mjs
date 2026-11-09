@@ -784,18 +784,40 @@ await shot('22-police');
 const esc = await g(() => {
   const game = __game, P = game.player, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
   game.teleport(530, 545, 0, 0.3); step(10);
-  game.police.crime('kill', P.x, P.z); step(30 * 8, () => { game.police.arrestT = 0; });   // dodge the officers while the chase builds up
+  game.police.crime('kill', P.x, P.z); game.police.crime('kill', P.x, P.z); step(30 * 8, () => { game.police.arrestT = 0; });   // dodge the officers while the chase builds up
   const chased = game.police.cars.length;
   game.teleport(415, 452, 0, 0.3);                     // run off around the corner, out of their sight
   let blinkAt = -1, t = 0;
-  while (game.police.level > 0 && t < 40 * 30) { step(1); t++; if (blinkAt < 0 && document.getElementById('wanted').classList.contains('blink')) blinkAt = t / 30; }
+  while (game.police.level > 0 && t < 75 * 30) { step(1); t++; if (blinkAt < 0 && document.getElementById('wanted').classList.contains('blink')) blinkAt = t / 30; }
   const leaving = (game.police.gone || []).length;
   step(30 * 16);
   return { chased, blinkAt, escapedAt: t / 30, level: game.police.level, leaving, left: (game.police.gone || []).length + game.police.cars.length, hud: document.getElementById('wanted').innerHTML, atStation: Math.hypot(P.x - 750, P.z - 112) < 10 };
 });
 check('escape: stars blink as soon as the police lose sight of you', esc.blinkAt > 0 && esc.blinkAt < 4, JSON.stringify(esc));
-check('escape: after hiding long enough the stars disappear (not arrested)', esc.level === 0 && !esc.atStation && esc.escapedAt < 30 && esc.hud === '');
+check('escape: after 50 s out of their sight (or out of their reach) the stars disappear (not arrested)', esc.level === 0 && !esc.atStation && esc.escapedAt > 30 && esc.escapedAt < 56 && esc.hud === '', `${esc.escapedAt}s`);
 check('escape: the patrol cars switch off their sirens and drive away, then are gone', esc.left === 0);
+
+// ---------------------------------------------------------------- pursuit along the streets
+const chase = await g(() => {
+  const game = __game, P = game.player, Po = game.police, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const onRoad = (x, z) => { const mx = ((x % 100) + 100) % 100, mz = ((z % 100) + 100) % 100; return Math.min(mx, 100 - mx) < 12 || Math.min(mz, 100 - mz) < 12; };   // road + parking lane
+  game.teleport(550, 500, 0, 0.3); step(5);
+  Po.crime('kill', P.x, P.z); Po.crime('kill', P.x, P.z);
+  let samples = 0, road = 0, arrive = -1, jumps = 0; const last = new Map();
+  for (let i = 0; i < 30 * 35; i++) {
+    Po.arrestT = 0; step(1);
+    for (const c of Po.cars) {
+      const L = last.get(c); if (L && Math.hypot(c.x - L[0], c.z - L[1]) > 5) jumps++; last.set(c, [c.x, c.z]);
+      const d = Math.hypot(c.x - P.x, c.z - P.z);
+      if (d > 45) { samples++; if (onRoad(c.x, c.z)) road++; }
+      if (d < 25 && arrive < 0) arrive = i / 30;
+    }
+  }
+  Po.clear();
+  return { pct: Math.round(100 * road / Math.max(1, samples)), arrive, jumps };
+});
+check('police: patrol cars drive to you along the streets (route planning) and arrive', chase.pct >= 80 && chase.arrive > 0 && chase.arrive < 30, JSON.stringify(chase));
+check('police: no patrol car ever jumps / teleports closer', chase.jumps === 0);
 
 // ---------------------------------------------------------------- fist fights: people fight back with real moves
 const brawl = await g(() => {
