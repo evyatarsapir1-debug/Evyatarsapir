@@ -67,6 +67,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 #district.show { opacity: 1; }
 #toast { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); background: #000a; padding: 8px 16px; border-radius: 10px; font-size: 16px; opacity: 0; transition: opacity .3s; }
 #toast.show { opacity: 1; }
+body.flying #toast { top: 34%; font-size: 14px; }   /* below the flight readouts */
 #prompt { position: absolute; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); background: #000c; padding: 10px 18px; border-radius: 12px;
   font: inherit; font-size: 17px; font-weight: 700; color: #fff; border: 2px solid #ff8a3d; display: none; white-space: nowrap; pointer-events: auto; cursor: pointer; }
 #prompt:active { background: #ff8a3d; }
@@ -233,33 +234,33 @@ body.navon #elevPanel { top: calc(max(10px, env(safe-area-inset-top)) + 52px); }
 .tbtns.foot { grid-template-columns: 72px 58px 50px; grid-template-areas: "cyc aim rel" "light fire ." "jump run ."; }
 .tbtns.drive { grid-template-columns: 58px 58px 48px; grid-template-areas: "can cam horn" "brake gas hb"; }
 .tbtns.heli { grid-template-columns: 58px 58px 48px; grid-template-areas: ". . cam" "brake gas ."; }
-.tbtns.plane { grid-template-columns: 66px 66px 50px; grid-template-areas: "as as cam" "up gas st" "dn brake fir"; align-items: center; justify-items: center; }
+.tbtns.plane { grid-template-columns: 66px 66px 50px; grid-template-areas: "as as cam" "gas brake st" ". . fir"; align-items: center; justify-items: center; }
 .tbtns.plane.turn { right: auto; left: max(10px, env(safe-area-inset-left)); grid-template-columns: 66px 66px; grid-template-areas: none; }
 .tbtn.fly { width: 64px; height: 64px; border-radius: 18px; font-size: 22px; line-height: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
 .tbtn.fly small { font-size: 10px; opacity: .9; }
 .tbtn.fly.assist { width: 136px; height: 36px; border-radius: 18px; font-size: 12px; background: #1f7ae099; border-color: #9ccaff; }
 .tbtn.fly.assist.on { background: #ff8a3dcc; }
 /* flight HUD */
-#flightHud { position: absolute; top: max(70px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: none; text-align: center; pointer-events: none; color: #fff; text-shadow: 0 1px 3px #000; }
+#flightHud { position: absolute; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: none; text-align: center; pointer-events: none; color: #fff; text-shadow: 0 1px 3px #000; }
 #flightHud.show { display: block; }
-#flightHud .fh-row { display: flex; gap: 8px; justify-content: center; }
-#flightHud .fh-box { background: #0009; border: 1px solid #ffffff30; border-radius: 10px; padding: 4px 10px; min-width: 64px; }
-#flightHud .fh-box b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
-#flightHud .fh-box small { font-size: 10px; opacity: .8; }
-#flightHud .fh-thr { position: absolute; left: -26px; top: 0; width: 14px; height: 52px; background: #0009; border: 1px solid #ffffff40; border-radius: 4px; overflow: hidden; }
+#flightHud .fh-row { display: flex; gap: 5px; justify-content: center; }
+#flightHud .fh-box { background: #0009; border: 1px solid #ffffff30; border-radius: 8px; padding: 2px 7px; min-width: 50px; }
+#flightHud .fh-box b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
+#flightHud .fh-box small { font-size: 8px; opacity: .8; }
+#flightHud .fh-thr { position: absolute; left: -20px; top: 0; width: 10px; height: 36px; background: #0009; border: 1px solid #ffffff40; border-radius: 4px; overflow: hidden; }
 #flightHud .fh-thr i { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(#ffb347, #4cd964); }
-#flightHud .fh-thr span { position: absolute; top: 56px; left: -6px; font-size: 9px; }
-#fhMode { margin-top: 6px; font-size: 13px; background: #0007; border-radius: 10px; padding: 2px 10px; display: inline-block; }
-#fhWarn { margin-top: 4px; font-size: 14px; font-weight: bold; color: #ffd23a; }
+#flightHud .fh-thr span { position: absolute; top: 39px; left: -6px; font-size: 8px; }
+#fhMode { margin-top: 3px; font-size: 11px; background: #0007; border-radius: 10px; padding: 2px 10px; display: inline-block; }
+#fhWarn { margin-top: 3px; font-size: 12px; font-weight: bold; color: #ffd23a; }
 #fhWarn:empty { display: none; }
-#fhGuide { margin: 6px auto 0; background: #0009; border-radius: 10px; padding: 6px 10px; width: 210px; }
-#fhRw { font-size: 12px; margin-bottom: 4px; }
+#fhGuide { margin: 4px auto 0; background: #0009; border-radius: 8px; padding: 3px 8px; width: 170px; }
+#fhRw { font-size: 10px; margin-bottom: 2px; }
 #fhGuide .fh-loc { position: relative; height: 10px; margin: 4px 0; background: linear-gradient(90deg, transparent 48%, #fff8 48%, #fff8 52%, transparent 52%), #ffffff1a; border-radius: 5px; }
 #fhGuide .fh-loc i { position: absolute; top: 1px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: #4cff8a; }
 #fhGuide .fh-gs { position: absolute; right: -18px; top: 0; width: 10px; height: 100%; background: linear-gradient(transparent 47%, #fff8 47%, #fff8 53%, transparent 53%), #ffffff1a; border-radius: 5px; }
 #fhGuide { position: relative; }
 #fhGuide .fh-gs i { position: absolute; left: 1px; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; background: #4cff8a; }
-#fhHint { font-size: 12px; color: #bfffd6; min-height: 14px; }
+#fhHint { font-size: 10px; color: #bfffd6; min-height: 12px; }
 #rwMarker { position: absolute; left: 0; top: 0; display: none; pointer-events: none; text-align: center; color: #4cff8a; text-shadow: 0 0 4px #000, 0 1px 2px #000; }
 #rwMarker span { display: block; font-size: 26px; line-height: 1; }
 #rwMarker em { font-style: normal; font-size: 12px; background: #0008; border-radius: 8px; padding: 1px 6px; color: #fff; white-space: nowrap; }
@@ -269,7 +270,7 @@ body.navon #elevPanel { top: calc(max(10px, env(safe-area-inset-top)) + 52px); }
 #trainHud b { display: block; font-size: 13px; margin-bottom: 2px; }
 #trainHud .done { opacity: .55; text-decoration: line-through; }
 #trainHud .cur { color: #ffd23a; font-weight: bold; }
-body.touch #flightHud { top: max(44px, env(safe-area-inset-top)); transform: translateX(-50%) scale(.85); transform-origin: top center; }
+body.touch #flightHud { top: max(4px, env(safe-area-inset-top)); transform: translateX(-50%) scale(.8); transform-origin: top center; }
 body.touch #trainHud { top: auto; bottom: 150px; right: auto; left: 10px; font-size: 11px; max-width: 210px; padding: 5px 9px; }
 body.touch #trainHud div:not(.cur) { display: none; }
 .tbtn { pointer-events: auto; width: 56px; height: 56px; border-radius: 50%; border: 1.5px solid #ffffff4d; background: #00000038; color: #ffffffe6;

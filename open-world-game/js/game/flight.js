@@ -226,7 +226,7 @@ export class Flight {
       if (Math.hypot(v.x - R.x, v.y - R.y, v.z - R.z) < 30) { T.step++; g.audio.coin?.(); g.toast(T.step <= n ? `טבעת ${T.step - 1} מתוך ${n} ✔` : 'כל הטבעות ✔ — עכשיו נחת על המסלול', 2); }
     }
     this.ringMeshes.forEach((m, i) => { m.visible = i >= T.step - 1 || T.step === 0; m.material = i === T.step - 1 ? this.ringOn : this.ringOff; m.rotation.z += dt * 0.4; });
-    const steps = ['המראה: לחץ "המראה" או הגבר מנוע ומשוך למעלה', ...T.rings.map((_, i) => `עבור דרך טבעת ${i + 1} (הצהובה המהבהבת)`), 'נחיתה על המסלול — לחץ "נחיתה" או נחת לפי השערים הירוקים'];
+    const steps = ['המראה: לחץ "המראה" או הגבר מנוע והטה ג׳ויסטיק למעלה', ...T.rings.map((_, i) => `עבור דרך טבעת ${i + 1} (הצהובה המהבהבת)`), 'נחיתה על המסלול — לחץ "נחיתה" או נחת לפי השערים הירוקים'];
     const html = '<b>🎓 בית ספר לטיסה</b>' + steps.map((s, i) => `<div class="${i < T.step ? 'done' : i === T.step ? 'cur' : ''}">${i < T.step ? '✔' : i === T.step ? '▶' : '•'} ${s}</div>`).join('');
     if (this.trainEl.dataset.h !== html) { this.trainEl.innerHTML = html; this.trainEl.dataset.h = html; }
     this.trainEl.classList.add('show');
@@ -324,6 +324,7 @@ export class Flight {
     if (this.holdToken && g.airport.runway === this.holdToken && !(this.auto?.mode === 'land' && this.auto.rw.r.id === 'air')) g.airport.runway = null;
     if (this.train) this._trainUpdate(dt);
     this.hud.classList.toggle('show', !!v);
+    document.body.classList.toggle('flying', !!v);
     if (!v) { if (this.lastPlane?.parts.jetMesh) this.lastPlane.parts.jetMesh.visible = true; this.marker.style.display = 'none'; this.gateGroup.visible = false; if (this.auto) this.auto = null; return; }
     this.lastPlane = v;
     const ground = heightAt(v.x, v.z, v.y + 0.5), agl = v.y - ground;

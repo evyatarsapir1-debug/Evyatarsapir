@@ -473,7 +473,7 @@ class Game {
     this.vehicles.adopt(v);
     world.vehicles.push(v);
     this.player.enterVehicle(v, world);
-    this.toast('בתא הטייס: "גז" מעלה את המנוע, ג׳ויסטיק למטה = המראה (מעל 210 קמ״ש), למעלה = ירידה, ימינה/שמאלה = פנייה', 6);
+    this.toast('בתא הטייס: "+ מהירות" מגביר מנוע, ג׳ויסטיק למעלה = טיפוס / המראה (מעל 210 קמ״ש), למטה = ירידה, ימינה/שמאלה = פנייה. או פשוט "המראה אוטומטית"', 6);
     return v;
   }
   // carjacking: the car leaves traffic / airport service and becomes a normal vehicle the player can keep

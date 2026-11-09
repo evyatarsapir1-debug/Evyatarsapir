@@ -608,7 +608,7 @@ const mil = await g(() => {
   const inJet = P.state === 'driving' && P.vehicle === jet;
   jet.x = -900; jet.z = -720; jet.heading = Math.PI / 2; jet.speed = 0;
   I.held.add('gas'); step(90); I.held.delete('gas');
-  step(30 * 9, () => { I.joyY = jet.speed > 55 ? -0.8 : 0; });
+  step(30 * 9, () => { I.joyY = jet.speed > 55 ? 0.8 : 0; /* joystick up = climb */ });
   I.joyY = 0;
   const alt = jet.y, kmh = jet.speed * 3.6;
   jet.x = -500; jet.z = -720; jet.y = 0; jet.vy = 0; jet.speed = 0; jet.pitch = 0; jet.roll = 0; jet.throttleSet = 0; jet.thrust = 0; jet.airborne = false; step(5);
@@ -639,7 +639,7 @@ const strike = await g(() => {
   // landing: glide down onto the runway with the throttle at idle — should touch down without damage
   jet.x = -950; jet.z = -720; jet.y = 40; jet.heading = Math.PI / 2; jet.speed = 72; jet.pitch = 0.06; jet.roll = 0.3; jet.vy = -4; jet.throttleSet = 0.25; jet.damage = 0; jet.airborne = true;
   let landedAt = null;
-  for (let i = 0; i < 30 * 40 && landedAt === null; i++) { I.joyY = jet.y > 12 ? 0.25 : 0; step(1); if (!jet.airborne && jet.y < 0.5) landedAt = i; }
+  for (let i = 0; i < 30 * 40 && landedAt === null; i++) { I.joyY = jet.y > 12 ? -0.25 : 0; /* joystick down = descend */ step(1); if (!jet.airborne && jet.y < 0.5) landedAt = i; }
   I.joyY = 0;
   const landDamage = jet.damage;
   step(30 * 25);
@@ -787,6 +787,9 @@ const esc = await g(() => {
   game.police.crime('kill', P.x, P.z); game.police.crime('kill', P.x, P.z); step(30 * 8, () => { game.police.arrestT = 0; });   // dodge the officers while the chase builds up
   const chased = game.police.cars.length;
   game.teleport(415, 452, 0, 0.3);                     // run off around the corner, out of their sight
+  // (a teleport can land right next to a passing patrol; in the game you would have run away from it)
+  for (const c of game.police.cars.slice()) if (Math.hypot(c.x - P.x, c.z - P.z) < 80) game.police._remove(c);
+  for (const q of game.peds.peds) if (q.app.cop && q.copChase && Math.hypot(q.x - P.x, q.z - P.z) < 40) { q.copChase = false; q.state = 'walk'; }
   let blinkAt = -1, t = 0;
   while (game.police.level > 0 && t < 75 * 30) { step(1); t++; if (blinkAt < 0 && document.getElementById('wanted').classList.contains('blink')) blinkAt = t / 30; }
   const leaving = (game.police.gone || []).length;

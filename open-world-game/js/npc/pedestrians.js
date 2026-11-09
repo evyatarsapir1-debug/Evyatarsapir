@@ -267,7 +267,7 @@ export class Pedestrians {
     for (let i = this.peds.length - 1; i >= 0; i--) {
       const p = this.peds[i];
       if (p.state === 'dead' && p.timer <= 0 && Math.hypot(p.x - px, p.z - pz) > 25) { this._release(p); this.peds.splice(i, 1); this._colors(); continue; }
-      const gone = p.state === 'dead' ? false : p.car ? p.state === 'driving' && (p.car.removed || (p.car.driver !== 'ai' && p.car.driver !== 'police' && !p.car.jacking)) : !p.shopKey && Math.hypot(p.x - px, p.z - pz) > 140;
+      const gone = p.state === 'dead' ? Math.hypot(p.x - px, p.z - pz) > 140 : p.car ? p.state === 'driving' && (p.car.removed || (p.car.driver !== 'ai' && p.car.driver !== 'police' && !p.car.jacking)) : !p.shopKey && Math.hypot(p.x - px, p.z - pz) > 140;
       if (gone) { if (p.car && p.car.driverPed === p) p.car.driverPed = null; this._release(p); this.peds.splice(i, 1); this._colors(); }
     }
     const walkers = this.peds.filter((p) => !p.shopKey && !p.car).length;
