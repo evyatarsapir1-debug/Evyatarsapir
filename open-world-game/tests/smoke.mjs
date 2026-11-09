@@ -794,7 +794,7 @@ const esc = await g(() => {
   return { chased, blinkAt, escapedAt: t / 30, level: game.police.level, leaving, left: (game.police.gone || []).length + game.police.cars.length, hud: document.getElementById('wanted').innerHTML, atStation: Math.hypot(P.x - 750, P.z - 112) < 10 };
 });
 check('escape: stars blink as soon as the police lose sight of you', esc.blinkAt > 0 && esc.blinkAt < 4, JSON.stringify(esc));
-check('escape: after 50 s out of their sight (or out of their reach) the stars disappear (not arrested)', esc.level === 0 && !esc.atStation && esc.escapedAt > 30 && esc.escapedAt < 56 && esc.hud === '', `${esc.escapedAt}s`);
+check('escape: after 50 s out of their sight (or out of their reach) the stars disappear (not arrested)', esc.level === 0 && !esc.atStation && esc.escapedAt > 30 && esc.escapedAt < 56 && esc.hud === '', JSON.stringify(esc));
 check('escape: the patrol cars switch off their sirens and drive away, then are gone', esc.left === 0);
 
 // ---------------------------------------------------------------- pursuit along the streets
@@ -888,6 +888,28 @@ check('weapons: a magazine runs empty and reloads by itself (magazine drops out,
 check('weapons: manual reload (X / "טעינה") tops the magazine up', gun.manual && gun.full);
 check('weapons: two-handed weapons keep the support hand on the gun (IK)', gun.ik);
 check('weapons: putting the weapon away is animated too', gun.holstering && gun.gone);
+
+// ---------------------------------------------------------------- run over: fast = stays down for good (no gore), slow = knocked over
+const ro = await g(() => {
+  const game = __game, P = game.player, step = (n, f) => { for (let i = 0; i < n; i++) { if (game.police.level) game.police.clear(); f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  const run = (kmh, first = 335, gap = 18, n = 4) => {
+    game.teleport(300, 590, 0, 0.3); step(5);
+    const v = game.spawnVehicleNear('sedan', 300, 600); v.x = 300; v.z = 597.75; v.heading = Math.PI / 2; v.sync();
+    P.state = 'driving'; P.vehicle = v; v.driver = 'player'; P.ignoreVehicle = v; P._attach(v);
+    const people = [];
+    for (let i = 0; i < n; i++) { const x = first + i * gap, z = 597.75; const q = game.peds._add({ x, z, state: 'wander', pts: [[x, z], [x + 0.3, z + 0.2]], wi: 0, timer: 99, ix: 3, iz: 5, corner: 0, dir: 1 }); people.push(q); }
+    game.peds._colors();
+    const seen = new Map();
+    step(30 * 9, () => { v.speed = kmh / 3.6; v.vx = Math.sin(v.heading) * v.speed; v.vz = Math.cos(v.heading) * v.speed; for (const q of people) { const st = seen.get(q) || new Set(); st.add(q.state); seen.set(q, st); } });
+    step(30 * 4);
+    v.speed = 0; v.vx = v.vz = 0; game.input.pressed.add('vehicle'); step(60);
+    return { dead: people.filter((q) => q.state === 'dead').length, hit: people.filter((q) => seen.get(q).has('thrown') || seen.get(q).has('fall')).length, up: people.filter((q) => seen.get(q).has('fall') && q.state !== 'dead' && q.state !== 'fall').length };
+  };
+  return { fast: run(60), slow: run(25, 306, 0, 1) };   // slow: someone 4 m in front of the bumper, too late to step aside
+});
+check('run over at speed: people are hit (no instant dodging) and stay down for good (no gore)', ro.fast.hit >= 3 && ro.fast.dead >= 3, JSON.stringify(ro));
+check('a slow bump only knocks a person over; they get back up', ro.slow.hit >= 1 && ro.slow.dead === 0, JSON.stringify(ro.slow));
 
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);

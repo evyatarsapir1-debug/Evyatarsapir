@@ -371,6 +371,11 @@ export class Pedestrians {
       statics?.query(p.x - 1, p.z - 1, p.x + 1, p.z + 1, _q);
       for (const c of _q) { if (c.off || c.tag === 'slab' || !verticalOverlap(p.y + 0.1, p.y + 1, c)) continue; const r = circleVs(p.x, p.z, 0.3, c); if (r.hit) { p.x += r.nx * r.depth; p.z += r.nz * r.depth; p.vx *= 0.3; p.vz *= 0.3; } }
       p.pose = 'thrown'; p.speed = 0;
+      if (p.timer <= 0 && p.killed) {
+        // run over at speed: they lie still on the road for good (no blood, no gore)
+        p.tumble = 0; p.vx = p.vz = 0; p.state = 'dead'; p.timer = 45; p.barT = 3;
+        return;
+      }
       if (p.timer <= 0) {
         p.tumble = 0; p.vx = p.vz = 0;
         p.state = 'fall'; p.timer = 1.6; p.afterFall = null;
@@ -393,29 +398,43 @@ export class Pedestrians {
     if (p.hitT > 0) p.hitT -= dt;
     if (p.sayT > 0) p.sayT -= dt;
     if (p.barT > 0) p.barT -= dt;
-    if (!['shopkeeper', 'resident', 'inside', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'driving', 'pulled', 'thrown', 'dead', 'swimmer', 'sunbathe', 'beachsit', 'guard', 'copChase', 'knocked', 'getup'].includes(p.state)) {
+    // ---- vehicles: being hit (anyone outdoors on their feet or lying in the road) and trying to get out of the way
+    const canBeHit = !['shopkeeper', 'resident', 'inside', 'driving', 'pulled', 'thrown', 'dead', 'swimmer'].includes(p.state);
+    const canDodge = canBeHit && !['fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'sunbathe', 'beachsit', 'guard', 'copChase', 'knocked', 'getup', 'dodge'].includes(p.state);
+    let threat = false;
+    if (canBeHit) {
       for (const v of vehicles) {
         const sp = Math.hypot(v.vx, v.vz);
-        if (sp < 4 || Math.abs(v.x - p.x) > 12 || Math.abs(v.z - p.z) > 12 || v.y - p.y > 3) continue;
+        if (sp < 2.5 || Math.abs(v.x - p.x) > 14 || Math.abs(v.z - p.z) > 14 || v.y - p.y > 3) continue;
         const dx = p.x - v.x, dz = p.z - v.z;
         const along = (dx * v.vx + dz * v.vz) / sp;
         const lat = Math.abs(dx * v.vz - dz * v.vx) / sp;
-        if (v.collider && verticalOverlap(p.y, p.y + 1.7, v.collider) && circleVs(p.x, p.z, 0.35, v.collider).hit && sp > 3) {
-          this._release(p);
-          p.state = 'fall'; p.timer = 2.6; p.seat = null; p.fixedY = null; p.fallYaw = Math.atan2(v.vx, v.vz); p.bench = null;
-          if (v.driver === 'player') ctx.onCrime?.(p.app.cop ? 'copHit' : 'assault', p.x, p.z);
-          p.vx = v.vx * 0.5; p.vz = v.vz * 0.5;
-          break;
+        if (p.app.cop && v.driver === 'police') continue;      // patrol cars don't hit their own officers
+        if (v.collider && verticalOverlap(p.y, p.y + 1.7, v.collider) && circleVs(p.x, p.z, 0.35, v.collider).hit) {
+          this._runOver(p, v, sp, ctx);
+          return;
         }
-        if (along > 0 && along < 10 && lat < 2.4 && p.state !== 'dodge') {
-          const side = (dx * v.vz - dz * v.vx) > 0 ? 1 : -1;
-          p.dodge = [p.x + (v.vz / sp) * side * 2.6, p.z - (v.vx / sp) * side * 2.6];
-          p.prevState = p.state === 'cross' ? 'cross' : p.state === 'sit' ? 'walk' : p.state;
-          this._release(p);
-          p.state = 'dodge'; p.timer = 0.9; p.seat = null; p.fixedY = null;
+        if (along > 0 && along < 12 && lat < 2.3) {
+          threat = true;
+          // they only react after their own reaction time, and only if there is still time left
+          p.react ??= this.rng.float(0.4, 1.0);
+          p.threatT = (p.threatT || 0) + dt;
+          const tti = along / sp;   // seconds until the car arrives
+          if (canDodge && p.threatT >= p.react && tti > 0.3) {
+            this._release(p); p.seat = null; p.fixedY = null;
+            if (p.temper === 'freeze' || this.rng.chance(0.3)) {   // frozen with fright
+              p.state = 'surprised'; p.timer = 1.4; p.yaw = Math.atan2(-dx, -dz); this.say(p, ['אאא!', 'זהירות!', 'לא!'][this.rng.int(0, 2)], 1.2);
+            } else {
+              const side = (dx * v.vz - dz * v.vx) > 0 ? 1 : -1;
+              p.dodge = [p.x + (v.vz / sp) * side * 2.2, p.z - (v.vx / sp) * side * 2.2];
+              p.prevState = p.state === 'cross' ? 'cross' : p.state === 'sit' ? 'walk' : p.state;
+              p.state = 'dodge'; p.timer = 1.0;
+            }
+          }
         }
       }
     }
+    if (!threat) p.threatT = 0;
     switch (p.state) {
       case 'shopkeeper':
         pose = p.phone ? 'phone' : Math.sin(time * 0.3 + p.x) > 0.7 ? 'talk' : 'idle'; speed = 0;
@@ -529,7 +548,7 @@ export class Pedestrians {
         speed = 0; pose = 'sit'; p.x = p.bench.sx; p.z = p.bench.sz; p.yaw = dampAngle(p.yaw, (p.bench.rot || 0) + Math.PI, 8, dt);
         if (p.timer <= 0) { this._release(p); p.state = 'walk'; p.timer = this.rng.float(6, 12); p.bench = null; }
         break;
-      case 'dodge': goal = p.dodge; speed = 4.5; pose = 'run'; if (p.timer <= 0) { p.state = p.prevState === 'cross' ? 'cross' : this._calm(p); p.timer = p.pts ? 0 : this.rng.float(3, 8); } break;
+      case 'dodge': goal = p.dodge; speed = 3.3; pose = 'run'; if (p.timer <= 0) { p.state = p.prevState === 'cross' ? 'cross' : this._calm(p); p.timer = p.pts ? 0 : this.rng.float(3, 8); } break;
       case 'fall':
         speed = 0; pose = 'fall';
         p.x += (p.vx || 0) * dt; p.z += (p.vz || 0) * dt; p.vx *= Math.exp(-4 * dt); p.vz *= Math.exp(-4 * dt);
@@ -684,7 +703,7 @@ export class Pedestrians {
 
   // something dangerous happened near this person (explosion, energy blast): duck / fall, then run away
   scare(p, src, hit) {
-    if (p.state === 'driving' || p.state === 'pulled' || p.state === 'thrown') return;
+    if (p.state === 'driving' || p.state === 'pulled' || p.state === 'thrown' || p.state === 'dead') return;
     p.seat = null; p.fixedY = null;
     this._release(p);
     if (hit && p.state !== 'fall') {
@@ -694,6 +713,26 @@ export class Pedestrians {
     }
     if (p.state === 'fall' || p.state === 'flee') return;
     p.state = 'flee'; p.timer = 6; p.fleeFrom = [src.x, src.z];
+  }
+
+  // hit by a vehicle: slow = knocked over (gets up); fast = thrown over the bonnet and killed (stays down, no gore)
+  _runOver(p, v, sp, ctx) {
+    this._release(p); p.seat = null; p.fixedY = null; p.bench = null; p.atk = null; p.copChase = p.copChase && sp < 8;
+    const byPlayer = v.driver === 'player';
+    if (sp > 8 && byPlayer) {          // only your driving is deadly; AI drivers just knock people over
+      const ux = v.vx / sp, uz = v.vz / sp, k = Math.min(1.6, sp / 14);
+      p.state = 'thrown'; p.killed = true; p.car = null; p.hp = 0; p.defeated = true; p.sayT = 0;
+      p.vx = v.vx * 0.75 + (Math.random() - 0.5) * 1.5; p.vz = v.vz * 0.75 + (Math.random() - 0.5) * 1.5; p.vy = 2.6 + 2.2 * k;
+      p.x += ux * 0.6; p.z += uz * 0.6;
+      p.fallYaw = Math.atan2(-ux, -uz); p.tumble = 0; p.spin = 6 + sp * 0.3; p.bounced = 0; p.timer = 2.4 + k;
+      if (p.shopKey) this.deadKeys.add(p.shopKey);
+      v.speed *= 0.9; v.vx *= 0.9; v.vz *= 0.9; v.addDamage?.(Math.min(6, sp * 0.25), -ux, -uz);
+      if (byPlayer) { ctx.onCrime?.(p.app.cop ? 'copHit' : 'kill', p.x, p.z); ctx.onRunOver?.(p, sp); }
+      for (const o of this.peds) if (o !== p && !o.car && Math.hypot(o.x - p.x, o.z - p.z) < 20) this.scare(o, { x: p.x, z: p.z }, false);
+    } else {
+      p.state = 'fall'; p.timer = 2.6; p.fallYaw = Math.atan2(v.vx, v.vz); p.vx = v.vx * 0.5; p.vz = v.vz * 0.5;
+      if (byPlayer) { ctx.onCrime?.(p.app.cop ? 'copHit' : 'assault', p.x, p.z); ctx.onRunOver?.(p, sp); }
+    }
   }
 
   say(p, text, t = 2.2) { p.say = text; p.sayT = t; }

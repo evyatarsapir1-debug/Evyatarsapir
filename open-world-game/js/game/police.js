@@ -172,10 +172,15 @@ export class Police {
           }
         }
       }
+      if (direct) {
+        // pull up next to you, not into you: aim a few metres to the side and stop short
+        const ux = (pos.x - c.x) / (dP || 1), uz = (pos.z - c.z) / (dP || 1), side = c.side ??= (Math.random() < 0.5 ? 1 : -1);
+        tx = pos.x - ux * 6 + uz * 4 * side; tz = pos.z - uz * 6 - ux * 4 * side;
+      }
       const dx = tx - c.x, dz = tz - c.z, d = Math.hypot(dx, dz);
       let e = Math.atan2(dx, dz) - c.heading; e = Math.atan2(Math.sin(e), Math.cos(e));
-      const close = hunting && dP < 13;
-      const vWant = close ? 0 : corner ? 11 : Math.abs(e) > 0.9 ? 8 : (hunting || informed) ? (dP < 60 ? 18 : 30) : 15;   // racing in with the siren, slower when searching
+      const close = hunting && (dP < 16 || (direct && d < 4));
+      const vWant = close ? 0 : corner ? 11 : Math.abs(e) > 0.9 ? 8 : direct ? Math.min(14, dP * 0.35) : (hunting || informed) ? (dP < 60 ? 18 : 30) : 15;   // racing in with the siren, slower when searching
       const sp = c.speed;
       const ctl = { throttle: sp < vWant - 1 ? (Math.abs(e) > 1.4 ? 0.5 : 1) : sp > vWant + 2 ? -0.8 : 0.15, steer: Math.max(-1, Math.min(1, -e * 2.2)), handbrake: false };
       if (close && Math.abs(sp) < 1.5) ctl.throttle = 0;

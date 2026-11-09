@@ -874,6 +874,7 @@ class Game {
     this.boats.update(dt, focusX, focusZ, all);
     this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, copsArmed: this.police.level >= 3, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
       onCrime: (k, x, z) => this.police.crime(k, x, z),
+      onRunOver: (ped, sp) => { this.audio.impact?.(Math.min(9, sp * 0.4)); this.rig.shake = Math.max(this.rig.shake, Math.min(0.35, sp * 0.02)); if (ped.killed) this.combat._drop(ped); },
       onPlayerHit: (who, n, type) => {
         // you got hit: flinch, impact burst, camera jolt, a short hit-stop; a kick shoves you back
         this.hurt(n, 'קטטה'); p.combatT = 3;
