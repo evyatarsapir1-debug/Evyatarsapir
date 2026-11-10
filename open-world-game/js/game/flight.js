@@ -169,8 +169,8 @@ export class Flight {
     const approach = agl < 60 && (v.throttleSet || 0) < 0.45;                   // you are landing by hand
     if (Math.abs(ctl.lift || 0) < 0.1 && !approach) ctl.lift = clamp(-v.vy * 0.12 - pt * 1.6, -0.6, 0.6);   // hold altitude
     if (sp < STALL + 12 && agl > 5) {                                            // stall protection
-      v.throttleSet = Math.max(v.throttleSet || 0, 0.9); ctl.lift = Math.min(ctl.lift || 0, -0.2);
-      this._warn('מהירות נמוכה — מוסיף כוח ומוריד את האף');
+      ctl.lift = Math.min(ctl.lift || 0, -0.2);   // lower the nose to keep flying speed (no automatic power)
+      this._warn('מהירות נמוכה — לחץ + מהירות');
     }
     if (agl < 40 && v.vy < -7 && !approach) { ctl.lift = 1; this._warn('קרוב לקרקע — מושך למעלה!'); }
   }
@@ -323,7 +323,7 @@ export class Flight {
     // release the runway reservation once the assisted landing is over
     if (this.holdToken && g.airport.runway === this.holdToken && !(this.auto?.mode === 'land' && this.auto.rw.r.id === 'air')) g.airport.runway = null;
     if (this.train) this._trainUpdate(dt);
-    this.hud.classList.toggle('show', !!v);
+    this.hud.classList.remove('show');            // the player asked for no flight readouts at the top (speed shows in the speedometer)
     document.body.classList.toggle('flying', !!v);
     if (!v) { if (this.lastPlane?.parts.jetMesh) this.lastPlane.parts.jetMesh.visible = true; this.marker.style.display = 'none'; this.gateGroup.visible = false; if (this.auto) this.auto = null; return; }
     this.lastPlane = v;
@@ -350,8 +350,7 @@ export class Flight {
       this.$('fhHint').textContent = hint;
     }
     // gates along the glide path + an on-screen marker at the touchdown point
-    this.gateGroup.visible = show && dist > 200;
-    if (this.gateGroup.visible) this._placeGates(rw);
+    this.gateGroup.visible = false;               // no approach squares in the sky
     if (show) {
       _v.set(rw.td, rw.ground + 2, rw.r.z).project(g.camera);
       const behind = _v.z > 1;
@@ -359,7 +358,7 @@ export class Flight {
       if (behind) { x = innerWidth - x; y = innerHeight - 40; }
       const m = 50, off = behind || x < m || x > innerWidth - m || y < m || y > innerHeight - m;
       x = clamp(x, m, innerWidth - m); y = clamp(y, m + 40, innerHeight - m);
-      this.marker.style.display = 'block';
+      this.marker.style.display = off ? 'none' : 'block';   // only when the runway itself is in view
       this.marker.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
       this.marker.classList.toggle('off', off);
       this.marker.querySelector('em').textContent = `מסלול ${dist > 1000 ? (dist / 1000).toFixed(1) + ' ק״מ' : Math.max(0, Math.round(dist)) + ' מ׳'}`;

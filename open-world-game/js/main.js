@@ -990,12 +990,13 @@ class Game {
     $('hud').classList.toggle('scoped', this.rig.aimMode === 'scope' && this.rig.scopeK > 0.6);
     // speedometer
     const sp = $('speedo');
-    if (v && !v.isPlane) {   // planes show the bigger flight HUD instead
+    if (v) {
       sp.classList.add('show');
       $('speedVal').textContent = Math.round(Math.abs(v.speed) * 3.6);
-      $('vehName').textContent = v.isPlane ? `גובה ${Math.round(v.y)} מ׳ · מנוע ${Math.round((v.throttleSet || 0) * 100)}%` : v.isAir ? `${v.T.name} · גובה ${Math.round(v.y)} מ׳` : v.T.name;
+      $('vehName').textContent = v.isPlane ? `גובה ${Math.round(v.y)} מ׳ · ${v.holdSpeed != null ? 'מהירות קבועה' : `מנוע ${Math.round((v.throttleSet || 0) * 100)}%`}` : v.isAir ? `${v.T.name} · גובה ${Math.round(v.y)} מ׳` : v.T.name;
       $('dmgFill').style.width = v.damage + '%';
     } else sp.classList.remove('show');
+    document.body.classList.toggle('inveh', !!v);   // lifts the area name above the speedometer
     // touch controls by context
     if (this.input.isTouch) {
       const mode = v ? (v.isHeli ? 'heli' : v.isPlane ? 'plane' : 'drive') : (p.state === 'foot' || p.state === 'sitting' ? 'foot' : null);

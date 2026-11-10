@@ -375,6 +375,7 @@ export class Player {
         if (input.wasPressed('stab')) F.toggleStab();
         if (input.wasPressed('assist')) F.toggleAssist(v);
         F.control(v, ctl, dt, input);
+        v.autoPilot = !!F.auto;   // the autopilot manages the speed itself
       }
     }
     this.controls = ctl;

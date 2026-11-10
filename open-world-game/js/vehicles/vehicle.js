@@ -170,6 +170,15 @@ export class Vehicle {
     let v = this.speed;
     // throttle lever (0..100%): gas moves it up, brake moves it down; the engines spool towards it
     this.throttleSet = clamp((this.throttleSet || 0) + thr * (thr < 0 ? 0.9 : 0.5) * dt, 0, 1);
+    // the speed only goes up while you press "+ speed": let go and the engine drops to idle. Up high the plane then
+    // holds the speed it has; below 25 m (landing) it slows down gradually by itself. The autopilot is not affected.
+    if (this.driver === 'player' && !this.autoPilot) {
+      if (thr > 0) { this._gas = true; if (!onGround) { this.throttleSet = 1; this.thrust = 1; } }
+      else if (this._gas) { this._gas = false; this.throttleSet = Math.min(this.throttleSet, 0.25); }
+      const agl = this.y - ground;
+      if (onGround || thr !== 0 || agl < 25) this.holdSpeed = null;
+      else if (this.holdSpeed == null) this.holdSpeed = this.speed;
+    } else this.holdSpeed = null;
     this.airbrake = thr < 0 || !!this.forceAirbrake;
     if (!this.driver) this.throttleSet = 0;
     this.thrust = damp(this.thrust || 0, this.throttleSet, 0.9, dt);
@@ -219,6 +228,7 @@ export class Vehicle {
       this.vy = damp(this.vy, targetVy, L > 0.5 ? 3 : 1.2, dt);
       if (L < 0.5) this.pitch = damp(this.pitch, 0.12, 0.8, dt); // nose drops in a stall
     }
+    if (this.holdSpeed != null && !onGround) { v = this.holdSpeed; this.thrust = damp(this.thrust || 0, 0.55, 1, dt); }
     v = clamp(v, onGround ? (thr < 0 ? -4 : Math.min(0, v)) : 18, T.maxSpeed * 1.08);   // reverse only while braking on the ground; in the air it keeps a gliding speed
     this.speed = v;
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
