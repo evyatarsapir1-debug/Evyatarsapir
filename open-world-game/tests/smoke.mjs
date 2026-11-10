@@ -747,13 +747,13 @@ const pol = await g(() => {
   const W = window.__wg, st = W.cellData(7, 1).buildings.find((b) => b.sign === 'תחנת משטרה'), ho = W.cellData(1, 2).buildings.find((b) => b.sign === 'בית חולים');
   game.econ.money = 20000;
   game.teleport(530, 545, 0, 0.3); step(10);
-  game.police.crime('kill', P.x, P.z); step(1);
+  for (let k = 0; k < 7; k++) game.police.crime('gunfire', P.x, P.z); step(1);
   const lv = game.police.level, hud = document.querySelectorAll('#wanted > :not(s)').length + (document.getElementById('wanted').textContent.length ? 1 : 0);
   let maxCars = 0, cop = false, m0 = game.econ.money;
   for (let i = 0; i < 30 * 60 && game.police.level > 0; i++) { game.time += 1 / 30; game._playFrame(1 / 30); maxCars = Math.max(maxCars, game.police.cars.length); cop = cop || game.peds.peds.some((q) => q.copChase); }
   const busted = { level: game.police.level, atStation: Math.hypot(P.x - 750, P.z - 112) < 10, fine: m0 - game.econ.money };
   // escape: wanted again, then leave the area and stay out of sight
-  game.police.crime('kill', P.x, P.z); game.teleport(-300, 520, 0, 0.3);
+  game.police.setWanted(2, P.x, P.z); game.teleport(-300, 520, 0, 0.3);
   let t = 0; while (game.police.level > 0 && t < 60) { step(30, () => game.police.cars.forEach((c) => game.police._remove(c))); t++; if (t === 3) game.teleport(200, 560, 0, 0.3); }
   const escaped = game.police.level === 0;
   // wasted -> hospital
@@ -784,9 +784,9 @@ await shot('22-police');
 const esc = await g(() => {
   const game = __game, P = game.player, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
   game.teleport(530, 545, 0, 0.3); step(10);
-  game.police.crime('kill', P.x, P.z); game.police.crime('kill', P.x, P.z); step(30 * 8, () => { game.police.arrestT = 0; });   // dodge the officers while the chase builds up
+  game.police.setWanted(2, P.x, P.z); step(30 * 8, () => { game.police.arrestT = 0; });   // dodge the officers while the chase builds up
   const chased = game.police.cars.length;
-  game.teleport(415, 452, 0, 0.3);                     // run off around the corner, out of their sight
+  game.teleport(250, 300, 0, 0.3);                     // run off a few blocks away, out of their sight
   // (a teleport can land right next to a passing patrol; in the game you would have run away from it)
   for (const c of game.police.cars.slice()) if (Math.hypot(c.x - P.x, c.z - P.z) < 80) game.police._remove(c);
   for (const q of game.peds.peds) if (q.app.cop && q.copChase && Math.hypot(q.x - P.x, q.z - P.z) < 40) { q.copChase = false; q.state = 'walk'; }
@@ -805,7 +805,7 @@ const chase = await g(() => {
   const game = __game, P = game.player, Po = game.police, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
   const onRoad = (x, z) => { const mx = ((x % 100) + 100) % 100, mz = ((z % 100) + 100) % 100; return Math.min(mx, 100 - mx) < 12 || Math.min(mz, 100 - mz) < 12; };   // road + parking lane
   game.teleport(550, 500, 0, 0.3); step(5);
-  Po.crime('kill', P.x, P.z); Po.crime('kill', P.x, P.z);
+  Po.setWanted(2, P.x, P.z);
   let samples = 0, road = 0, arrive = -1, jumps = 0; const last = new Map();
   for (let i = 0; i < 30 * 35; i++) {
     Po.arrestT = 0; step(1);
@@ -904,7 +904,7 @@ const ro = await g(() => {
     for (let i = 0; i < n; i++) { const x = first + i * gap, z = 597.75; const q = game.peds._add({ x, z, state: 'wander', pts: [[x, z], [x + 0.3, z + 0.2]], wi: 0, timer: 99, ix: 3, iz: 5, corner: 0, dir: 1 }); people.push(q); }
     game.peds._colors();
     const seen = new Map();
-    step(30 * 9, () => { v.speed = kmh / 3.6; v.vx = Math.sin(v.heading) * v.speed; v.vz = Math.cos(v.heading) * v.speed; for (const q of people) { const st = seen.get(q) || new Set(); st.add(q.state); seen.set(q, st); } });
+    step(30 * (kmh > 30 ? 5.5 : 9), () => { v.speed = kmh / 3.6; v.vx = Math.sin(v.heading) * v.speed; v.vz = Math.cos(v.heading) * v.speed; for (const q of people) { const st = seen.get(q) || new Set(); st.add(q.state); seen.set(q, st); } });
     step(30 * 4);
     v.speed = 0; v.vx = v.vz = 0; game.input.pressed.add('vehicle'); step(60);
     return { dead: people.filter((q) => q.state === 'dead').length, hit: people.filter((q) => seen.get(q).has('thrown') || seen.get(q).has('fall')).length, up: people.filter((q) => seen.get(q).has('fall') && q.state !== 'dead' && q.state !== 'fall').length };
@@ -913,6 +913,25 @@ const ro = await g(() => {
 });
 check('run over at speed: people are hit (no instant dodging) and stay down for good (no gore)', ro.fast.hit >= 3 && ro.fast.dead >= 3, JSON.stringify(ro));
 check('a slow bump only knocks a person over; they get back up', ro.slow.hit >= 1 && ro.slow.dead === 0, JSON.stringify(ro.slow));
+
+// ---------------------------------------------------------------- police only come for repeated gunfire
+const calm = await g(() => {
+  const game = __game, P = game.player, Po = game.police, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  Po.clear(); Po.shots = []; game.teleport(530, 562, 0, 0.3); step(5);
+  game.econ.weapons.p7 = { ammo: 60 }; game.equip('p7'); step(20);
+  for (let i = 0; i < 3; i++) { game.input.pressed.add('fire'); step(12); }
+  const afterFew = Po.level;
+  ['punch', 'kill', 'assault', 'carjack', 'copHit'].forEach((k) => Po.crime(k, P.x, P.z));
+  const afterOther = Po.level;
+  game.econ.weapons.x4 = { ammo: 90 }; game.equip('x4'); step(25);
+  step(30 * 2, () => game.input.keys.add('KeyT')); game.input.keys.clear();
+  const afterBurst = Po.level;
+  Po.clear(); game.equip(null); step(15);
+  return { afterFew, afterOther, afterBurst };
+});
+check('police: a few shots, punches, run-overs or taking cars do not call the police', calm.afterFew === 0 && calm.afterOther === 0, JSON.stringify(calm));
+check('police: repeated gunfire (a burst) brings the police', calm.afterBurst >= 1, JSON.stringify(calm));
 
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);

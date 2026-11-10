@@ -1,4 +1,4 @@
-// Police and wanted level (0-5 stars). Crimes seen by police (or loud ones anywhere) raise the level; patrol cars
+// Police and wanted level (0-5 stars). Repeated gunfire (6+ shots in 20 s) brings the police; patrol cars
 // with sirens chase you, officers get out and try to arrest you; from 3 stars they also shoot (game damage, no gore).
 // Stay out of their sight long enough and they lose you. Busted -> the police station; wasted -> the hospital.
 import * as THREE from 'three';
@@ -22,19 +22,24 @@ export class Police {
   get active() { return this.level > 0; }
 
   // report a crime at (x,z). sev: how many stars it is worth when seen; loud crimes are noticed anywhere
+  // Only gunfire brings the police: shots are counted over the last 20 s. 6 shots -> 1 star, every 8 more -> another
+  // star (max 5). Heavy weapons count more. Punches, running people over, taking cars etc. no longer call the police.
   crime(kind, x, z) {
-    const SEV = { punch: 0.6, assault: 1, kill: 2, gunfire: 1, carjack: 1, explosion: 2, copHit: 2, cannon: 3, missile: 3, wreck: 1 };
-    const LOUD = { kill: 1, gunfire: 1, explosion: 1, cannon: 1, missile: 1 };
-    const sev = SEV[kind] || 1;
-    const seen = this._copNear(x, z, 70) || (LOUD[kind] && Math.random() < 0.7) || this.level > 0;
-    if (!seen) { this.heat += sev * 0.35; if (this.heat < 1) return; }
-    this.heat = 0;
+    const W = { gunfire: 1, explosion: 2, cannon: 3, missile: 3 }[kind];
+    if (!W) return;
+    const now = this.game.time;
+    this.shots = (this.shots || []).filter((t) => now - t < 20);
+    for (let i = 0; i < W; i++) this.shots.push(now);
+    const n = this.shots.length;
+    if (n < 6) return;
+    const want = Math.min(5, 1 + Math.floor((n - 6) / 8));
     const before = this.level;
-    this.level = Math.min(5, Math.max(this.level, 1) + (this.level > 0 ? sev * 0.5 : sev - 1));
-    this.level = Math.round(this.level * 2) / 2;
-    if (Math.floor(this.level) > Math.floor(before)) this.game.toast(`${'★'.repeat(Math.floor(this.level))} המשטרה מחפשת אותך!`, 2.5);
+    if (want > this.level) this.level = want;
+    if (Math.floor(this.level) > Math.floor(before)) this.game.toast(before ? `${'★'.repeat(Math.floor(this.level))} המשטרה מגבירה את המרדף!` : '★ יריות רבות — המשטרה בדרך!', 2.5);
     this.unseen = 0; this.lastKnown = { x, z }; this.sinceCrime = 0; if (!before) this.noReach = 0;
   }
+  // set a wanted level directly (tests / scripted events)
+  setWanted(n, x, z) { const before = this.level; this.level = Math.max(this.level, n); this.unseen = 0; this.lastKnown = { x, z }; this.sinceCrime = 0; if (!before) this.noReach = 0; }
   _copNear(x, z, r) {
     for (const c of this.cars) if (!c.removed && Math.hypot(c.x - x, c.z - z) < r) return true;
     for (const v of this.game.traffic.cars) if (v.T.police && Math.hypot(v.x - x, v.z - z) < r) return true;

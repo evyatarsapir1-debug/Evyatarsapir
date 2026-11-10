@@ -92,7 +92,9 @@ export class AirportManager {
     const { taxiZ: T, runwayZ: R, runwayW: W } = AIRPORT;
     return [
       { x: gx, z: 655, v: 2, rev: true },
-      { x: gx - 22, z: T - 6, v: 6 }, { x: W + 60, z: T, v: 9 }, { x: W + 25, z: T + 25, v: 6 }, { x: W + 15, z: R - 15, v: 5 }, { x: W + 30, z: R, v: 4, hold: true },
+      { x: gx - 22, z: T - 6, v: 6 }, { x: W + 60, z: T, v: 9 }, { x: W + 25, z: T + 25, v: 6 },
+      { x: W + 20, z: R - 48, v: 4, hold: true },              // hold short: wait off the runway until it is free
+      { x: W + 40, z: R, v: 4 },                              // line up
       { x: W + 120, z: R, v: 30, runway: true }, { x: -470, z: R, v: 74, runway: true },
       { x: -150, z: R, y: 22, v: 78, air: true }, { x: 700, z: R, y: 200, v: 86, air: true }, { x: 2600, z: R, y: 450, v: 95, air: true, end: true },
     ];
