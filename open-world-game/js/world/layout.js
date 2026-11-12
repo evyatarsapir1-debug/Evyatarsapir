@@ -57,7 +57,7 @@ const SHOP_NAMES = [
   'נעלי הצעד', 'בית הקפה הירוק', 'מסעדת הנמל', 'סושי גל', 'תכשיטי אור',
   'משקפי עין', 'פארם העיר', 'צעצועי קשת', 'יין ושמש', 'מכולת אבי',
 ];
-export const SPECIAL_SIGNS = ['פלאפל הכיכר', 'גלידת שקיעה', 'בגדי רחוב', 'חנות בגדים', 'תחנת רכבת מרכזית', 'מוסך לוס אנטוס', 'דלק+', 'נמל התעופה לוס אנטוס', 'מגדל לוס אנטוס', 'בית העירייה', 'מחסני הנמל', 'בית קפה החוף', 'קניון העיר', 'חניון', 'חוות השקד', 'מנהרת הרכס', 'חנות נשקים', 'צ׳ק-אין', 'שער 1', 'שער 2', 'שער 3', 'שירותים', 'דיוטי פרי', 'קפה טרמינל', 'מסוע מזוודות', 'האנגר לוס אנטוס', 'מגדל פיקוח', 'הגעות', 'ספריית העיר', 'הבית שלי', 'בסיס צבאי', 'מפקדה', 'מגורי חיילים', 'מרכז שליטה', 'האנגר', 'מוסך צבאי', 'בולנז׳רי', 'קפה דה לה פלאס', 'פטיסרי', 'ביסטרו', 'בוטיק', 'מסוף בל־ריב', 'תחנת משטרה', 'בית חולים', 'סוכנות רכב'];
+export const SPECIAL_SIGNS = ['פלאפל הכיכר', 'גלידת שקיעה', 'בגדי רחוב', 'חנות בגדים', 'תחנת רכבת מרכזית', 'מוסך לוס אנטוס', 'דלק+', 'נמל התעופה לוס אנטוס', 'מגדל לוס אנטוס', 'בית העירייה', 'מחסני הנמל', 'בית קפה החוף', 'קניון העיר', 'חניון', 'חוות השקד', 'מנהרת הרכס', 'חנות נשקים', 'צ׳ק-אין', 'שער 1', 'שער 2', 'שער 3', 'שירותים', 'דיוטי פרי', 'קפה טרמינל', 'מסוע מזוודות', 'האנגר לוס אנטוס', 'מגדל פיקוח', 'הגעות', 'ספריית העיר', 'הבית שלי', 'בסיס צבאי', 'מפקדה', 'מגורי חיילים', 'מרכז שליטה', 'האנגר', 'מוסך צבאי', 'בולנז׳רי', 'קפה דה לה פלאס', 'פטיסרי', 'ביסטרו', 'בוטיק', 'מסוף בל־ריב', 'תחנת משטרה', 'בית חולים', 'סוכנות רכב', 'הבנק המרכזי', 'בנק הנמל', 'בנק השכונה', 'בנק מגדל הזהב'];
 export const ALL_SIGNS = [...SHOP_NAMES, ...SPECIAL_SIGNS];
 
 const PASTELS = [0xf2e3c6, 0xe8d1b5, 0xd9c8a9, 0xf0d9c0, 0xc9d6df, 0xe4c9b6, 0xd8e2cf, 0xefe6d8, 0xd4b8a0, 0xbfcfd9];
@@ -72,6 +72,15 @@ export const FORCED_SHOPS = {
   '6,2': 'גלידת שקיעה', '9,0': 'גלידת שקיעה', '9,7': 'גלידת שקיעה',
   '7,2': 'פלאפל הכיכר', '4,7': 'פלאפל הכיכר', '6,9': 'פלאפל הכיכר', '9,3': 'פלאפל הכיכר',
   '8,3': 'סוכנות רכב', '2,3': 'ספריית העיר', '7,3': 'גלידת שקיעה', '7,5': 'חנות בגדים', '7,6': 'פלאפל הכיכר', '7,4': 'אלקטרו פלוס', '2,5': 'חנות נשקים', '2,6': 'מספרת סטייל' };
+
+// Four banks, each its own design and size, built into existing city blocks (no special shops there).
+// Each can be entered and robbed in a fictional heist mission (see game/heist.js).
+export const BANKS = [
+  { id: 'central', key: '3,3', name: 'הבנק המרכזי', loot: 500000, style: 'classic', x: 332, z: 330, w: 38, d: 30, h: 14, color: 0xe7dcc2, wallStyle: 'concrete' },
+  { id: 'harbor', key: '6,6', name: 'בנק הנמל', loot: 200000, style: 'harbor', x: 665, z: 631, w: 30, d: 24, h: 9, color: 0xc8dbe6, wallStyle: 'glass' },
+  { id: 'local', key: '1,5', name: 'בנק השכונה', loot: 150000, style: 'local', x: 150, z: 520, w: 21, d: 17, h: 6.5, color: 0xb26b4f, wallStyle: 'brick' },
+  { id: 'gold', key: '6,3', name: 'בנק מגדל הזהב', loot: 750000, style: 'gold', x: 640, z: 336, w: 42, d: 34, h: 46, color: 0x6f6146, wallStyle: 'glass' },
+];
 
 // The player's own beach villa (block 8,8): house, pool deck, garden, two cars in the driveway.
 export const VILLA = { bx: 8, bz: 8, x: 850, z: 832, w: 26, d: 15, h: 7.6, door: { x: 850, z: 824.2 } };
@@ -365,6 +374,17 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
     PR.push({ kind: 'bin', x: ox + 8.4, z: oz + 32 });
   }
 
+  // a bank in this block: clear its footprint and put the bank there (the rest of the block stays as it was)
+  const bank = BANKS.find((k) => k.key === bx + ',' + bz);
+  if (bank) {
+    const pad = 3, x0 = bank.x - bank.w / 2 - pad, x1 = bank.x + bank.w / 2 + pad, z0 = bank.z - bank.d / 2 - pad, z1 = bank.z + bank.d / 2 + pad;
+    for (let i = B.length - 1; i >= 0; i--) { const q = B[i]; if (q.x + q.w / 2 > x0 && q.x - q.w / 2 < x1 && q.z + q.d / 2 > z0 && q.z - q.d / 2 < z1) B.splice(i, 1); }
+    for (let i = PR.length - 1; i >= 0; i--) { const q = PR[i]; if (q.x > x0 - 1 && q.x < x1 + 1 && q.z > z0 - 1 && q.z < z1 + 1) PR.splice(i, 1); }
+    B.push({ x: bank.x, z: bank.z, w: bank.w, d: bank.d, h: bank.h, style: bank.wallStyle, color: bank.color, face: 'n', sign: bank.name, bank: { id: bank.id, style: bank.style, loot: bank.loot, name: bank.name } });
+    // a little forecourt: lamp-side planters and benches in front of the entrance
+    PR.push({ kind: 'bankfront', x: bank.x, z: bank.z - bank.d / 2, w: bank.w, style: bank.style });
+  }
+
   // guaranteed shops near the city centre (+ a few fictional gear stores in other towns)
   const forced = FORCED_SHOPS[bx + ',' + bz] || (type === 'C' && (bx < 0 || bx > 9 || bz < 0 || bz > 9) && rng.chance(0.08) ? 'חנות נשקים' : null);
   // (the marina is the only other town)
@@ -384,7 +404,8 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
 // Which buildings can be entered (real interiors are generated from this flag)
 export function markInteriors(B, rng) {
   for (const b of B) {
-    if (b.police || b.hospital) b.interior = 'hall';
+    if (b.bank) b.interior = 'bank';
+    else if (b.police || b.hospital) b.interior = 'hall';
     else if (b.sign === 'ספריית העיר') b.interior = 'library';
     else if (b.villa) b.interior = 'villa';
     else if (b.forceShop) b.interior = 'shop';

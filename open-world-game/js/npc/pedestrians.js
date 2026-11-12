@@ -223,11 +223,13 @@ export class Pedestrians {
       if (c) want.set(key + ':k', { x: c.keeper[0], z: c.keeper[1], y: c.y, yaw: c.yaw, state: 'shopkeeper' });
       if (L.spec.home) { const h = L.spec.home; want.set(key + ':h', { x: h.pt[0], z: h.pt[1], y: h.y, yaw: h.yaw, state: 'resident' }); }
       (L.spec.counters || []).forEach((c, i) => want.set(`${key}:c${i}`, { x: c.keeper[0], z: c.keeper[1], y: c.y, yaw: c.yaw, state: 'shopkeeper' }));
-      (L.spec.staff || []).forEach((c, i) => want.set(`${key}:s${i}`, { x: c.pt[0], z: c.pt[1], y: c.y, yaw: c.yaw, state: c.sit ? 'resident' : 'shopkeeper' }));
+      (L.spec.staff || []).forEach((c, i) => want.set(`${key}:s${i}`, { x: c.pt[0], z: c.pt[1], y: c.y, yaw: c.yaw, state: c.sit ? 'resident' : 'shopkeeper', guard: !!c.guard }));
+      // bank security guards patrolling the lobby
+      if (L.spec.guards) { const G = L.spec.guards; for (let i = 0; i < G.n; i++) want.set(`${key}:g${i}`, { x: G.points[i % G.points.length][0], z: G.points[i % G.points.length][1], y: G.y, yaw: i, state: 'wander', pts: G.points, seats: [], guard: true, bank: true }); }
       (L.spec.outdoor || []).forEach((c, i) => want.set(`${key}:o${i}`, { x: c.pt[0], z: c.pt[1], y: c.y, yaw: c.yaw, state: 'shopkeeper', phone: i === 1 }));
       if (L.spec.wander) {
         const pts = L.spec.wander.points;
-        for (let i = 0; i < L.spec.wander.n; i++) want.set(`${key}:w${i}`, { x: pts[i % pts.length][0] + (i % 3) * 0.7, z: pts[i % pts.length][1], y: L.spec.rooms[0].y0, yaw: i, state: 'wander', pts, seats: L.spec.seats || [], suitcase: i % 5 < 3 });
+        for (let i = 0; i < L.spec.wander.n; i++) want.set(`${key}:w${i}`, { x: pts[i % pts.length][0] + (i % 3) * 0.7, z: pts[i % pts.length][1], y: L.spec.rooms[0].y0, yaw: i, state: 'wander', pts, seats: L.spec.seats || [], suitcase: !L.spec.bank && i % 5 < 3, bank: !!L.spec.bank });
       }
       if (L.spec.homes) {
         L.spec.homes.forEach((h, i) => {
@@ -247,6 +249,8 @@ export class Pedestrians {
       if (this.deadKeys.has(k) || this.peds.some((p) => p.shopKey === k)) continue;
       const p = this._add({ x: w.x, z: w.z, y: w.y, state: w.state, shopKey: k, pts: w.pts, seats: w.seats, suitcase: !!w.suitcase });
       if (w.cop) this._copLook(p);
+      if (w.guard) this._guardLook(p);
+      if (w.bank) p.inBank = true;
       if (w.soldier) {
         // soldier: olive uniform, helmet (the short-hair cap in olive), dark boots
         Object.assign(p.app, { shirt: 0x4b5320, pants: 0x4b5320, shoes: 0x1f1f1f, hair: 0x3f4a2c, long: false, bald: false, soldier: true });
@@ -290,6 +294,27 @@ export class Pedestrians {
   _copLook(p) {
     Object.assign(p.app, { shirt: 0x7ea6d8, pants: 0x1a2440, shoes: 0x0e0e0e, cop: true, long: false });
     p.phone = false; p.suitcase = false; p.temper = 'fight'; p.walkSpeed = 1.35; p.hp = p.maxHp = 12;
+    this._colors();
+  }
+  // a bank is being robbed: everyone inside reacts in their own way (no violence): guards radio for help and take
+  // cover, customers and staff run for the exit, hide on the floor or phone the police
+  heistReact(b, src, yMin, yMax) {
+    for (const p of this.peds) {
+      if (['dead', 'thrown', 'driving', 'pulled', 'inside'].includes(p.state) || p.heistReacted) continue;
+      if (Math.abs(p.x - b.x) > b.w / 2 + 1 || Math.abs(p.z - b.z) > b.d / 2 + 1 || p.y < yMin - 0.5 || p.y > yMax + 0.5) continue;
+      p.heistReacted = true;
+      this._release(p); p.seat = null; p.fixedY = null; p.bench = null;
+      const r = this.rng.float();
+      if (p.app.guard) { p.state = 'callHelp'; p.timer = 3; p.afterCall = 'hide'; this.say(p, 'מוקד, כאן המאבטח: שוד בבנק! שלחו משטרה!', 3); }
+      else if (r < 0.4) { p.state = 'flee'; p.timer = 9; p.fleeFrom = [src.x, src.z]; this.say(p, this.rng.pick(['שוד! כולם החוצה!', 'הצילו!', 'בורחים!']), 2); }
+      else if (r < 0.75) { p.state = 'hide'; p.timer = 25 + this.rng.float(0, 15); this.say(p, this.rng.pick(['אני מתחבא...', 'שקט, שקט...', 'רק שזה ייגמר']), 2); }
+      else { p.state = 'callHelp'; p.timer = 4; p.fleeFrom = [src.x, src.z]; this.say(p, 'הלו משטרה? יש שוד בבנק!', 3.5); }
+    }
+  }
+  // bank security guard: dark uniform, cap, vest, duty belt (not police: the wanted system ignores them)
+  _guardLook(p) {
+    Object.assign(p.app, { shirt: 0x23262d, pants: 0x1a1c21, shoes: 0x0e0e0e, guard: true, long: false });
+    p.phone = false; p.suitcase = false; p.walkSpeed = 1.15; p.hp = p.maxHp = 10; p.temper = 'call';
     this._colors();
   }
   // an officer who gets out of a patrol car and runs at the player to arrest them
@@ -400,7 +425,7 @@ export class Pedestrians {
     if (p.barT > 0) p.barT -= dt;
     // ---- vehicles: being hit (anyone outdoors on their feet or lying in the road) and trying to get out of the way
     const canBeHit = !['shopkeeper', 'resident', 'inside', 'driving', 'pulled', 'thrown', 'dead', 'swimmer'].includes(p.state);
-    const canDodge = canBeHit && !['fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'sunbathe', 'beachsit', 'guard', 'copChase', 'knocked', 'getup', 'dodge'].includes(p.state);
+    const canDodge = canBeHit && !['hide', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'sunbathe', 'beachsit', 'guard', 'copChase', 'knocked', 'getup', 'dodge'].includes(p.state);
     let threat = false;
     if (canBeHit) {
       for (const v of vehicles) {
@@ -483,9 +508,9 @@ export class Pedestrians {
         goal = p.pts[p.wi]; speed = p.walkSpeed * 0.9;
         if (p.timer > 0) { speed = 0; pose = p.phone ? 'phone' : 'idle'; goal = null; break; }
         if (Math.hypot(goal[0] - p.x, goal[1] - p.z) < 0.8) {
-          const seats = p.app.soldier ? [] : (p.seats || []).filter((st) => Math.hypot(st.x - p.x, st.z - p.z) < 14 && !this.peds.some((o) => o !== p && o.seat === st));
+          const seats = p.app.soldier || p.app.guard ? [] : (p.seats || []).filter((st) => Math.hypot(st.x - p.x, st.z - p.z) < 14 && !this.peds.some((o) => o !== p && o.seat === st));
           if (seats.length && this.rng.chance(0.55)) { p.seat = this.rng.pick(seats); p.state = 'toSeat'; }
-          else if (p.app.soldier) { p.timer = this.rng.float(1, 3); p.wi = (p.wi + 1) % p.pts.length; }   // patrol: corner to corner
+          else if (p.app.soldier || p.app.guard) { p.timer = this.rng.float(1, 3); p.wi = (p.wi + 1) % p.pts.length; }   // patrol: corner to corner
           else { p.timer = this.rng.float(3, 9); p.wi = this.rng.int(0, p.pts.length - 1); p.phone = this.rng.chance(0.3); }
         }
         break;
@@ -630,7 +655,12 @@ export class Pedestrians {
       case 'surprised': speed = 0; pose = 'surprised'; if (p.timer <= 0) { p.state = this._calm(p); p.timer = 4; } break;
       case 'callHelp':
         speed = 0; pose = 'phone';
-        if (p.timer <= 0) { p.state = 'flee'; p.timer = 6; }
+        if (p.timer <= 0) { p.state = p.afterCall || 'flee'; p.timer = p.afterCall ? 25 : 6; p.afterCall = null; }
+        break;
+      case 'hide':
+        // crouched, hands over the head, waiting for it to be over
+        speed = 0; pose = 'hide';
+        if (p.timer <= 0) { p.state = this._calm(p); p.timer = 4; }
         break;
       case 'dead':
         speed = 0; pose = 'fall';
@@ -983,6 +1013,10 @@ export class Pedestrians {
           t.bodyX = -1.2 * (1 - k2); t.legL = -1.3 * (1 - k2 * 0.8); t.kneeL = 1.9 * (1 - k2 * 0.8); t.legR = 0.4 * (1 - k2); t.kneeR = 1.2 * (1 - k2);
           t.armL = t.armR = -0.7; t.elbowL = t.elbowR = -0.4; t.spine = 0.5 * (1 - k2); hipsY = 0.35 + 0.55 * k2; }
         break;
+      case 'hide':
+        t.legL = t.legR = -1.5; t.kneeL = t.kneeR = 2.0; hipsY = 0.42; t.spine = 0.55; t.head = 0.3;
+        t.armL = t.armR = -2.7; t.elbowL = t.elbowR = -1.7; t.side = 0.15;
+        break;
       case 'surprised':
         t.armL = t.armR = -2.3; t.elbowL = t.elbowR = -1.2; t.side = 0.5; t.spine = -0.12; t.head = -0.15;
         break;
@@ -1033,7 +1067,7 @@ export class Pedestrians {
       M.neck.setMatrixAt(i, a.neck.matrixWorld); M.shoulders.setMatrixAt(i, a.shoulders.matrixWorld);
       M.nose.setMatrixAt(i, a.nose.matrixWorld); M.eyes.setMatrixAt(i, a.eyes.matrixWorld);
       const sol = !!p.app.soldier;
-      const cop = !!p.app.cop;
+      const cop = !!p.app.cop || !!p.app.guard;
       for (const k of ['cap', 'brim', 'badge', 'cvest', 'stripe', 'belt', 'holster', 'radio']) M[k].setMatrixAt(i, cop ? a[k].matrixWorld : this.zero);
       M.pistol.setMatrixAt(i, cop && p.pose === 'aimGun' ? a.pistol.matrixWorld : this.zero);
       if (cop) M.hairS.setMatrixAt(i, this.zero);

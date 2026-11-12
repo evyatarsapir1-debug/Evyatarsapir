@@ -248,6 +248,7 @@ export class Police {
     const g = this.game, fine = Math.min(g.econ.money, 500 + Math.floor(this.level) * 400);
     g.econ.pay(fine, 'קנס משטרה');
     this.clear();
+    g.heist?.fail('נעצרת');
     g.respawnAt(POLICE_STATION, `נעצרת! שילמת קנס של ₪${fine.toLocaleString('he-IL')} ושוחררת מתחנת המשטרה.`);
   }
 

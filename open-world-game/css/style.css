@@ -383,3 +383,28 @@ html, body { touch-action: manipulation; }
 
 #fhKeys { margin-top: 4px; font-size: 10px; opacity: .75; }
 body.touch #fhKeys { display: none; }
+
+/* bank heists */
+#heistHud { position: absolute; top: max(70px, env(safe-area-inset-top)); right: 12px; background: #000b; color: #fff; border-radius: 12px; padding: 8px 12px; font-size: 12px; max-width: 270px; display: none; pointer-events: none; line-height: 1.5; border: 1px solid #d4af3766; }
+#heistHud.show { display: block; }
+#heistHud b { display: block; font-size: 13px; margin-bottom: 2px; color: #ffd76a; }
+#heistHud .done { opacity: .5; text-decoration: line-through; }
+#heistHud .cur { color: #ffd23a; font-weight: bold; }
+#heistHud .loot { margin-top: 4px; color: #8dffb8; font-weight: bold; }
+body.touch #heistHud { top: auto; bottom: 150px; right: auto; left: 10px; font-size: 11px; max-width: 220px; padding: 5px 9px; }
+body.touch #heistHud div.done, body.touch #heistHud div:not(.cur):not(.loot) { display: none; }
+#heistBusy { position: absolute; left: 50%; bottom: 26%; transform: translateX(-50%); background: #000b; color: #fff; border-radius: 10px; padding: 6px 12px; display: none; text-align: center; min-width: 180px; pointer-events: none; font-size: 13px; }
+#heistBusy.show { display: block; }
+#heistBusy i { display: block; height: 6px; background: #ffffff30; border-radius: 3px; margin-top: 5px; overflow: hidden; }
+#heistBusy b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ffd23a, #8dffb8); }
+#alarmFlash { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 40px #ff000088; opacity: 0; transition: opacity .12s; }
+#alarmFlash.on { opacity: 1; }
+#heistReward { position: absolute; inset: 0; pointer-events: none; display: none; overflow: hidden; }
+#heistReward.show { display: block; }
+#heistReward .rw-box { position: absolute; left: 50%; top: 28%; transform: translate(-50%, -50%); background: #000c; border: 2px solid #d4af37; border-radius: 18px; padding: 16px 28px; text-align: center; color: #fff; animation: rwpop .5s ease-out; }
+#heistReward .rw-t { font-size: 26px; font-weight: 900; color: #ffd76a; }
+#heistReward .rw-n { font-size: 40px; font-weight: 900; color: #8dffb8; font-variant-numeric: tabular-nums; margin: 4px 0; }
+#heistReward .rw-s { font-size: 13px; opacity: .85; }
+#heistReward .bill { position: absolute; top: -40px; font-size: 30px; animation: billfall linear infinite; }
+@keyframes billfall { from { transform: translateY(0) rotate(0deg); } to { transform: translateY(110vh) rotate(540deg); } }
+@keyframes rwpop { from { transform: translate(-50%, -50%) scale(.6); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }

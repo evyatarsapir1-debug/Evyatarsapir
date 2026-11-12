@@ -130,7 +130,7 @@ function shellColliders(b, top, door, out) {
   }
 }
 
-const DOORS = { shop: [1.8, 2.6], house: [1.2, 2.2], hall: [3.0, 3.2], mall: [4, 3.4], apartment: [2.2, 2.7], tower: [2.2, 2.7], terminal: [8, 3.4], hangar: [46, 16], ctower: [1.8, 2.6], villa: [2.0, 2.5], library: [2.4, 2.8] };
+const DOORS = { bank: [2.6, 3.0], shop: [1.8, 2.6], house: [1.2, 2.2], hall: [3.0, 3.2], mall: [4, 3.4], apartment: [2.2, 2.7], tower: [2.2, 2.7], terminal: [8, 3.4], hangar: [46, 16], ctower: [1.8, 2.6], villa: [2.0, 2.5], library: [2.4, 2.8] };
 export function doorFor(b) { const d = DOORS[b.interior]; return d ? { face: b.face, w: d[0], h: d[1] } : null; }
 
 // The player's villa: an open, bright two-storey home. Ground floor: living room, dining, kitchen with island.
@@ -451,6 +451,8 @@ export function interiorSpec(b) {
     }
     for (let a = -hl + 3; a < hl - 4; a += 5) piece(F, spec, 'bench', a, D * 0.4, y0, '+d');
     for (let a = -hl + 3; a < hl; a += 7) for (let d = 3; d < D; d += 7) lamp(a, d, y0 + H - 0.03);
+  } else if (b.interior === 'bank') {
+    bankSpec(b, F, spec, piece, lamp, furn);
   } else if (b.interior === 'apartment' || b.interior === 'tower') {
     apartmentSpec(b, F, spec, piece, lamp, furn);
   } else if (b.interior === 'terminal') {
@@ -644,6 +646,227 @@ function ctowerSpec(b, F, spec, piece, lamp, furn) {
     doorPt: F.pt(sa0 - 0.9, D / 2), doorCenter: F.pt(sa0, D / 2), insidePt: F.pt((sa0 + hl) / 2, D / 2),
     out: [-rx, -rz], lat: [-F.fx, -F.fz], width: 1.2, height: 2.3, labels: ['לובי', 'חדר פיקוח'],
   };
+}
+
+// --------------------------------------------------------------------------- banks
+// Every bank: a lobby with customers and waiting seats, a teller counter with glass screens, staff desks with
+// computers, a security room with a wall of camera monitors, and a big vault behind a thick wall with a round door
+// (the door itself is animated by the heist system). Two banks have upper floors served by an elevator.
+// Styles: classic (marble + columns, 2 floors), harbor (bright glass), local (small branch), gold (dark luxury, 3 floors).
+function bankSpec(b, F, spec, piece, lamp, furn) {
+  const C = spec.colliders, y0 = CURB_H, L = F.L, D = F.D, hl = L / 2, K = b.bank.style;
+  const PAL = {
+    classic: { wall: 0xebe2cf, floor: 0xd9d1c1, ceil: 0xf6f3ec, wood: 0x5e3f2a, accent: 0xb8964a, seat: 0x7a2e2e },
+    harbor: { wall: 0xeaf0f3, floor: 0xc9d3da, ceil: 0xfafcfd, wood: 0xd9d3c7, accent: 0x2e86c1, seat: 0x2e5d8a },
+    local: { wall: 0xf1e8d8, floor: 0xb58d64, ceil: 0xf7f4ee, wood: 0x7a5233, accent: 0x2e7d4f, seat: 0x2e7d4f },
+    gold: { wall: 0x33302b, floor: 0xe6dcc4, ceil: 0x2a2825, wood: 0x2b211a, accent: 0xd4af37, seat: 0x1f1f1f },
+  }[K];
+  const nFl = K === 'classic' ? 2 : K === 'gold' ? 3 : 1;
+  const H1 = K === 'local' ? 4.0 : K === 'harbor' ? 5.5 : 5.2, FH = 4.0;
+  const floors = [y0]; for (let k = 1; k < nFl; k++) floors.push(y0 + H1 + (k - 1) * FH);
+  const topIn = nFl > 1 ? floors[nFl - 1] + FH : y0 + H1;
+  spec.door = { face: b.face, w: 2.6, h: 3.0 };
+  spec.doors = [];
+  shellColliders(b, topIn, spec.door, C);
+  if (y0 + b.h > topIn + 0.3) C.push(makeBox(b.x, b.z, b.w / 2, b.d / 2, 0, topIn, y0 + b.h + 1));
+  else C.push(colFromRect(F.rect(-hl, hl, 0, D), topIn - 0.25, topIn, 'slab'));
+  const WT = 0.16;
+  const wallBox = (a0, a1, d0, d1, ya, yb, color = PAL.wall, mat = 'wall') => { const r = F.rect(a0, a1, d0, d1); spec.boxes.push(boxFromRect(r, ya, yb, color, mat)); C.push(colFromRect(r, ya, yb)); };
+  // wall across (lateral) at depth dc with door openings [{a, w, door}]
+  const wallA = (a0, a1, dc, ya, yb, gaps, color = PAL.wall) => {
+    let a = a0;
+    for (const g of [...gaps].sort((p, q) => p.a - q.a)) {
+      if (g.a - g.w / 2 > a) wallBox(a, g.a - g.w / 2, dc - WT / 2, dc + WT / 2, ya, yb, color);
+      wallBox(g.a - g.w / 2, g.a + g.w / 2, dc - WT / 2, dc + WT / 2, ya + 2.4, yb, color);
+      if (g.door) { const col = colFromRect(F.rect(g.a - g.w / 2, g.a + g.w / 2, dc - 0.06, dc + 0.06), ya, ya + 2.15, 'door'); C.push(col); spec.doors.push({ hinge: F.pt(g.a - g.w / 2, dc), dir: [-F.fz, F.fx], w: g.w, y: ya, color: g.color || 0x5a4030, col }); }
+      a = g.a + g.w / 2;
+    }
+    if (a1 > a) wallBox(a, a1, dc - WT / 2, dc + WT / 2, ya, yb, color);
+  };
+  const wallD = (d0, d1, ac, ya, yb, gaps = [], color = PAL.wall) => {
+    let d = d0;
+    for (const g of [...gaps].sort((p, q) => p.d - q.d)) {
+      if (g.d - g.w / 2 > d) wallBox(ac - WT / 2, ac + WT / 2, d, g.d - g.w / 2, ya, yb, color);
+      wallBox(ac - WT / 2, ac + WT / 2, g.d - g.w / 2, g.d + g.w / 2, ya + 2.4, yb, color);
+      if (g.door) { const col = colFromRect(F.rect(ac - 0.06, ac + 0.06, g.d - g.w / 2, g.d + g.w / 2), ya, ya + 2.15, 'door'); C.push(col); spec.doors.push({ hinge: F.pt(ac, g.d - g.w / 2), dir: [-F.fx, -F.fz], w: g.w, y: ya, color: g.color || 0x5a4030, col }); }
+      d = g.d + g.w / 2;
+    }
+    if (d1 > d) wallBox(ac - WT / 2, ac + WT / 2, d, d1, ya, yb, color);
+  };
+  spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1: floors[1] ?? topIn, wall: PAL.wall, floor: PAL.floor, ceil: PAL.ceil, door: spec.door, b });
+  const info = { style: K, floors, alarms: [], drawers: [], loot: [] };
+  // ---- elevator (multi-storey banks) in the front-left corner, opening towards the lobby
+  let sa1 = -hl;                                   // lateral end of the elevator shaft
+  if (nFl > 1) {
+    const sa0 = -hl, sw = 2.5, sd0 = 1.2, sd1 = sd0 + 2.6; sa1 = sa0 + sw;
+    const yTop = topIn;
+    wallBox(sa0, sa1, sd0 - WT / 2, sd0 + WT / 2, y0, yTop, 0xb8b2a6); wallBox(sa0, sa1, sd1 - WT / 2, sd1 + WT / 2, y0, yTop, 0xb8b2a6);
+    for (const y of floors) {
+      wallBox(sa1 - WT / 2, sa1 + WT / 2, sd0, (sd0 + sd1) / 2 - 0.6, y, y + (y === y0 ? H1 : FH), 0xb8b2a6);
+      wallBox(sa1 - WT / 2, sa1 + WT / 2, (sd0 + sd1) / 2 + 0.6, sd1, y, y + (y === y0 ? H1 : FH), 0xb8b2a6);
+      wallBox(sa1 - WT / 2, sa1 + WT / 2, (sd0 + sd1) / 2 - 0.6, (sd0 + sd1) / 2 + 0.6, y + 2.3, y + (y === y0 ? H1 : FH), 0xb8b2a6);
+    }
+    const ldoors = floors.map((y) => { const c = colFromRect(F.rect(sa1 - 0.08, sa1 + 0.08, (sd0 + sd1) / 2 - 0.6, (sd0 + sd1) / 2 + 0.6), y, y + 2.3, 'ldoor'); C.push(c); return c; });
+    // upper floor slabs with the shaft opening
+    for (let k = 1; k < nFl; k++) {
+      const y = floors[k];
+      for (const r of [F.rect(sa1, hl, 0, D), F.rect(-hl, sa1, 0, sd0), F.rect(-hl, sa1, sd1, D)]) {
+        spec.surfaces.push(makeSurface(r[0], r[1], r[2], r[3], y));
+        spec.slabs.push({ rect: r, y, color: PAL.floor, under: PAL.ceil });
+        C.push(colFromRect(r, y - 0.25, y - 0.02, 'slab'));
+      }
+      spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0: y, y1: y + FH, wall: PAL.wall, floor: null, ceil: PAL.ceil, door: null, b });
+    }
+    const [rx, rz] = [-F.fz, F.fx];
+    spec.floors = floors;
+    spec.elevator = {
+      floors, ldoors, cabin: F.rect(sa0 + 0.08, sa1 - 0.12, sd0 + 0.1, sd1 - 0.1), shaft: F.rect(sa0, sa1, sd0, sd1),
+      doorPt: F.pt(sa1 + 0.9, (sd0 + sd1) / 2), doorCenter: F.pt(sa1, (sd0 + sd1) / 2), insidePt: F.pt((sa0 + sa1) / 2, (sd0 + sd1) / 2),
+      out: [rx, rz], lat: [-F.fx, -F.fz], width: 1.2, height: 2.3,
+      labels: K === 'gold' ? ['לובי', 'אבטחה', 'אוצר'] : ['לובי', 'הנהלה'],
+    };
+  }
+  // ---- ground floor: lobby, teller counter, staff desks
+  const dc = K === 'local' ? D * 0.46 : D * 0.42;       // counter line
+  const dBack = K === 'local' ? D * 0.68 : D * 0.64;     // back partition (security + vault behind it)
+  const yG = y0, HG = floors[1] ? floors[1] - y0 : H1;
+  // marble columns (classic) / glass fins (harbor) / gold-trimmed pillars (gold)
+  if (K !== 'local') for (let a = sa1 + 3; a < hl - 2; a += 6.5) for (const dd of [2.2, dc - 1.4]) {
+    if (dd < 1.5) continue;
+    furn(a - 0.35, a + 0.35, dd - 0.35, dd + 0.35, yG, yG + HG, K === 'gold' ? 0x1e1c19 : K === 'harbor' ? 0xdfe9ef : 0xf1ebdf, true, K === 'harbor' ? 'glass' : 'prop');
+    if (K === 'gold') { furn(a - 0.38, a + 0.38, dd - 0.38, dd + 0.38, yG + 0.02, yG + 0.18, PAL.accent, false); furn(a - 0.38, a + 0.38, dd - 0.38, dd + 0.38, yG + HG - 0.25, yG + HG - 0.05, PAL.accent, false); }
+  }
+  // waiting area, plants, rug, info desk
+  const aL = sa1 + 1.5;
+  piece(F, spec, 'rug', (aL + hl) / 2 - 1, dc * 0.45, yG, '+d', K === 'gold' ? 0x5a1f1f : K === 'classic' ? 0x7a2e2e : 0x2e5d8a, false);
+  for (let a = aL + 1.5; a < hl - 5; a += 3.6) piece(F, spec, 'seatrow', a, Math.max(2.2, dc * 0.5), yG, '+d', PAL.seat);
+  piece(F, spec, 'plant', aL, 0.7, yG); piece(F, spec, 'plant', hl - 0.6, 0.7, yG);
+  if (K !== 'local') { piece(F, spec, 'desk_reception', hl - 2.4, 1.9, yG, '+d'); (spec.staff ||= []).push({ pt: F.pt(hl - 2.4, 2.8), yaw: Math.atan2(F.fx, F.fz), y: yG }); }
+  // the heist starts at the entrance
+  info.start = { pt: F.pt(0, 1.4), y: yG };
+  // teller counter across the hall, glass screens above it, a gate at the right end to walk behind
+  const ca0 = aL - 0.5, ca1 = hl - 1.8;
+  furn(ca0, ca1, dc, dc + 0.8, yG, yG + 1.08, PAL.wood);
+  furn(ca0, ca1, dc - 0.05, dc + 0.85, yG + 1.08, yG + 1.14, K === 'gold' ? PAL.accent : 0xd8d2c8, false);
+  furn(ca0, ca1, dc + 0.36, dc + 0.42, yG + 1.14, yG + 2.1, 0xcfe3ef, true, 'glass');
+  const nT = Math.max(2, Math.min(5, Math.floor((ca1 - ca0) / 3)));
+  spec.counters = [];
+  for (let i = 0; i < nT; i++) {
+    const a = ca0 + (i + 0.5) * (ca1 - ca0) / nT;
+    furn(a - 0.35, a + 0.35, dc + 0.45, dc + 0.75, yG + 1.14, yG + 1.5, 0x111418);      // teller monitor
+    furn(a - 0.32, a + 0.32, dc + 0.44, dc + 0.45, yG + 1.17, yG + 1.47, 0x2a5a8a, false, 'screen');
+    spec.counters.push({ pt: F.pt(a, dc - 0.6), keeper: F.pt(a, dc + 1.4), yaw: Math.atan2(F.fx, F.fz), y: yG });
+    info.drawers.push({ pt: F.pt(a, dc + 1.15), y: yG });
+  }
+  // staff desks with computers behind the counter
+  for (let a = ca0 + 1.6; a < ca1 - 0.5 && dBack - dc > 4; a += 3.4) {
+    piece(F, spec, 'desk', a, dc + 2.9, yG, '-d');
+    (spec.staff ||= []).push({ pt: F.pt(a, dc + 2.9 - 0.72), yaw: Math.atan2(-F.fx, -F.fz) + Math.PI, y: yG, sit: true });
+  }
+  // ---- back partition: security room (left) and vault room (right) behind it
+  const vw = K === 'gold' ? 0 : Math.min(L * 0.5, K === 'local' ? 7 : 11);   // vault room width (gold: the vault is upstairs)
+  const secW = K === 'local' ? 4.2 : 5.2;
+  const secA0 = -hl, secA1 = -hl + secW;
+  const vA1 = hl, vA0 = hl - vw;
+  const gaps = [{ a: (secA0 + secA1) / 2 + 0.6, w: 1.1, door: true, color: 0x3a3f45 }];
+  if (vw) gaps.push({ a: (vA0 + vA1) / 2, w: 2.4 });
+  if (vw && vA0 - secA1 > 3) gaps.push({ a: (secA1 + vA0) / 2, w: 1.1, door: true });   // staff room
+  if (!vw) gaps.push({ a: 0, w: 1.1, door: true });
+  wallA(-hl, hl, dBack, yG, yG + HG, gaps);
+  if (vw) wallD(dBack, D, vA0, yG, yG + HG);
+  wallD(dBack, D, secA1, yG, yG + HG);
+  const secRoom = (a0, a1, d0, d1, y, h) => {
+    // camera monitors on the back wall, console desk, chair, server rack
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) {
+      const aa = a0 + 0.6 + c * ((a1 - a0 - 1.2) / 3), yy = y + 1.25 + r * 0.62;
+      furn(aa, aa + (a1 - a0 - 1.2) / 3 - 0.08, d1 - 0.12, d1 - 0.04, yy, yy + 0.55, 0x0d1014, false);
+      furn(aa + 0.04, aa + (a1 - a0 - 1.2) / 3 - 0.12, d1 - 0.13, d1 - 0.12, yy + 0.04, yy + 0.51, [0x3c6e5a, 0x3a5a7a, 0x5a6a7a][(r + c) % 3], false, 'screen');
+    }
+    furn(a0 + 0.4, a1 - 0.4, d1 - 1.3, d1 - 0.7, y, y + 0.78, 0x2c3036);
+    piece(F, spec, 'chair', (a0 + a1) / 2, d1 - 1.75, y, '+d', 0x1f1f1f, false);
+    furn(a0 + 0.1, a0 + 0.7, d0 + 0.3, d0 + 1.0, y, y + 2.0, 0x1b1d22);
+    for (let k = 0; k < 6; k++) furn(a0 + 0.12, a0 + 0.13, d0 + 0.35, d0 + 0.95, y + 0.3 + k * 0.28, y + 0.36 + k * 0.28, k % 2 ? 0x4cff8a : 0xff4c4c, false, 'lamp');
+    (spec.staff ||= []).push({ pt: F.pt((a0 + a1) / 2, d1 - 1.75), yaw: Math.atan2(-F.fx, -F.fz), y, sit: true, guard: true });
+    lamp((a0 + a1) / 2, (d0 + d1) / 2, y + h - 0.05);
+    return { pt: F.pt((a0 + a1) / 2, d1 - 1.4), y };
+  };
+  const vaultRoom = (a0, a1, d0, d1, y, h, big) => {
+    // thick steel walls around the vault, a round opening facing the corridor; deposit boxes + money inside
+    const vd0 = d0 + 2.4, va = (a0 + a1) / 2, T2 = 0.5, steel = 0x5b6168;
+    wallBox(a0 + 0.3, va - 1.25, vd0, vd0 + T2, y, y + h, steel, 'metal');
+    wallBox(va + 1.25, a1 - 0.3, vd0, vd0 + T2, y, y + h, steel, 'metal');
+    wallBox(va - 1.25, va + 1.25, vd0, vd0 + T2, y + 2.7, y + h, steel, 'metal');
+    wallBox(a0 + 0.3, a0 + 0.3 + T2, vd0, d1, y, y + h, steel, 'metal');
+    wallBox(a1 - 0.3 - T2, a1 - 0.3, vd0, d1, y, y + h, steel, 'metal');
+    // frame around the door
+    furn(va - 1.35, va + 1.35, vd0 - 0.08, vd0, y + 2.6, y + 2.85, 0x8a9096, false, 'metal');
+    const doorCol = colFromRect(F.rect(va - 1.25, va + 1.25, vd0, vd0 + T2), y, y + 2.7, 'vaultdoor'); C.push(doorCol);
+    // inside: walls of safe-deposit boxes, money on pallets, gold bars on a table
+    const ia0 = a0 + 0.3 + T2, ia1 = a1 - 0.3 - T2;
+    for (const side of [ia0, ia1 - 0.4]) for (let r = 0; r < 5; r++) for (let c = 0; c < Math.floor((d1 - vd0 - 1.2) / 0.5); c++) {
+      const dd = vd0 + T2 + 0.4 + c * 0.5, yy = y + 0.3 + r * 0.42;
+      furn(side, side + 0.4, dd, dd + 0.46, yy, yy + 0.38, (r + c) % 2 ? 0x9aa0a6 : 0x8b9197, false, 'metal');
+    }
+    const loot = [];
+    const nP = big ? 3 : 2;
+    for (let i = 0; i < nP; i++) {
+      const la = ia0 + 1.4 + i * ((ia1 - ia0 - 2.8) / Math.max(1, nP - 1)), ld = (vd0 + d1) / 2 + 0.4;
+      furn(la - 0.6, la + 0.6, ld - 0.4, ld + 0.4, y, y + 0.15, 0x7a5a33);                                // pallet
+      for (let k = 0; k < 4; k++) furn(la - 0.5 + (k % 2) * 0.52, la - 0.02 + (k % 2) * 0.52, ld - 0.35 + Math.floor(k / 2) * 0.36, ld - 0.02 + Math.floor(k / 2) * 0.36, y + 0.15, y + 0.15 + (big ? 0.8 : 0.55), 0x2f7a43, false);
+      loot.push({ pt: F.pt(la, ld - 0.9), y });
+    }
+    if (big || K === 'classic') {
+      const ga = va, gd = d1 - 0.8;
+      furn(ga - 0.9, ga + 0.9, gd - 0.35, gd + 0.35, y, y + 0.8, 0x2b2b2b);
+      for (let k = 0; k < 10; k++) furn(ga - 0.8 + (k % 5) * 0.32, ga - 0.55 + (k % 5) * 0.32, gd - 0.25 + Math.floor(k / 5) * 0.25, gd - 0.05 + Math.floor(k / 5) * 0.25, y + 0.8, y + 0.9, 0xd4af37, false, 'lamp');
+      loot.push({ pt: F.pt(ga, gd - 0.9), y, gold: true });
+    }
+    lamp(va, (vd0 + d1) / 2, y + h - 0.05); lamp(va, d0 + 1.0, y + h - 0.05);
+    info.alarms.push({ pt: F.pt(va, vd0 - 0.2), y: y + 2.9 });
+    return { center: F.pt(va, vd0 + T2 / 2), hingeA: va - 1.25, d: vd0, y, col: doorCol, out: [F.fx, F.fz], lat: [-F.fz, F.fx], loot, outside: F.pt(va, vd0 - 1.6) };
+  };
+  // security room on the ground floor (harbor, local), manager's office upstairs (classic), security upstairs (gold)
+  if (K === 'harbor' || K === 'local') info.security = secRoom(secA0, secA1, dBack, D, yG, HG);
+  else { piece(F, spec, 'desk', (secA0 + secA1) / 2, D - 1.5, yG, '-d'); piece(F, spec, 'bookcase', secA0 + 0.6, dBack + 0.4, yG, '+d'); lamp((secA0 + secA1) / 2, (dBack + D) / 2, yG + HG - 0.05); }
+  if (vw) info.vault = vaultRoom(vA0, vA1, dBack, D, yG, HG, false);
+  // middle back room: staff kitchen / archive
+  if (vw && vA0 - secA1 > 3) { piece(F, spec, 'table', (secA1 + vA0) / 2, (dBack + D) / 2, yG, '+d'); piece(F, spec, 'bookcase', (secA1 + vA0) / 2, D - 0.3, yG, '-d'); }
+  lamp((sa1 + hl) / 2, dc * 0.5, yG + HG - 0.05); lamp((sa1 + hl) / 2 - 6, dc * 0.5, yG + HG - 0.05); lamp((sa1 + hl) / 2, dc + 2.5, yG + HG - 0.05);
+  info.alarms.push({ pt: F.pt(0, 0.6), y: yG + HG - 0.4 }, { pt: F.pt(hl - 1, dc - 1), y: yG + HG - 0.4 });
+  // customers in the lobby and guards patrolling it
+  const lp = [F.pt(aL + 1, 1.5), F.pt(hl - 2, 1.6), F.pt(0, dc - 1.2), F.pt(aL + 2, dc - 1.4), F.pt(hl - 3, dc - 1.4)];
+  spec.wander = { points: lp, n: K === 'local' ? 3 : K === 'gold' ? 4 : 5 };
+  spec.guards = { points: [F.pt(aL, 1.2), F.pt(hl - 1.2, 1.2), F.pt(hl - 1.2, dc - 1.0), F.pt(aL, dc - 1.0)], n: K === 'local' ? 1 : K === 'gold' ? 3 : 2, y: yG };
+  // ---- upper floors
+  if (K === 'classic') {
+    const y = floors[1];
+    // offices along the front, manager's office + security room at the back
+    for (let a = sa1 + 2; a < hl - 1.5; a += 3.4) { piece(F, spec, 'desk', a, 2.2, y, '+d'); spec.staff.push({ pt: F.pt(a, 2.2 + 0.72), yaw: Math.atan2(F.fx, F.fz), y, sit: true }); }
+    wallA(-hl, hl, D * 0.55, y, y + FH, [{ a: -hl + 3.2, w: 1.1, door: true, color: 0x3a3f45 }, { a: hl - 3.5, w: 1.1, door: true }]);
+    wallD(D * 0.55, D, 0, y, y + FH);
+    info.security = secRoom(-hl, 0, D * 0.55, D, y, FH);
+    // manager's office: big desk, armchairs, wall safe with the vault code
+    piece(F, spec, 'desk', hl / 2, D - 1.6, y, '-d'); piece(F, spec, 'armchair', hl / 2 - 1.2, D * 0.55 + 1.2, y, '+d', 0x5e3f2a); piece(F, spec, 'armchair', hl / 2 + 1.2, D * 0.55 + 1.2, y, '+d', 0x5e3f2a);
+    furn(hl - 1.0, hl - 0.2, D - 1.2, D - 0.4, y + 0.9, y + 1.7, 0x3a3f45, true, 'metal');   // wall safe
+    info.manager = { pt: F.pt(hl - 1.6, D - 0.9), y };
+    for (let a = -hl + 3; a < hl; a += 6) lamp(a, D * 0.3, y + FH - 0.05);
+    lamp(hl / 2, D * 0.78, y + FH - 0.05);
+  }
+  if (K === 'gold') {
+    // floor 1: security centre + offices; floor 2: the treasury vault
+    const y1 = floors[1], y2 = floors[2];
+    for (let a = sa1 + 2; a < hl - 1.5; a += 3.4) { piece(F, spec, 'desk', a, 2.2, y1, '+d'); spec.staff.push({ pt: F.pt(a, 2.2 + 0.72), yaw: Math.atan2(F.fx, F.fz), y: y1, sit: true }); }
+    wallA(-hl, hl, D * 0.5, y1, y1 + FH, [{ a: -hl + 4, w: 1.1, door: true, color: 0x2a2a2a }]);
+    info.security = secRoom(-hl, hl * 0.2, D * 0.5, D, y1, FH);
+    for (let a = -hl + 3; a < hl; a += 6) lamp(a, D * 0.25, y1 + FH - 0.05);
+    // treasury: a wide hall with the biggest vault
+    info.vault = vaultRoom(-hl * 0.45, hl - 0.5, D * 0.3, D, y2, FH, true);
+    for (let a = sa1 + 2; a < hl - 2; a += 5) piece(F, spec, 'plant', a, 0.6, y2);
+    for (let a = -hl + 3; a < hl; a += 6) lamp(a, D * 0.2, y2 + FH - 0.05);
+    info.alarms.push({ pt: F.pt(0, 0.6), y: y1 + FH - 0.4 }, { pt: F.pt(0, 0.6), y: y2 + FH - 0.4 });
+  }
+  if (K === 'classic') info.alarms.push({ pt: F.pt(0, 0.6), y: floors[1] + FH - 0.4 });
+  spec.bank = info;
 }
 
 // --------------------------------------------------------------------------- apartment buildings & towers

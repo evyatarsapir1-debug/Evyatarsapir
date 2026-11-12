@@ -1,3 +1,4 @@
+import { BANKS } from '../world/layout.js';
 // The in-game smartphone. Opens/closes from the phone button (or N). Every app works:
 // map + GPS, contacts (real calls with actions), messages with replies, camera + gallery,
 // radio, missions, my cars, and phone settings.
@@ -166,9 +167,13 @@ export class Phone {
           const tag = st === 'done' ? '<span class="ptag ok">הושלמה</span>' : st === 'active' ? '<span class="ptag">פעילה</span>' : `<button type="button" class="pcall" data-acc="${m.id}">התחל</button>`;
           return `<div class="prow"><span class="pav" style="background:${CONTACTS[m.giver].color}">${CONTACTS[m.giver].name[0]}</span><span><b>${m.title}</b><small>${CONTACTS[m.giver].name} · ${fmt(m.reward)}</small></span>${tag}</div>`;
         }).join('');
-        s.innerHTML = head('משימות') + (act ? `<div class="pcard"><b>${act.title}</b><div>${M.objective().text}</div>${M.timer !== null ? '<div class="mtimer"></div>' : ''}
+        // bank heists: each bank, its loot, status, and a button to navigate there
+        const HS = g.heist, heistRows = BANKS.map((k) => { const st = HS.status(k.id), r = HS.records[k.id] || {};
+          return `<div class="prow"><span class="pav" style="background:#b8860b">🏦</span><span><b>${k.name}</b><small>שלל ${fmt(k.loot)} · ${st.text}${r.count ? ` · בוצע ${r.count}×` : ''}</small></span><button type="button" class="pcall" data-hnav="${k.id}">נווט</button></div>`; }).join('');
+        s.innerHTML = head('משימות') + `<div class="pinfo">🏦 שודי בנקים — היכנס לבנק ולחץ "התחל שוד" ליד הכניסה</div><div class="plist">${heistRows}</div>` + (act ? `<div class="pcard"><b>${act.title}</b><div>${M.objective().text}</div>${M.timer !== null ? '<div class="mtimer"></div>' : ''}
           <div class="pmapbar"><button type="button" class="pbtn" data-act="nav">נווט ליעד</button><button type="button" class="pbtn warn" data-act="quit">וותר</button></div></div>` : '<div class="pinfo">אין משימה פעילה</div>') + `<div class="plist">${rows}</div>`;
         s.querySelectorAll('[data-acc]').forEach((b) => { b.onclick = () => { M.accept(b.dataset.acc); this.show('missions'); }; });
+        s.querySelectorAll('[data-hnav]').forEach((b) => { b.onclick = () => { const d = HS.door(b.dataset.hnav); if (d) { g.gps.set({ ...d, radius: 4 }, g.playerPos()); this.show('map'); } }; });
         const nav = s.querySelector('[data-act="nav"]'); if (nav) nav.onclick = () => { M._target(); this.show('map'); };
         const quit = s.querySelector('[data-act="quit"]'); if (quit) quit.onclick = () => { M.abandon(); this.show('missions'); };
         break;

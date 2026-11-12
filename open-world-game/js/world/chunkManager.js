@@ -202,6 +202,35 @@ function addProp(pb, p, lampB) {
       pb.addGeometry(G.box, mat(p.x, y + 0.9, p.z, 0, 1, 1.8, 0.7), 0xd9d9d9);
       pb.addGeometry(G.box, mat(p.x, y + 1.6, p.z, 0, 1.02, 0.35, 0.72), 0xc0392b);
       break;
+    case 'bankfront': {
+      // entrance architecture for the banks (z = the front face, entrance in the middle, facing -z)
+      const x = p.x, z = p.z, W = p.w, door = 2.0;
+      const cols = (n, r, h, col, z0) => { for (let i = 0; i < n; i++) { const cx = x - W / 2 + 2 + i * (W - 4) / (n - 1); if (Math.abs(cx - x) < door) continue; pb.addGeometry(G.cyl16, mat(cx, y + h / 2, z0, 0, r * 2, h, r * 2), col); pb.addGeometry(G.box, mat(cx, y + 0.2, z0, 0, r * 2.6, 0.4, r * 2.6), col); pb.addGeometry(G.box, mat(cx, y + h - 0.15, z0, 0, r * 2.6, 0.3, r * 2.6), col); } };
+      const atm = (ax) => { pb.addGeometry(G.box, mat(ax, y + 0.9, z - 0.2, 0, 0.8, 1.8, 0.4), 0x3a3f45); pb.addGeometry(G.box, mat(ax, y + 1.25, z - 0.41, 0, 0.5, 0.35, 0.02), 0x3fd6ff); pb.addGeometry(G.box, mat(ax, y + 1.75, z - 0.41, 0, 0.7, 0.18, 0.02), 0x2e7d4f); };
+      if (p.style === 'classic') {
+        for (let k = 0; k < 3; k++) pb.addGeometry(G.box, mat(x, y + 0.12 + k * 0.24, z - 1.6 - (2 - k) * 0.5, 0, W - 2 - k, 0.24, 1.2 + k * 0.9), 0xe9e2d2);   // front steps
+        cols(8, 0.45, 8.6, 0xf3eee3, z - 2.4);
+        pb.addGeometry(G.box, mat(x, y + 9.1, z - 2.3, 0, W - 1, 0.9, 3.4), 0xe9e2d2);                       // entablature
+        for (const sx of [-1, 1]) pb.addGeometry(G.box, mat(x + sx * (W - 1) / 4, y + 10.1, z - 2.3, 0, (W - 1) / 2 + 0.3, 0.45, 3.5, 0, -sx * 0.16), 0xe0d8c6);   // gable pediment
+        pb.addGeometry(G.box, mat(x, y + 9.95, z - 4.0, 0, W - 3, 0.9, 0.1), 0xd8cfbb);                      // pediment face
+        atm(x + W / 2 - 1.2);
+      } else if (p.style === 'harbor') {
+        pb.addGeometry(G.box, mat(x, y + 3.6, z - 2.2, 0, 9, 0.18, 4.4), 0xcfe3ef);                          // glass canopy
+        for (const sx of [-1, 1]) pb.addGeometry(G.cyl, mat(x + sx * 4.2, y + 1.8, z - 4.1, 0, 0.16, 3.6, 0.16), 0xc0c6cc);
+        pb.addGeometry(G.box, mat(x, y + 5.0, z - 0.1, 0, W, 0.5, 0.2), 0x2e86c1);                            // blue band
+        atm(x + 5); atm(x + 6.2);
+      } else if (p.style === 'local') {
+        pb.addGeometry(G.box, mat(x, y + 2.9, z - 0.9, 0, 5.2, 0.12, 1.8), 0x2e7d4f);                          // green awning
+        pb.addGeometry(G.box, mat(x, y + 2.75, z - 1.8, 0, 5.2, 0.35, 0.06), 0x2e7d4f);
+        atm(x - 3.5);
+      } else if (p.style === 'gold') {
+        for (let k = 0; k < 2; k++) pb.addGeometry(G.box, mat(x, y + 0.12 + k * 0.24, z - 1.3 - (1 - k) * 0.6, 0, 14 - k * 2, 0.24, 1.4 + k * 1.2), 0x1b1a18);   // black marble steps
+        pb.addGeometry(G.box, mat(x, y + 4.4, z - 0.15, 0, 9, 0.5, 0.4), 0xd4af37);                             // gold portal
+        for (const sx of [-1, 1]) { pb.addGeometry(G.box, mat(x + sx * 4.3, y + 2.2, z - 0.15, 0, 0.45, 4.4, 0.4), 0xd4af37); pb.addGeometry(G.cyl16, mat(x + sx * 6, y + 3, z - 1.2, 0, 0.8, 6, 0.8), 0x1e1c19); pb.addGeometry(G.box, mat(x + sx * 6, y + 6.05, z - 1.2, 0, 1.1, 0.12, 1.1), 0xd4af37); }
+        atm(x + 8);
+      }
+      break;
+    }
     case 'canopy':
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) pb.addGeometry(G.box, mat(p.x + sx * (p.w / 2 - 1), y + 2.6, p.z + sz * (p.d / 2 - 1), 0, 0.5, 5.2, 0.5), 0xdddddd);
       pb.addGeometry(G.box, mat(p.x, y + 5.3, p.z, 0, p.w, 0.6, p.d), 0xf4f4f4);

@@ -26,7 +26,7 @@ export class Economy {
   constructor() { this.reset(); }
   reset() {
     this.money = 15000;
-    this.health = 100; this.flightSchool = 0;
+    this.health = 100; this.flightSchool = 0; this.heists = {};
     this.items = { flashlight: false, parachute: 0, repairKit: 0, snacks: 0, food: {} };
     this.weapons = {};          // id -> { ammo }
     this.equipped = null;       // weapon id or null
@@ -36,11 +36,11 @@ export class Economy {
     this.wardrobe = [];         // clothes the player owns: [{ id, name, swatch, patch }]
     this.log = [];
   }
-  toJSON() { return { money: this.money, health: this.health, items: this.items, weapons: this.weapons, equipped: this.equipped, wardrobe: this.wardrobe, startOutfit: this.startOutfit, ownedCars: this.ownedCars, flightSchool: this.flightSchool || 0 }; }
+  toJSON() { return { money: this.money, health: this.health, items: this.items, weapons: this.weapons, equipped: this.equipped, wardrobe: this.wardrobe, startOutfit: this.startOutfit, ownedCars: this.ownedCars, flightSchool: this.flightSchool || 0, heists: this.heists || {} }; }
   load(o) {
     this.reset();
     if (!o) return;
-    this.money = o.money ?? this.money; this.health = o.health ?? 100; this.flightSchool = o.flightSchool || 0;
+    this.money = o.money ?? this.money; this.health = o.health ?? 100; this.flightSchool = o.flightSchool || 0; this.heists = o.heists || {};
     Object.assign(this.items, o.items || {});
     this.items.food = { ...(o.items?.food || {}) };
     if (this.items.snacks > 0) { this.items.food.snack = (this.items.food.snack || 0) + this.items.snacks; this.items.snacks = 0; }

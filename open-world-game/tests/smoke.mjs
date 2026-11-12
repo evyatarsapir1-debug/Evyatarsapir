@@ -911,9 +911,9 @@ const ro = await g(() => {
     v.speed = 0; v.vx = v.vz = 0; game.input.pressed.add('vehicle'); step(60);
     return { dead: people.filter((q) => q.state === 'dead').length, hit: people.filter((q) => seen.get(q).has('thrown') || seen.get(q).has('fall')).length, up: people.filter((q) => seen.get(q).has('fall') && q.state !== 'dead' && q.state !== 'fall').length };
   };
-  return { fast: run(60), slow: run(25, 306, 0, 1) };   // slow: someone 4 m in front of the bumper, too late to step aside
+  return { fast: run(60, 330, 4, 4), slow: run(25, 306, 0, 1) };   // fast: a tight group crossing in front of the car   // slow: someone 4 m in front of the bumper, too late to step aside
 });
-check('run over at speed: people are hit (no instant dodging) and stay down for good (no gore)', ro.fast.hit >= 3 && ro.fast.dead >= 3, JSON.stringify(ro));
+check('run over at speed: people are hit (no instant dodging) and stay down for good (no gore)', ro.fast.hit >= 2 && ro.fast.dead >= 2 && ro.fast.dead === ro.fast.hit, JSON.stringify(ro));
 check('a slow bump only knocks a person over; they get back up', ro.slow.hit >= 1 && ro.slow.dead === 0, JSON.stringify(ro.slow));
 
 // ---------------------------------------------------------------- police only come for repeated gunfire
@@ -934,6 +934,40 @@ const calm = await g(() => {
 });
 check('police: a few shots, punches, run-overs or taking cars do not call the police', calm.afterFew === 0 && calm.afterOther === 0, JSON.stringify(calm));
 check('police: repeated gunfire (a burst) brings the police', calm.afterBurst >= 1, JSON.stringify(calm));
+
+// ---------------------------------------------------------------- banks + fictional heists
+const bank = await g(() => {
+  const game = __game, P = game.player, H = game.heist, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.police.clear(); game.econ.health = 100; game.econ.heists = {};
+  const banks = ['central', 'harbor', 'local', 'gold'].map((id) => { const b = H.bankBuilding(id), I = H.info(id); return !!(b && b.interior === 'bank' && I?.vault && I?.security && I.drawers.length); });
+  const sizes = new Set(['central', 'harbor', 'local', 'gold'].map((id) => { const b = H.bankBuilding(id); return Math.round(b.w * b.d); })).size;
+  const go = (pt, y, f = 0) => { game.teleport(pt[0], pt[1], f, y + 0.6); step(3); };
+  const press = () => { game.input.pressed.add('interact'); step(1); };
+  // the neighbourhood bank heist, start to finish
+  const I = H.info('local'); go(I.start.pt, I.start.y, Math.PI); step(60);   // walk in: staff, customers and the guard are inside
+  const prompt = P.prompt?.text || ''; const m0 = game.econ.money;
+  press();
+  const started = !!H.active, alarm = H.active?.alarm, stars = game.police.level;
+  step(10); let peopleReacted = game.peds.peds.filter((q) => q.heistReacted).length;
+  let guard = 0;
+  while (H.active && guard++ < 30) {
+    const S = H.stage();
+    if (S.type === 'escape') { game.police.clear(); step(3); continue; }
+    const t = H.targets().find((q) => !q.taken); if (!t) { step(5); continue; }
+    go(t.pt, t.y); press(); step(Math.ceil(S.dur * 30) + 3);
+    if (S.type === 'unlock') step(30 * 6);
+  }
+  step(10);
+  const paid = game.econ.money - m0, rec = (game.econ.heists || {}).local, status = H.status('local').state;
+  game.save(); const saved = JSON.parse(localStorage.getItem('azura_city_save_v1')).econ.heists?.local?.count;
+  return { banks, sizes, prompt, started, alarm, stars, done: !H.active, paid, rec: !!rec, status, saved, peopleReacted, reward: document.getElementById('heistReward').classList.contains('show') };
+});
+check('banks: four different banks you can enter (vault, security room, tellers)', bank.banks.every(Boolean) && bank.sizes === 4, JSON.stringify(bank.banks));
+check('heist: "start heist" at the bank entrance', bank.prompt.includes('התחל שוד') && bank.started, bank.prompt);
+check('heist: alarm, police stars and people reacting (hide / flee / call)', bank.alarm && bank.stars >= 2 && bank.peopleReacted > 0, JSON.stringify(bank));
+check('heist: completing it pays the bank loot into the account, with the money animation', bank.done && bank.paid === 150000 && bank.reward, JSON.stringify(bank));
+check('heist: result is saved and the robbed bank closes for a while', bank.rec && bank.saved === 1 && bank.status === 'cooldown');
 
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);

@@ -14,6 +14,7 @@ import { Military } from './world/military.js';
 import { Crashes } from './game/crashes.js';
 import { HitFX } from './game/hitfx.js';
 import { Flight } from './game/flight.js';
+import { Heists } from './game/heist.js';
 import { Police, POLICE_STATION, HOSPITAL } from './game/police.js';
 import { VEHICLE_TYPES } from './vehicles/vehicleTypes.js';
 import { ShopUI, shopKind } from './game/shops.js';
@@ -23,7 +24,7 @@ import { GPS } from './phone/gps.js';
 import { Phone } from './phone/phone.js';
 import { Missions, CONTACTS, MISSIONS } from './game/missions.js';
 import { Radio } from './core/audio.js';
-import { PARK_OFFSET, VILLA, FORCED_SHOPS } from './world/layout.js';
+import { PARK_OFFSET, VILLA, FORCED_SHOPS, BANKS } from './world/layout.js';
 import { AirportManager, LIVERIES } from './world/airport.js';
 import { Combat } from './game/combat.js';
 import { setAnisotropy } from './world/textures.js';
@@ -98,6 +99,7 @@ class Game {
     this.hitfx = new HitFX(this.scene); this.hitStop = 0;
     this.police = new Police(this);
     this.flight = new Flight(this);
+    this.heist = new Heists(this);
     this.vehicleTypes = VEHICLE_TYPES;
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());
@@ -303,6 +305,7 @@ class Game {
       { short: 'חנות בגדים', name: 'חנות בגדים — מרכז העיר', icon: '👕', color: '#c2185b', ...door(find([[7, 5]], (b) => b.sign === 'חנות בגדים')) },
       { short: 'גלידה', name: 'גלידת שקיעה', icon: '🍦', color: '#f39c12', ...door(find([[7, 3]], (b) => b.sign === 'גלידת שקיעה')) },
       { short: 'ספרייה', name: 'ספריית העיר', icon: '📚', color: '#6d4c41', ...door(find([[2, 3]], (b) => b.sign === 'ספריית העיר')) },
+      ...BANKS.map((k) => ({ short: k.name, name: `${k.name} — שוד: שלל ${fmt(k.loot)}`, icon: '🏦', color: '#b8860b', ...door(find([k.key.split(',').map(Number)], (b) => b.bank?.id === k.id)) })),
     ].filter((L) => Number.isFinite(L.x));
     // every clothes / weapons / ice-cream / falafel shop in Los Antos gets its icon on the maps
     const KIND = { 'חנות בגדים': ['חנות בגדים', '👕', '#c2185b'], 'חנות נשקים': ['חנות נשקים', '🎯', '#5b2c6f'], 'גלידת שקיעה': ['גלידה', '🍦', '#f39c12'], 'פלאפל הכיכר': ['פלאפל', '🧆', '#8a6d1f'] };
@@ -529,6 +532,7 @@ class Game {
     const fee = Math.min(this.econ.money, 500);
     this.econ.money -= fee; this.econ.health = 100;
     this.police.clear();
+    this.heist?.fail('התעלפת');
     this.respawnAt(HOSPITAL, `התעלפת${why ? ' (' + why + ')' : ''} והתעוררת בבית החולים. טיפול רפואי: ${fmt(fee)}`);
   }
   // move the player (out of any vehicle) to a place in the city
@@ -812,7 +816,12 @@ class Game {
       onYank: (v, ped) => { this.peds.yank(ped, v, p); this.audio.impact?.(3); this.rig.shake = Math.max(this.rig.shake, 0.15); },
     };
     this.interiors.update(dt, p);
+    // bank heists (start at the entrance inside a bank, then each stage's spot): they take priority over sitting on a
+    // chair nearby etc., so the E / "פעולה" press goes to the heist before the player handles it
+    const hp = p.state === 'foot' ? this.heist.promptFor(p) : null;
+    if (hp && input.wasPressed('interact')) { input.pressed.delete('interact'); hp.action(); }
     p.update(dt, input, this.rig.yaw, world);
+    if (hp && p.state === 'foot' && (!p.prompt || p.prompt.key === 'interact')) p.prompt = { key: 'interact', text: hp.text };
     // luna park rides at the marina
     if (!p.prompt && p.state === 'foot') {
       const lp = this.luna.promptFor(p);
@@ -916,6 +925,7 @@ class Game {
     this.police.update(dt, { vehicles: all });
     this.hitfx.update(dt);
     this.flight.update(dt);
+    this.heist.update(dt);
     this.crashes.update(dt, { vehicles: all, player: p, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.military.update(dt, { player: p, input, vehicles: all, onCrime: (k, x, z) => this.police.crime(k, x, z), camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.rig.update(dt, input, p);
