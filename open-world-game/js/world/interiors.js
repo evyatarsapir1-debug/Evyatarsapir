@@ -744,8 +744,10 @@ function bankSpec(b, F, spec, piece, lamp, furn) {
   if (K !== 'local') { piece(F, spec, 'desk_reception', hl - 2.4, 1.9, yG, '+d'); (spec.staff ||= []).push({ pt: F.pt(hl - 2.4, 2.8), yaw: Math.atan2(F.fx, F.fz), y: yG }); }
   // the heist starts at the entrance
   info.start = { pt: F.pt(0, 1.4), y: yG };
+  // local frame so the heist can tell where the player is (lobby / behind the counter / back rooms)
   // teller counter across the hall, glass screens above it, a gate at the right end to walk behind
   const ca0 = aL - 0.5, ca1 = hl - 1.8;
+  info.frame = { o: F.pt(0, 0), f: [F.fx, F.fz], r: [-F.fz, F.fx], dc, ca0, ca1, hl, D };
   furn(ca0, ca1, dc, dc + 0.8, yG, yG + 1.08, PAL.wood);
   furn(ca0, ca1, dc - 0.05, dc + 0.85, yG + 1.08, yG + 1.14, K === 'gold' ? PAL.accent : 0xd8d2c8, false);
   furn(ca0, ca1, dc + 0.36, dc + 0.42, yG + 1.14, yG + 2.1, 0xcfe3ef, true, 'glass');
@@ -756,7 +758,7 @@ function bankSpec(b, F, spec, piece, lamp, furn) {
     furn(a - 0.35, a + 0.35, dc + 0.45, dc + 0.75, yG + 1.14, yG + 1.5, 0x111418);      // teller monitor
     furn(a - 0.32, a + 0.32, dc + 0.44, dc + 0.45, yG + 1.17, yG + 1.47, 0x2a5a8a, false, 'screen');
     spec.counters.push({ pt: F.pt(a, dc - 0.6), keeper: F.pt(a, dc + 1.4), yaw: Math.atan2(F.fx, F.fz), y: yG });
-    info.drawers.push({ pt: F.pt(a, dc + 1.15), y: yG });
+    info.drawers.push({ pt: F.pt(a, dc + 1.15), y: yG, pile: { pt: F.pt(a + 0.62, dc + 0.62), y: yG + 1.14, h: 0.1, yaw: Math.atan2(F.fx, F.fz), kind: 'drawer' } });   // cash by the till, behind the glass
   }
   // staff desks with computers behind the counter
   for (let a = ca0 + 1.6; a < ca1 - 0.5 && dBack - dc > 4; a += 3.4) {
@@ -812,14 +814,13 @@ function bankSpec(b, F, spec, piece, lamp, furn) {
     for (let i = 0; i < nP; i++) {
       const la = ia0 + 1.4 + i * ((ia1 - ia0 - 2.8) / Math.max(1, nP - 1)), ld = (vd0 + d1) / 2 + 0.4;
       furn(la - 0.6, la + 0.6, ld - 0.4, ld + 0.4, y, y + 0.15, 0x7a5a33);                                // pallet
-      for (let k = 0; k < 4; k++) furn(la - 0.5 + (k % 2) * 0.52, la - 0.02 + (k % 2) * 0.52, ld - 0.35 + Math.floor(k / 2) * 0.36, ld - 0.02 + Math.floor(k / 2) * 0.36, y + 0.15, y + 0.15 + (big ? 0.8 : 0.55), 0x2f7a43, false);
-      loot.push({ pt: F.pt(la, ld - 0.9), y });
+      // the money on the pallet is a separate object (it vanishes into your bag when you take it)
+      loot.push({ pt: F.pt(la, ld - 0.9), y, pile: { pt: F.pt(la, ld), y: y + 0.15, h: big ? 0.8 : 0.55, yaw: Math.atan2(F.fx, F.fz), kind: 'cash' } });
     }
     if (big || K === 'classic') {
       const ga = va, gd = d1 - 0.8;
       furn(ga - 0.9, ga + 0.9, gd - 0.35, gd + 0.35, y, y + 0.8, 0x2b2b2b);
-      for (let k = 0; k < 10; k++) furn(ga - 0.8 + (k % 5) * 0.32, ga - 0.55 + (k % 5) * 0.32, gd - 0.25 + Math.floor(k / 5) * 0.25, gd - 0.05 + Math.floor(k / 5) * 0.25, y + 0.8, y + 0.9, 0xd4af37, false, 'lamp');
-      loot.push({ pt: F.pt(ga, gd - 0.9), y, gold: true });
+      loot.push({ pt: F.pt(ga, gd - 0.9), y, gold: true, pile: { pt: F.pt(ga, gd), y: y + 0.8, h: 0.1, yaw: Math.atan2(F.fx, F.fz), kind: 'gold' } });
     }
     lamp(va, (vd0 + d1) / 2, y + h - 0.05); lamp(va, d0 + 1.0, y + h - 0.05);
     info.alarms.push({ pt: F.pt(va, vd0 - 0.2), y: y + 2.9 });

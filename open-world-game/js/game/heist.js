@@ -66,6 +66,7 @@ export class Heists {
     this.game = game;
     this.active = null;               // { id, b, stage, loot, busy, t, timer }
     this.doors = {};                  // bankId -> { open, mode, t, wheel }
+    this.taken = {};                  // bankId -> Set of loot keys already in your bag
     this.fx = [];
     this._buildHud();
   }
@@ -89,17 +90,7 @@ export class Heists {
   promptFor(player) {
     if (player.state !== 'foot') return null;
     const near = (pt, y, r = 1.8) => pt && Math.hypot(player.x - pt[0], player.z - pt[1]) < r && Math.abs(player.y - y) < 1.4;
-    if (!this.active) {
-      for (const k of BANKS) {
-        const I = this.info(k.id);
-        if (!I || !near(I.start.pt, I.start.y, 2.4)) continue;
-        const st = this.status(k.id);
-        if (st.state === 'cooldown') return { text: `${k.name}: ${st.text}`, action: () => this.game.toast(`${k.name} — ${st.text}`, 2) };
-        if (this.game.police.level > 0) return { text: 'לא עכשיו — המשטרה מחפשת אותך', action: () => {} };
-        return { text: `התחל שוד: ${k.name} (שלל ${fmtUSD(k.loot)})`, action: () => this.start(k.id) };
-      }
-      return null;
-    }
+    if (!this.active) return null;     // no "start" button: the robbery begins when you actually rob the bank
     const A = this.active, S = this.stage(), I = this.info(A.id);
     if (!S || A.busy || A.wait) return null;
     for (const t of this.targets()) {
@@ -118,21 +109,37 @@ export class Heists {
     let list = [];
     if (S.type === 'hold') list = S.where === 'drawer' ? [I.drawers[0]] : [I[S.where]];
     else if (S.type === 'unlock' || S.type === 'blast') list = [{ pt: I.vault.outside, y: I.vault.y }];
-    else if (S.type === 'loot') list = (S.from === 'drawers' ? I.drawers : I.vault.loot).map((q) => ({ ...q }));
+    else if (S.type === 'loot') list = (S.from === 'drawers' ? I.drawers : I.vault.loot).map((q, i) => ({ ...q, key: (S.from === 'drawers' ? 'd' : 'v') + i }));
     A.targets = list.filter(Boolean).map((q) => ({ ...q, taken: false }));
     return A.targets;
   }
 
   // ------------------------------------------------------------------ flow
-  start(id) {
-    const H = HEISTS[id], I = this.info(id);
-    this.active = { id, b: this.bankBuilding(id), stage: 0, loot: 0, busy: null, targets: null, timer: H.timeLimit || null, alarm: false };
+  start(id, loud = false) {
+    const H = HEISTS[id];
+    this.active = { id, b: this.bankBuilding(id), stage: 0, loot: 0, busy: null, targets: null, timer: H.timeLimit || null, alarm: false, holdup: loud };
     this.doors[id] = { open: 0, mode: 'closed', t: 0 };
-    this.game.toast(`🏦 ${H.title}`, 3);
-    this.game.phone?.notify?.('תוכנית השוד', H.intro);
-    if (H.alarmAtStart) this.alarm('start');
+    this.taken[id] = new Set();
+    this.game.toast(loud ? `🔫 שוד! ${H.stages[0].text}` : `🤫 שוד שקט — ${H.stages[0].text}`, 4);
+    if (H.alarmAtStart || loud) this.alarm(loud ? 'holdup' : 'start');
     this._gps();
-    this._hudRender(true);
+  }
+  // the robbery begins when you rob: draw / use a weapon inside the bank (a loud hold-up), or slip behind the teller
+  // counter, into the back rooms or upstairs (a quiet job)
+  _autoStart() {
+    const g = this.game, P = g.player;
+    if (P.state !== 'foot' || g.police.level > 0) return;
+    for (const L of g.interiors.loaded.values()) {
+      const I = L.spec.bank, b = L.b; if (!I?.frame) continue;
+      if (Math.abs(P.x - b.x) > b.w / 2 || Math.abs(P.z - b.z) > b.d / 2) continue;
+      if (this.status(b.bank.id).state !== 'ready') return;
+      const Fr = I.frame, dx = P.x - Fr.o[0], dz = P.z - Fr.o[1];
+      const depth = -(dx * Fr.f[0] + dz * Fr.f[1]);
+      const armed = P.armed && (P.aimT > 0 || P.firing > 0);
+      const sneaking = depth > Fr.dc + 0.9 || P.y > I.floors[0] + 2;
+      if (armed) return this.start(b.bank.id, true);
+      if (sneaking) return this.start(b.bank.id, false);
+    }
   }
   _gps() {
     const S = this.stage(); if (!S) return;
@@ -149,15 +156,17 @@ export class Heists {
     if (msg) this.game.toast(msg, 3);
     A.stage++; A.targets = null; A.busy = null; A.wait = null;
     if (A.stage >= HEISTS[A.id].stages.length) return this._success();
-    this._gps(); this._hudRender(true);
+    const S = this.stage();
+    setTimeout(() => { if (this.active === A && this.stage() === S) this.game.toast(S.text, 3.5); }, msg ? 2600 : 0);
+    this._gps();
   }
   alarm(why) {
     const A = this.active; if (!A || A.alarm) return;
     A.alarm = true;
     const H = HEISTS[A.id], b = A.b, I = this.info(A.id);
     this.game.police.setWanted(H.stars, b.door.x, b.door.z);
-    this.game.toast(`🚨 האזעקה בבנק! ${'★'.repeat(H.stars)} המשטרה בדרך`, 3);
-    this.game.peds.heistReact(b, this.game.playerPos(), I.floors[0], I.floors[I.floors.length - 1] + 4);
+    if (why !== 'holdup') this.game.toast(`🚨 האזעקה בבנק! ${'★'.repeat(H.stars)} המשטרה בדרך`, 3);
+    this.game.peds.heistReact(b, this.game.playerPos(), I.floors[0], I.floors[I.floors.length - 1] + 4, why === 'holdup');
     this._siren(true);
   }
   fail(reason) {
@@ -187,8 +196,9 @@ export class Heists {
     this._doors(dt);
     this._fx(dt);
     this._alarmLights(dt);
+    this._lootObjects(dt);
     const A = this.active;
-    if (!A) { this._hud.classList.remove('show'); return; }
+    if (!A) { this._hud.classList.remove('show'); this._busy.classList.remove('show'); this._autoStart(); return; }
     const S = this.stage();
     if (A.timer !== null) { A.timer -= dt; if (A.timer <= 0) return this.fail('נגמר הזמן'); }
     // an action in progress (hold / loot / unlock / blast): stay at the spot until it is done
@@ -202,6 +212,7 @@ export class Heists {
           if (S.type === 'hold') return this._next(S.done);
           if (S.type === 'loot') {
             done.target.taken = true;
+            if (done.target.key) (this.taken[A.id] ||= new Set()).add(done.target.key);
             const total = HEISTS[A.id].stages.filter((q) => q.type === 'loot').reduce((n, q) => n + (q.share || 1), 0);
             A.loot += BANKS.find((q) => q.id === A.id).loot * (S.share || 1) / total / this.targets().length;
             this._bag(true); g.audio.coin?.(); g.audio.mech?.('in');
@@ -357,6 +368,52 @@ export class Heists {
     }
   }
 
+  // cash stacks, gold bars and till money are real objects: what you take disappears into your bag
+  _lootObjects(dt) {
+    const g = this.game, P = g.player;
+    for (const L of g.interiors.loaded.values()) {
+      const I = L.spec.bank; if (!I) continue;
+      const id = L.b.bank.id;
+      if ((!this.active || this.active.id !== id) && this.status(id).state === 'ready' && this.taken[id]?.size) this.taken[id] = new Set();   // restocked
+      if (!L.lootObj) {
+        const cash = new THREE.MeshStandardMaterial({ color: 0x3f8f55, roughness: 0.8 }), band = new THREE.MeshStandardMaterial({ color: 0xe8e2c8, roughness: 0.7 });
+        const goldM = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.25, emissive: 0x3a2a05, emissiveIntensity: 0.4 });
+        const make = (pile) => {
+          const grp = new THREE.Group(); grp.position.set(pile.pt[0], pile.y, pile.pt[1]); grp.rotation.y = pile.yaw;
+          if (pile.kind === 'cash') for (let k = 0; k < 4; k++) {
+            const st = new THREE.Group(); st.position.set(-0.26 + (k % 2) * 0.52, 0, -0.18 + Math.floor(k / 2) * 0.36);
+            const h = pile.h * (0.85 + ((k * 37) % 10) / 60);
+            const m = new THREE.Mesh(new THREE.BoxGeometry(0.46, h, 0.32), cash); m.position.y = h / 2; m.castShadow = true; st.add(m);
+            for (const yy of [0.25, 0.75]) { const bnd = new THREE.Mesh(new THREE.BoxGeometry(0.47, 0.04, 0.33), band); bnd.position.y = h * yy; st.add(bnd); }
+            grp.add(st);
+          } else if (pile.kind === 'gold') for (let k = 0; k < 12; k++) {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.08, 0.12), goldM); m.position.set(-0.7 + (k % 6) * 0.28, 0.04 + Math.floor(k / 6) * 0.0, -0.13 + Math.floor(k / 6) * 0.26); m.castShadow = true; grp.add(m);
+          } else for (let k = 0; k < 3; k++) {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.08), cash); m.position.set(-0.1 + k * 0.1, 0.025 + (k % 2) * 0.05, 0); grp.add(m);
+            const bnd = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.052, 0.082), band); bnd.position.copy(m.position); grp.add(bnd);
+          }
+          L.group.add(grp); return { grp, anim: -1 };
+        };
+        L.lootObj = {};
+        (I.vault?.loot || []).forEach((q, i) => { if (q.pile) L.lootObj['v' + i] = make(q.pile); });
+        I.drawers.forEach((q, i) => { if (q.pile) L.lootObj['d' + i] = make(q.pile); });
+      }
+      const T = this.taken[id];
+      for (const [key, o] of Object.entries(L.lootObj)) {
+        const gone = !!T?.has(key);
+        if (!gone) { o.grp.visible = true; o.grp.scale.setScalar(1); o.anim = -1; if (o.home) o.grp.position.copy(o.home); continue; }
+        if (o.anim < 0 && o.grp.visible && this.active?.id === id) { o.anim = 0; o.home = o.grp.position.clone(); }
+        if (o.anim >= 0) {
+          // swept into the bag: lifts towards you and shrinks away
+          o.anim += dt / 0.55; const k = Math.min(1, o.anim);
+          o.grp.position.lerpVectors(o.home, new THREE.Vector3(P.x, P.y + 1.1, P.z), k * k);
+          o.grp.scale.setScalar(1 - k * 0.95);
+          if (k >= 1) { o.grp.visible = false; o.anim = -2; }
+        } else if (o.anim !== -2) o.grp.visible = false;
+      }
+    }
+  }
+
   // money bag on the player's back while carrying loot
   _bag(on) {
     const P = this.game.player;
@@ -383,7 +440,7 @@ export class Heists {
     const html = `<b>🏦 ${H.title}</b>` + H.stages.map((s, i) => `<div class="${i < A.stage ? 'done' : i === A.stage ? 'cur' : ''}">${i < A.stage ? '✔' : i === A.stage ? '▶' : '•'} ${s.text}${i === A.stage && s.type === 'loot' && tg.length > 1 ? ` (${tg.length - left}/${tg.length})` : ''}</div>`).join('')
       + `<div class="loot">שלל בתיק: ${fmt(A.loot)}${A.timer !== null ? ` · ⏱ ${Math.max(0, Math.ceil(A.timer))} שנ׳` : ''}${A.alarm ? ' · 🚨 אזעקה' : ''}</div>`;
     if (force || this._hud.dataset.h !== html) { this._hud.innerHTML = html; this._hud.dataset.h = html; }
-    this._hud.classList.add('show');
+    this._hud.classList.remove('show');   // no stage list on screen: short messages + the map route guide you
     const B = A.busy;
     this._busy.classList.toggle('show', !!B || A.wait?.kind === 'opening');
     if (B) { this._busy.querySelector('span').textContent = S.type === 'loot' ? 'אוסף שלל…' : `${S.busy}…`; this._busy.querySelector('b').style.width = Math.round(100 * B.t / B.dur) + '%'; }

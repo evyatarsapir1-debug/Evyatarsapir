@@ -298,17 +298,21 @@ export class Pedestrians {
   }
   // a bank is being robbed: everyone inside reacts in their own way (no violence): guards radio for help and take
   // cover, customers and staff run for the exit, hide on the floor or phone the police
-  heistReact(b, src, yMin, yMax) {
+  heistReact(b, src, yMin, yMax, holdup = false) {
     for (const p of this.peds) {
       if (['dead', 'thrown', 'driving', 'pulled', 'inside'].includes(p.state) || p.heistReacted) continue;
       if (Math.abs(p.x - b.x) > b.w / 2 + 1 || Math.abs(p.z - b.z) > b.d / 2 + 1 || p.y < yMin - 0.5 || p.y > yMax + 0.5) continue;
       p.heistReacted = true;
       this._release(p); p.seat = null; p.fixedY = null; p.bench = null;
-      const r = this.rng.float();
-      if (p.app.guard) { p.state = 'callHelp'; p.timer = 3; p.afterCall = 'hide'; this.say(p, 'מוקד, כאן המאבטח: שוד בבנק! שלחו משטרה!', 3); }
-      else if (r < 0.4) { p.state = 'flee'; p.timer = 9; p.fleeFrom = [src.x, src.z]; this.say(p, this.rng.pick(['שוד! כולם החוצה!', 'הצילו!', 'בורחים!']), 2); }
-      else if (r < 0.75) { p.state = 'hide'; p.timer = 25 + this.rng.float(0, 15); this.say(p, this.rng.pick(['אני מתחבא...', 'שקט, שקט...', 'רק שזה ייגמר']), 2); }
-      else { p.state = 'callHelp'; p.timer = 4; p.fleeFrom = [src.x, src.z]; this.say(p, 'הלו משטרה? יש שוד בבנק!', 3.5); }
+      const r = this.rng.float(), talk = this.rng.chance(0.25), sameFloor = Math.abs(p.y - (src.y ?? p.y)) < 2.5;
+      const say = (t, d) => { if (talk) this.say(p, t, d); };
+      // hold-up at gunpoint: staff and guards put their hands up, customers get down on the floor
+      if (holdup && sameFloor && (p.app.guard || p.state === 'shopkeeper' || p.state === 'resident')) { p.state = 'surrender'; p.timer = 30 + this.rng.float(0, 10); say( this.rng.pick(['בסדר, בסדר!', 'קח מה שאתה רוצה', 'רק בלי בעיות']), 2.2); continue; }
+      if (holdup && (r < 0.7 || !sameFloor)) { p.state = 'hide'; p.timer = 30 + this.rng.float(0, 10); say( this.rng.pick(['כולם על הרצפה!', 'אני לא זז…', 'שקט, שקט…']), 2); continue; }
+      if (p.app.guard) { p.state = 'callHelp'; p.timer = 3; p.afterCall = 'hide'; say('מוקד, כאן המאבטח: שוד בבנק! שלחו משטרה!', 3); }
+      else if (r < 0.4) { p.state = 'flee'; p.timer = 9; p.fleeFrom = [src.x, src.z]; say(this.rng.pick(['שוד! כולם החוצה!', 'הצילו!', 'בורחים!']), 2); }
+      else if (r < 0.75) { p.state = 'hide'; p.timer = 25 + this.rng.float(0, 15); say(this.rng.pick(['אני מתחבא...', 'שקט, שקט...', 'רק שזה ייגמר']), 2); }
+      else { p.state = 'callHelp'; p.timer = 4; p.fleeFrom = [src.x, src.z]; say('הלו משטרה? יש שוד בבנק!', 3.5); }
     }
   }
   // bank security guard: dark uniform, cap, vest, duty belt (not police: the wanted system ignores them)
@@ -425,7 +429,7 @@ export class Pedestrians {
     if (p.barT > 0) p.barT -= dt;
     // ---- vehicles: being hit (anyone outdoors on their feet or lying in the road) and trying to get out of the way
     const canBeHit = !['shopkeeper', 'resident', 'inside', 'driving', 'pulled', 'thrown', 'dead', 'swimmer'].includes(p.state);
-    const canDodge = canBeHit && !['hide', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'sunbathe', 'beachsit', 'guard', 'copChase', 'knocked', 'getup', 'dodge'].includes(p.state);
+    const canDodge = canBeHit && !['hide', 'surrender', 'fall', 'flee', 'fight', 'down', 'evade', 'surprised', 'callHelp', 'dazed', 'sunbathe', 'beachsit', 'guard', 'copChase', 'knocked', 'getup', 'dodge'].includes(p.state);
     let threat = false;
     if (canBeHit) {
       for (const v of vehicles) {
@@ -656,6 +660,11 @@ export class Pedestrians {
       case 'callHelp':
         speed = 0; pose = 'phone';
         if (p.timer <= 0) { p.state = p.afterCall || 'flee'; p.timer = p.afterCall ? 25 : 6; p.afterCall = null; }
+        break;
+      case 'surrender':
+        // hands up, facing the robber
+        speed = 0; pose = 'surrender'; p.yaw = dampAngle(p.yaw, Math.atan2(ctx.player.x - p.x, ctx.player.z - p.z), 4, dt);
+        if (p.timer <= 0) { p.state = 'hide'; p.timer = 15; }
         break;
       case 'hide':
         // crouched, hands over the head, waiting for it to be over
@@ -1012,6 +1021,9 @@ export class Pedestrians {
         { const k2 = Math.max(0, Math.min(1, 1 - p.timer / 0.9));
           t.bodyX = -1.2 * (1 - k2); t.legL = -1.3 * (1 - k2 * 0.8); t.kneeL = 1.9 * (1 - k2 * 0.8); t.legR = 0.4 * (1 - k2); t.kneeR = 1.2 * (1 - k2);
           t.armL = t.armR = -0.7; t.elbowL = t.elbowR = -0.4; t.spine = 0.5 * (1 - k2); hipsY = 0.35 + 0.55 * k2; }
+        break;
+      case 'surrender':
+        t.armL = t.armR = -2.95; t.elbowL = t.elbowR = -0.35; t.side = 0.35; t.spine = -0.05; t.head = -0.05;
         break;
       case 'hide':
         t.legL = t.legR = -1.5; t.kneeL = t.kneeR = 2.0; hipsY = 0.42; t.spine = 0.55; t.head = 0.3;

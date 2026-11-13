@@ -947,7 +947,8 @@ const bank = await g(() => {
   // the neighbourhood bank heist, start to finish
   const I = H.info('local'); go(I.start.pt, I.start.y, Math.PI); step(60);   // walk in: staff, customers and the guard are inside
   const prompt = P.prompt?.text || ''; const m0 = game.econ.money;
-  press();
+  const idle = !H.active;                                   // just walking in starts nothing
+  go(I.drawers[0].pt, I.drawers[0].y); step(2);            // slip behind the counter: the robbery begins
   const started = !!H.active, alarm = H.active?.alarm, stars = game.police.level;
   step(10); let peopleReacted = game.peds.peds.filter((q) => q.heistReacted).length;
   let guard = 0;
@@ -958,13 +959,16 @@ const bank = await g(() => {
     go(t.pt, t.y); press(); step(Math.ceil(S.dur * 30) + 3);
     if (S.type === 'unlock') step(30 * 6);
   }
-  step(10);
+  step(30);
+  const L = [...game.interiors.loaded.values()].find((q) => q.b.bank?.id === 'local');
+  const lootGone = L?.lootObj ? Object.values(L.lootObj).filter((o) => !o.grp.visible).length : 0, lootAll = L?.lootObj ? Object.keys(L.lootObj).length : 0;
   const paid = game.econ.money - m0, rec = (game.econ.heists || {}).local, status = H.status('local').state;
   game.save(); const saved = JSON.parse(localStorage.getItem('azura_city_save_v1')).econ.heists?.local?.count;
-  return { banks, sizes, prompt, started, alarm, stars, done: !H.active, paid, rec: !!rec, status, saved, peopleReacted, reward: document.getElementById('heistReward').classList.contains('show') };
+  return { banks, sizes, prompt, idle, lootGone, lootAll, started, alarm, stars, done: !H.active, paid, rec: !!rec, status, saved, peopleReacted, reward: document.getElementById('heistReward').classList.contains('show') };
 });
 check('banks: four different banks you can enter (vault, security room, tellers)', bank.banks.every(Boolean) && bank.sizes === 4, JSON.stringify(bank.banks));
-check('heist: "start heist" at the bank entrance', bank.prompt.includes('התחל שוד') && bank.started, bank.prompt);
+check('heist: no "start" button — walking in is fine, robbing (behind the counter / weapon out) starts it', !bank.prompt.includes('התחל שוד') && bank.idle && bank.started, bank.prompt);
+check('heist: the cash and gold you take disappear from the bank', bank.lootAll > 0 && bank.lootGone === bank.lootAll, `${bank.lootGone}/${bank.lootAll}`);
 check('heist: alarm, police stars and people reacting (hide / flee / call)', bank.alarm && bank.stars >= 2 && bank.peopleReacted > 0, JSON.stringify(bank));
 check('heist: completing it pays the bank loot into the account, with the money animation', bank.done && bank.paid === 150000 && bank.reward, JSON.stringify(bank));
 check('heist: result is saved and the robbed bank closes for a while', bank.rec && bank.saved === 1 && bank.status === 'cooldown');
