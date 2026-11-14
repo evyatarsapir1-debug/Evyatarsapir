@@ -46,6 +46,31 @@ export function zoneOf(d) {
   return { id: 'back', name: 'אחורי הראש' };
 }
 
+/** Zone keys with the side of the head (client's left = +X). Used for analysis, highlighting and feedback. */
+export const ZONE_KEYS = ['top', 'crown', 'fringe', 'sideL', 'sideR', 'sideburnL', 'sideburnR', 'back', 'nape'];
+export const ZONE_NAMES = {
+  top: 'החלק העליון', crown: 'הכתר (קודקוד)', fringe: 'הפוני וקו השיער הקדמי', sideL: 'הצד השמאלי', sideR: 'הצד הימני',
+  sideburnL: 'הפאה השמאלית', sideburnR: 'הפאה הימנית', back: 'אחורי הראש', nape: 'העורף',
+};
+export function zoneKeyOf(d) {
+  const z = zoneOf(d).id;
+  if (z === 'side' || z === 'sideburn') return z + (azimuth(d) < 0 ? 'R' : 'L');
+  return z;
+}
+
+/** Plain-Hebrew height description for feedback (by normalized height on the head). */
+export function heightName(y) {
+  if (y < -0.42) return 'בתחתית העורף';
+  if (y < 0.05) return 'בגובה האוזן';
+  if (y < 0.3) return 'מעל האוזן';
+  if (y < 0.55) return 'בקו הרקה (גובה הפייד)';
+  return 'בחלק העליון';
+}
+export function dirFromAzY(az, y, out = new THREE.Vector3()) {
+  const r = Math.sqrt(Math.max(0, 1 - y * y));
+  return out.set(Math.sin(az) * r, y, Math.cos(az) * r);
+}
+
 /** Ellipsoid point + outward normal for a unit direction. */
 export function surfacePoint(d, out = new THREE.Vector3()) { return out.set(d.x * RADII.x, d.y * RADII.y, d.z * RADII.z); }
 export function surfaceNormal(p, out = new THREE.Vector3()) {

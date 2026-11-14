@@ -44,7 +44,8 @@ export class OrbitCam {
     c.phi += (this.phi - c.phi) * k;
     c.r += (this.r - c.r) * k;
     const dir = _d.set(Math.sin(c.phi) * Math.sin(c.theta), Math.cos(c.phi), Math.sin(c.phi) * Math.cos(c.theta));
-    let r = c.r;
+    // narrow (portrait) screens see less sideways: step back so the whole head still fits
+    let r = c.r * (this.camera.aspect < 1 ? Math.min(1.8, 0.85 / this.camera.aspect) : 1);
     // stay in front of the mirror wall, above the floor, below the ceiling
     if (dir.z > 0) r = Math.min(r, (1.12 - this.target.z) / dir.z);
     if (dir.y > 0) r = Math.min(r, (2.85 - this.target.y) / dir.y);

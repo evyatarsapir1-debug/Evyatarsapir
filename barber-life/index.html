@@ -29,22 +29,50 @@
       <div class="brand big">BARBER <b>LIFE</b></div>
       <div class="tagline">בית הספר לספרות — מאפס ועד מאסטר ברבר</div>
       <div class="title-buttons">
-        <button id="btnStart" class="btn primary big">✂️ &nbsp;התחל להתאמן</button>
+        <button id="btnStart" class="btn primary big">✂️ &nbsp;כניסה לאקדמיה</button>
         <button id="btnHowTo" class="btn ghost">איך עובדים?</button>
       </div>
       <div class="phase-note">
-        שלב 1 של המשחק: עמדת אימון עם לקוח תלת־ממדי, כיסא ספרים, מכונת תספורת עם מסרקי גובה וטרימר.
-        השיער בנוי מאלפי שערות תלת־ממדיות ומתקצר באמת בכל מקום שהמכונה עוברת.
+        100 שיעורים, מעבדת תספורות, לקוחות עם בקשות, אתגרים ותעודות — והכול על ראש תלת־ממדי עם אלפי שערות שאתה מספר בעצמך.
       </div>
+    </div>
+  </div>
+
+  <!-- Hub -->
+  <div id="hub" class="hub hidden">
+    <div class="hub-inner">
+      <header class="hub-head">
+        <div class="brand">BARBER <b>LIFE</b></div>
+        <button id="profileChip" class="profile-chip">
+          <span class="avatar">💈</span>
+          <span class="pc-text"><b id="hubName">ספר/ית</b><small id="hubRank">מתחיל</small></span>
+        </button>
+        <div class="coins" title="מטבעות"><span>🪙</span><b id="hubCoins">0</b></div>
+      </header>
+      <div class="xp-row"><div class="xpbar"><i id="hubXp"></i></div><small id="hubXpText" class="muted"></small></div>
+      <div class="hub-grid" id="hubGrid"></div>
+    </div>
+  </div>
+
+  <!-- Generic sheet (library, lessons, dictionary, awards, shop...) -->
+  <div id="sheet" class="sheet hidden">
+    <div class="sheet-card">
+      <header class="sheet-head">
+        <button id="sheetBack" class="icon-btn" aria-label="חזרה">→</button>
+        <h2 id="sheetTitle"></h2>
+        <button id="sheetClose" class="icon-btn" aria-label="סגירה">✕</button>
+      </header>
+      <div id="sheetBody" class="sheet-body"></div>
     </div>
   </div>
 
   <!-- HUD -->
   <div id="hud" class="hidden">
     <header class="topbar">
+      <button id="btnHome" class="icon-btn" title="לתפריט הראשי" aria-label="לתפריט הראשי">⌂</button>
       <div class="brand">BARBER <b>LIFE</b></div>
-      <button id="clientChip" class="chip client-chip" title="בחירת לקוח">
-        <span class="avatar">👤</span><span><b id="clientName">דניאל</b><small id="clientHair">שיער חלק</small></span>
+      <button id="clientChip" class="chip client-chip" title="בחירת ראש לאימון חופשי">
+        <span class="avatar" id="clientAvatar">👤</span><span><b id="clientName">דניאל</b><small id="clientHair">שיער חלק</small></span>
       </button>
       <div class="top-actions">
         <button id="btnUndo" class="icon-btn" title="ביטול פעולה אחרונה" aria-label="ביטול">↶</button>
@@ -55,9 +83,33 @@
       </div>
     </header>
 
+    <!-- Session task card -->
+    <div id="sessionBar" class="session-bar hidden">
+      <div class="task-card">
+        <div class="task-top"><b id="taskTitle"></b><span id="taskTimer" class="muted small"></span></div>
+        <div id="taskSub" class="task-sub hidden"></div>
+        <div class="task-actions">
+          <button id="btnRequest" class="sb hidden">💬 הבקשה</button>
+          <button id="btnSteps" class="sb">📋 שלבים</button>
+          <button id="btnDemo" class="sb">▶ הדגמה</button>
+          <button id="btnHygiene" class="sb hidden">🧴 חיטוי כלים</button>
+          <div id="cmpGroup" class="cmp" role="group" aria-label="השוואה">
+            <button data-cmp="mine" class="active">שלי</button><button data-cmp="pro">מקצועי</button><button data-cmp="diff">הבדלים</button>
+          </div>
+          <button id="btnCheck" class="sb primary hidden">✓ בדוק</button>
+          <button id="btnFinish" class="sb primary">✓ סיום ובדיקה</button>
+        </div>
+        <div id="stepsList" class="steps hidden"></div>
+      </div>
+      <div id="proBadge" class="pro-badge hidden">תצוגת התוצאה המקצועית</div>
+    </div>
+
     <aside class="tool-panel">
       <button class="tool-card active" data-tool="clipper"><span class="ti">✂️</span><span>מכונה</span></button>
       <button class="tool-card" data-tool="trimmer"><span class="ti">🪒</span><span>טרימר</span></button>
+      <button class="tool-card" data-tool="scissors"><span class="ti">✂</span><span>מספריים</span></button>
+      <button class="tool-card" data-tool="thinning"><span class="ti">〰️</span><span>דילול</span></button>
+      <button class="tool-card" data-tool="duster"><span class="ti">🧹</span><span>מברשת</span></button>
     </aside>
 
     <div class="view-panel">
@@ -73,7 +125,7 @@
     </div>
 
     <div id="readout" class="readout">
-      <div id="roZone">העבר את המכונה על הראש</div>
+      <div id="roZone">העבר את הכלי על הראש</div>
       <div id="roLen" class="muted"></div>
     </div>
 
@@ -88,10 +140,18 @@
       <div class="lg-row"><i style="background:#e61f1a"></i>22–32</div>
       <div class="lg-row"><i style="background:#f2d9e6"></i>32+</div>
     </div>
+    <div id="legendDiff" class="legend hidden">
+      <div class="lg-title">מול המקצועי</div>
+      <div class="lg-row"><i style="background:#1ad940"></i>אורך נכון</div>
+      <div class="lg-row"><i style="background:#ffd91a"></i>קצת ארוך</div>
+      <div class="lg-row"><i style="background:#f21a1a"></i>ארוך מדי</div>
+      <div class="lg-row"><i style="background:#1acbf2"></i>קצת קצר</div>
+      <div class="lg-row"><i style="background:#2633f2"></i>קצר מדי</div>
+    </div>
 
     <footer class="bottom">
       <div class="mode-toggle" role="group" aria-label="מצב">
-        <button id="modeCut" class="mode active">✋ חיתוך</button>
+        <button id="modeCut" class="mode active">✋ עבודה</button>
         <button id="modeView" class="mode">🔄 סיבוב</button>
       </div>
       <div id="guardBox" class="guard-box">
@@ -101,7 +161,20 @@
       </div>
       <div id="trimInfo" class="guard-box hidden">
         <div class="guard-title"><span>טרימר</span><b>נשאר: 0.2 מ״מ</b></div>
-        <div class="muted small">לקווים: מסביב לאוזן, פאות ועורף.</div>
+        <div class="muted small">לקווים: מסביב לאוזן, פאות ועורף, ולעור חלק בסקין פייד.</div>
+      </div>
+      <div id="scissorBox" class="guard-box hidden">
+        <div class="guard-title"><span>מספריים על מסרק — גובה המסרק</span><b id="scissorInfo">נשאר: 40 מ״מ</b></div>
+        <div id="scissorLens" class="guards"></div>
+        <button id="btnPoint" class="lever">סוג גזירה: <b>ישרה</b></button>
+      </div>
+      <div id="thinInfo" class="guard-box hidden">
+        <div class="guard-title"><span>מספרי דילול</span><b>מורידים נפח</b></div>
+        <div class="muted small">כל תנועה מקצרת רק כשליש מהשערות. מתאים לשיער עבה ולטקסטורה בחלק העליון — לא לפייד.</div>
+      </div>
+      <div id="dustInfo" class="guard-box hidden">
+        <div class="guard-title"><span>מברשת צוואר</span><b>ניקוי הלקוח</b></div>
+        <div class="muted small">העבר על הכתפיים, הצוואר והגלימה כדי להוריד שערות שנחתכו.</div>
       </div>
     </footer>
     <div id="toast" class="toast"></div>
@@ -112,12 +185,14 @@
     <div class="modal-card">
       <h2>איך עובדים בעמדה</h2>
       <ul class="howto">
-        <li><b>חיתוך:</b> גוררים אצבע/עכבר על הראש. המכונה מקצרת כל שערה שארוכה מהמסרק שנבחר.</li>
+        <li><b>עבודה:</b> גוררים אצבע/עכבר על הראש. הכלי מקצר כל שערה שארוכה מהאורך שהוא משאיר.</li>
         <li><b>סיבוב:</b> גוררים מחוץ לראש, או עוברים למצב "🔄 סיבוב". במחשב: כפתור ימני בעכבר.</li>
         <li><b>זום:</b> צביטה בשתי אצבעות, גלגלת העכבר או ＋/－.</li>
-        <li><b>מסרקי גובה:</b> מספר גבוה = נשאר שיער ארוך יותר. ½=1.5 מ״מ, 1=3, 2=6, 3=10, 4=13, 6=19, 8=25 מ״מ. ידית טייפר פתוחה מוסיפה 1.5 מ״מ.</li>
-        <li><b>🌈 מפת אורכים:</b> צובעת כל שערה לפי האורך שלה — דרך מצוינת לבדוק מעברים וסימטריה.</li>
-        <li><b>↶ ביטול:</b> מחזיר את התנועה האחרונה. טעות היא חלק מהלמידה.</li>
+        <li><b>הכלים:</b> מכונה עם מסרקי גובה, טרימר לקווים, מספריים על מסרק לשיער ארוך, מספרי דילול לנפח, ומברשת לניקוי הלקוח.</li>
+        <li><b>מסרקי גובה:</b> ½=1.5 מ״מ, 1=3, 2=6, 3=10, 4=13, 6=19, 8=25 מ״מ. ידית טייפר פתוחה מוסיפה 1.5 מ״מ.</li>
+        <li><b>📋 שלבים / ▶ הדגמה:</b> בתספורת עם יעד אפשר לראות את סדר העבודה ולצפות בהדגמה תלת־ממדית.</li>
+        <li><b>שלי / מקצועי / הבדלים:</b> משווים את העבודה שלך לתוצאה המקצועית — ירוק נכון, אדום ארוך מדי, כחול קצר מדי.</li>
+        <li><b>✓ סיום ובדיקה:</b> המורה בודק את השיער עצמו: אורך, סימטריה, מעברים, אחידות וגימור — ומסביר מה לתקן.</li>
       </ul>
       <div class="safety">
         <b>🧼 היגיינה ובטיחות:</b> ספר מקצועי מנקה ומחטא מכונות, להבים ומסרקים בין לקוח ללקוח, משתמש בצווארון נייר ובגלימה נקייה,
@@ -129,7 +204,7 @@
 
   <div id="clientModal" class="modal hidden">
     <div class="modal-card">
-      <h2>בחר לקוח לאימון</h2>
+      <h2>אימון חופשי — בחר ראש</h2>
       <div id="clientList" class="client-list"></div>
       <button class="btn ghost" data-close>סגור</button>
     </div>
@@ -138,11 +213,58 @@
   <div id="confirmModal" class="modal hidden">
     <div class="modal-card small">
       <h2>להתחיל מחדש?</h2>
-      <p>השיער של הלקוח יחזור לאורך המקורי והשערות על הרצפה ינוקו.</p>
+      <p>השיער יחזור לאורך המקורי והשערות על הרצפה ינוקו.</p>
       <div class="row">
         <button id="confirmYes" class="btn primary">כן, שיער חדש</button>
         <button class="btn ghost" data-close>ביטול</button>
       </div>
+    </div>
+  </div>
+
+  <div id="leaveModal" class="modal hidden">
+    <div class="modal-card small">
+      <h2>לצאת לתפריט?</h2>
+      <p id="leaveText">העבודה הנוכחית לא תיבדק.</p>
+      <div class="row">
+        <button id="leaveYes" class="btn primary">כן, לצאת</button>
+        <button class="btn ghost" data-close>להמשיך לעבוד</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="resultModal" class="modal hidden">
+    <div class="modal-card wide">
+      <h2>בדיקת התספורת — המורה האישי</h2>
+      <div id="resultBody"></div>
+      <div class="row result-actions">
+        <button id="btnContinue" class="btn ghost">🛠️ המשך לתקן</button>
+        <button id="btnCompare" class="btn ghost">🔍 השוואה למקצועי</button>
+        <button id="btnRetry" class="btn ghost">♻️ נסה שוב</button>
+        <button id="btnEnd" class="btn primary">✓ סיום</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="requestModal" class="modal hidden">
+    <div class="modal-card">
+      <div id="requestBody"></div>
+    </div>
+  </div>
+
+  <div id="nameModal" class="modal hidden">
+    <div class="modal-card small">
+      <h2>ברוך הבא לאקדמיה!</h2>
+      <p>איך קוראים לך? השם יופיע על התעודות שלך.</p>
+      <input id="nameInput" class="text-input" maxlength="24" placeholder="השם שלך" />
+      <div class="row"><button id="nameSave" class="btn primary">שמירה</button></div>
+    </div>
+  </div>
+
+  <div id="rewardModal" class="modal hidden">
+    <div class="modal-card small">
+      <h2 id="rewardTitle">כל הכבוד!</h2>
+      <div id="rewardBody"></div>
+      <button class="btn primary" data-close>המשך</button>
     </div>
   </div>
 

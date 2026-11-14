@@ -111,7 +111,8 @@ function fabricTexture(hex, stripe) {
   return t;
 }
 
-export function buildClient({ skin = SKIN_TONES.light, hairColor = '#3a281d', capeColor = '#1d2733' } = {}) {
+export function buildClient({ skin = SKIN_TONES.light, hairColor = '#3a281d', capeColor = '#1d2733', mannequin = false } = {}) {
+  if (mannequin) skin = '#d8bfa4';
   const group = new THREE.Group(); group.name = 'client';
   const head = new THREE.Group(); head.name = 'head';
   head.position.set(0, 1.34, 0.0);
@@ -167,6 +168,27 @@ export function buildClient({ skin = SKIN_TONES.light, hairColor = '#3a281d', ca
   neck.position.set(0, -0.12, -0.012);
   head.add(neck);
 
+  if (mannequin) {
+    // Training head on a tripod stand: a short bust, a clamp and a tripod on the floor.
+    const plastic = new THREE.MeshStandardMaterial({ color: '#cfb59a', roughness: 0.55 });
+    const bust = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.11, 0.12, 32), plastic);
+    bust.position.set(0, 1.12, -0.012); group.add(bust);
+    const chromeM = new THREE.MeshStandardMaterial({ color: '#d8d8da', metalness: 1, roughness: 0.2 });
+    const clamp = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.06, 20), new THREE.MeshStandardMaterial({ color: '#1a1a1a', roughness: 0.5 }));
+    clamp.position.set(0, 1.03, -0.012); group.add(clamp);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.98, 16), chromeM);
+    pole.position.set(0, 0.52, -0.012); group.add(pole);
+    for (let k = 0; k < 3; k++) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.42, 12), chromeM);
+      const a = k * Math.PI * 2 / 3;
+      leg.position.set(Math.sin(a) * 0.14, 0.14, -0.012 + Math.cos(a) * 0.14);
+      leg.rotation.set(Math.cos(a) * 0.75, 0, -Math.sin(a) * 0.75);
+      group.add(leg);
+    }
+    group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    return { group, head, headMesh, baseColors, dustTargets: [neck, bust], mannequin: true };
+  }
+
   // Barber cape (lathe), neck strip, lap drape.
   const capeMat = new THREE.MeshStandardMaterial({ map: fabricTexture(capeColor, null), roughness: 0.75, side: THREE.DoubleSide });
   const prof = [[0.05, 0.0], [0.07, -0.015], [0.12, -0.04], [0.19, -0.075], [0.225, -0.12], [0.24, -0.2], [0.245, -0.4], [0.255, -0.62], [0.27, -0.78]]
@@ -208,5 +230,5 @@ export function buildClient({ skin = SKIN_TONES.light, hairColor = '#3a281d', ca
     group.add(shoe);
   }
 
-  return { group, head, headMesh, baseColors };
+  return { group, head, headMesh, baseColors, dustTargets: [cape, strip, lapMesh, neck], mannequin: false };
 }

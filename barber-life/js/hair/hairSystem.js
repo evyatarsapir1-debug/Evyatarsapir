@@ -3,7 +3,7 @@
 // short, lying down and following the head when long, curls) is computed in the vertex shader from the length,
 // so cutting = shortening a per-strand length attribute. Nothing is a flat picture of hair.
 import * as THREE from 'three';
-import { RADII, hairMask, zoneOf, surfacePoint, surfaceNormal, mulberry32 } from './scalp.js';
+import { RADII, hairMask, zoneOf, zoneKeyOf, ZONE_KEYS, surfacePoint, surfaceNormal, mulberry32 } from './scalp.js';
 
 const SEG = 6; // ribbon segments per strand
 
@@ -23,6 +23,34 @@ export const HAIR_PRESETS = {
     color: '#151010', curlAmp: 0.0032, curlFreq: 620, width: 0.0013,
     lengths: { top: 50, crown: 46, side: 34, back: 36, nape: 24 },
   },
+  // Training mannequin: long, even hair so every haircut in the library can be cut on it.
+  mannequin: {
+    id: 'mannequin', name: 'ראש אימון', hairType: 'שיער אימון ארוך', hairTypeId: 'straight',
+    color: '#4a3324', curlAmp: 0, curlFreq: 0, width: 0.00115,
+    lengths: { top: 62, crown: 60, side: 52, back: 54, nape: 44 },
+  },
+  mannequinWavy: {
+    id: 'mannequinWavy', name: 'ראש אימון גלי', hairType: 'גלי', hairTypeId: 'wavy',
+    color: '#5c3e27', curlAmp: 0.0022, curlFreq: 260, width: 0.00115,
+    lengths: { top: 62, crown: 60, side: 52, back: 54, nape: 44 },
+  },
+  mannequinCurly: {
+    id: 'mannequinCurly', name: 'ראש אימון מתולתל', hairType: 'מתולתל', hairTypeId: 'curly',
+    color: '#1d1512', curlAmp: 0.0032, curlFreq: 620, width: 0.0013,
+    lengths: { top: 62, crown: 60, side: 52, back: 54, nape: 44 },
+  },
+};
+
+/** Hair types used for generated clients (lengths are chosen per client). */
+export const HAIR_TYPES = {
+  straightDark: { hairType: 'חלק', hairTypeId: 'straight', color: '#2e2018', curlAmp: 0, curlFreq: 0, width: 0.00115 },
+  straightBrown: { hairType: 'חלק', hairTypeId: 'straight', color: '#5a3d26', curlAmp: 0, curlFreq: 0, width: 0.00115 },
+  blond: { hairType: 'חלק ובהיר', hairTypeId: 'straight', color: '#b8925a', curlAmp: 0, curlFreq: 0, width: 0.00105 },
+  ginger: { hairType: 'חלק, ג׳ינג׳י', hairTypeId: 'straight', color: '#8a4a22', curlAmp: 0, curlFreq: 0, width: 0.00105 },
+  wavy: { hairType: 'גלי', hairTypeId: 'wavy', color: '#4e3522', curlAmp: 0.0022, curlFreq: 260, width: 0.00115 },
+  curly: { hairType: 'מתולתל', hairTypeId: 'curly', color: '#161011', curlAmp: 0.0032, curlFreq: 620, width: 0.0013 },
+  coarse: { hairType: 'עבה וקשה', hairTypeId: 'coarse', color: '#121012', curlAmp: 0.0009, curlFreq: 180, width: 0.0015 },
+  grey: { hairType: 'מאפיר', hairTypeId: 'straight', color: '#8d8a86', curlAmp: 0, curlFreq: 0, width: 0.001 },
 };
 
 const vertexShader = /* glsl */`
@@ -30,9 +58,9 @@ const vertexShader = /* glsl */`
   uniform float uCurlAmp, uCurlFreq, uWidth;
   attribute float aT, aSide;
   attribute vec3 aRoot, aNormal, aFlow;
-  attribute float aLen;
+  attribute float aLen, aTarget, aZone;
   attribute vec4 aRand;
-  varying float vT, vLen;
+  varying float vT, vLen, vTarget, vZone;
   varying vec3 vTan, vWorld, vNorm;
   varying vec4 vRand;
 
@@ -72,7 +100,7 @@ const vertexShader = /* glsl */`
     side = sl > 1e-4 ? side / sl : normalize(cross(tanW, vec3(0.0, 1.0, 0.0)));
     float w = uWidth * (0.6 + aRand.w * 0.8) * mix(1.0, 0.3, aT) * step(0.00025, L);
     wp.xyz += side * aSide * w * 0.5;
-    vT = aT; vLen = L; vTan = tanW; vWorld = wp.xyz; vRand = aRand;
+    vT = aT; vLen = L; vTarget = aTarget; vZone = aZone; vTan = tanW; vWorld = wp.xyz; vRand = aRand;
     vNorm = normalize(mat3(modelMatrix) * aNormal);
     gl_Position = projectionMatrix * viewMatrix * wp;
   }
@@ -80,8 +108,8 @@ const vertexShader = /* glsl */`
 
 const fragmentShader = /* glsl */`
   uniform vec3 uColor, uKeyDir, uKeyColor, uFillDir, uFillColor, uAmbient;
-  uniform float uMapMode;
-  varying float vT, vLen;
+  uniform float uMapMode, uHighlight;
+  varying float vT, vLen, vTarget, vZone;
   varying vec3 vTan, vWorld, vNorm;
   varying vec4 vRand;
 
@@ -100,7 +128,20 @@ const fragmentShader = /* glsl */`
     vec3 V = normalize(cameraPosition - vWorld);
     vec3 T = normalize(vTan);
     vec3 base = uColor * (0.7 + vRand.x * 0.6);
-    if (uMapMode > 0.5) base = pow(lengthColor(vLen * 1000.0), vec3(2.2)) * 0.8;
+    if (uMapMode > 0.5 && uMapMode < 1.5) base = pow(lengthColor(vLen * 1000.0), vec3(2.2)) * 0.8;
+    if (uMapMode > 1.5) {
+      // difference from the professional result: green = right length, red = too long, blue = too short
+      float tol = max(0.0006, vTarget * 0.12);
+      float e = (vLen - vTarget) / tol;
+      vec3 c = vec3(0.1, 0.85, 0.25);
+      if (e > 1.0) c = mix(vec3(1.0, 0.85, 0.1), vec3(0.95, 0.1, 0.1), clamp((e - 1.0) / 3.0, 0.0, 1.0));
+      if (e < -1.0) c = mix(vec3(0.1, 0.8, 0.95), vec3(0.15, 0.2, 0.95), clamp((-e - 1.0) / 2.0, 0.0, 1.0));
+      base = pow(c, vec3(2.2)) * 0.8;
+    }
+    if (uHighlight > -0.5) {
+      if (abs(vZone - uHighlight) < 0.5) base = mix(base, pow(vec3(1.0, 0.78, 0.25), vec3(2.2)), 0.85);
+      else base *= 0.35;
+    }
     float ao = mix(0.32, 1.0, smoothstep(0.0, 0.75, vT));
     vec3 col = uAmbient * base * ao;
     // Kajiya-Kay style hair lighting with two lights + head self-shadowing from the scalp normal.
@@ -162,7 +203,12 @@ export class HairSystem {
     this.lengths = new Float32Array(n);   // mm
     this.initial = new Float32Array(n);
     this.zone = new Array(n);
+    this.zoneIdx = new Float32Array(n);
+    this.dirs = new Float32Array(n * 3);
+    this.mask = new Float32Array(n);
     this.hash = new Float32Array(n);
+    this.target = null;      // mm per strand for the active haircut (null = free cutting)
+    this.display = 'mine';   // 'mine' | 'pro'
     const whorl = new THREE.Vector3(0.12, 0.8, -0.58).normalize();
     const nrm = new THREE.Vector3(), flow = new THREE.Vector3(), radial = new THREE.Vector3();
     const L = this.preset.lengths;
@@ -192,6 +238,9 @@ export class HairSystem {
       for (let k = 0; k < 4; k++) this.rand[i * 4 + k] = rnd();
       const z = zoneOf(dd);
       this.zone[i] = z.id;
+      this.zoneIdx[i] = ZONE_KEYS.indexOf(zoneKeyOf(dd));
+      dd.toArray(this.dirs, i * 3);
+      this.mask[i] = hairMask(dd);
       // Grown-out starting lengths that blend smoothly between the zones.
       const topW = THREE.MathUtils.smoothstep(dd.y, 0.15, 0.65);
       const backW = THREE.MathUtils.smoothstep(-dd.z, 0.2, 0.8);
@@ -220,6 +269,9 @@ export class HairSystem {
     this.lenAttr = new THREE.InstancedBufferAttribute(new Float32Array(n), 1);
     this.lenAttr.setUsage(THREE.DynamicDrawUsage);
     tpl.setAttribute('aLen', this.lenAttr);
+    this.targetAttr = new THREE.InstancedBufferAttribute(new Float32Array(n), 1);
+    tpl.setAttribute('aTarget', this.targetAttr);
+    tpl.setAttribute('aZone', new THREE.InstancedBufferAttribute(this.zoneIdx, 1));
     tpl.instanceCount = n;
     tpl.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 0.3);
 
@@ -234,6 +286,7 @@ export class HairSystem {
       uFillColor: { value: new THREE.Color(0.7, 0.75, 0.85) },
       uAmbient: { value: new THREE.Color(0.55, 0.55, 0.6) },
       uMapMode: { value: 0 },
+      uHighlight: { value: -1 },
     };
     const mat = new THREE.ShaderMaterial({
       uniforms: this.uniforms, vertexShader, fragmentShader,
@@ -246,22 +299,79 @@ export class HairSystem {
     this.syncLengths();
   }
 
+  /** Lengths currently drawn: the player's work, or the professional result of the active haircut. */
+  get shown() { return this.display === 'pro' && this.proLengths ? this.proLengths : this.lengths; }
+
   syncLengths() {
-    const a = this.lenAttr.array;
-    for (let i = 0; i < this.count; i++) a[i] = this.lengths[i] * 0.001;
+    const a = this.lenAttr.array, src = this.shown;
+    for (let i = 0; i < this.count; i++) a[i] = src[i] * 0.001;
     this.lenAttr.needsUpdate = true;
     this.scalpDirty = true;
   }
 
-  setMapMode(on) { this.uniforms.uMapMode.value = on ? 1 : 0; }
+  /** 0 = natural, 1 = length map, 2 = difference from the target (needs a target). */
+  setMapMode(mode) { this.uniforms.uMapMode.value = mode === true ? 1 : mode === false ? 0 : mode; }
+  highlightZone(key) { this.uniforms.uHighlight.value = key == null ? -1 : ZONE_KEYS.indexOf(key); }
+
+  /**
+   * Set the haircut to aim for. fn(dir, i) -> mm. The professional result is the target limited by the hair the
+   * client actually has (nobody can make hair longer).
+   */
+  setTarget(fn) {
+    if (!fn) { this.target = this.proLengths = null; this.display = 'mine'; this.syncLengths(); return; }
+    const n = this.count, d = new THREE.Vector3();
+    this.target = new Float32Array(n);
+    this.proLengths = new Float32Array(n);
+    const ta = this.targetAttr.array;
+    for (let i = 0; i < n; i++) {
+      d.fromArray(this.dirs, i * 3);
+      const t = Math.max(0, fn(d, i));
+      this.target[i] = t;
+      this.proLengths[i] = Math.min(t, this.initial[i]);
+      ta[i] = this.proLengths[i] * 0.001;
+    }
+    this.targetAttr.needsUpdate = true;
+    this.syncLengths();
+  }
+
+  setDisplay(mode) { this.display = mode === 'pro' && this.proLengths ? 'pro' : 'mine'; this.syncLengths(); }
+
+  /**
+   * Thinning shears: in the footprint, about `fraction` of the strands are shortened to 45–75% of their length,
+   * which removes bulk without changing the outline. Returns cut events like cut().
+   */
+  thin(point, radius, fraction, stroke, out = []) {
+    const r2 = radius * radius, R = this.roots;
+    let changed = 0;
+    for (let i = 0; i < this.count; i++) {
+      const dx = R[i * 3] - point.x, dy = R[i * 3 + 1] - point.y, dz = R[i * 3 + 2] - point.z;
+      if (dx * dx + dy * dy + dz * dz > r2) continue;
+      // each strand is picked at most once per stroke (deterministic per stroke id)
+      const h = (this.hash[i] * 7.31 + stroke * 0.618) % 1;
+      if (h > fraction) continue;
+      if (this._thinStroke && this._thinStroke[i] === stroke) continue;
+      (this._thinStroke ||= new Int32Array(this.count))[i] = stroke;
+      const L = this.lengths[i];
+      if (L < 8) continue;
+      const nl = L * (0.45 + ((this.hash[i] * 13.7) % 1) * 0.3);
+      this.lengths[i] = nl;
+      out.push(i, L - nl);
+      changed++;
+    }
+    if (changed) this.syncLengths();
+    return out;
+  }
 
   /**
    * Cut every strand whose root lies within `radius` (m) of the head-local point to `targetMM`.
    * The outer 30% of the tool footprint cuts only some strands, like a real blade edge.
    * Returns the cut strands as [index, removedMM, ...] for the falling clippings.
    */
-  cut(point, radius, targetMM, out = []) {
-    const r2 = radius * radius, inner = radius * 0.7, R = this.roots;
+  cut(point, radius, targetMM, out = [], { edge = 0.7, ragged = 0, axis = null, depth = 0 } = {}) {
+    const r2 = radius * radius, inner = radius * edge, R = this.roots;
+    // With a blade axis the footprint is a strip: `radius` along the blade, `depth` across it (a real blade is a line).
+    const ax = axis ? axis.x : 0, ay = axis ? axis.y : 0, az = axis ? axis.z : 0;
+    const dInner = depth * edge;
     let changed = 0;
     for (let i = 0; i < this.count; i++) {
       const L = this.lengths[i];
@@ -269,10 +379,22 @@ export class HairSystem {
       const dx = R[i * 3] - point.x, dy = R[i * 3 + 1] - point.y, dz = R[i * 3 + 2] - point.z;
       const d2 = dx * dx + dy * dy + dz * dz;
       if (d2 > r2) continue;
-      const dist = Math.sqrt(d2);
-      if (dist > inner && this.hash[i] > 1 - (dist - inner) / (radius - inner)) continue;
-      this.lengths[i] = targetMM;
-      out.push(i, L - targetMM);
+      if (axis) {
+        const along = Math.abs(dx * ax + dy * ay + dz * az);
+        const across = Math.sqrt(Math.max(0, d2 - along * along));
+        if (across > depth) continue;
+        // soft blade corners and edge: some strands at the border survive, like a real pass
+        const e = Math.max(along > inner ? (along - inner) / (radius - inner) : 0, across > dInner ? (across - dInner) / (depth - dInner) : 0);
+        if (e > 0 && this.hash[i] > 1 - e) continue;
+      } else {
+        const dist = Math.sqrt(d2);
+        if (dist > inner && this.hash[i] > 1 - (dist - inner) / (radius - inner)) continue;
+      }
+      // point cutting leaves the ends slightly uneven (soft, textured line)
+      const t = ragged ? targetMM * (1 - ragged * ((this.hash[i] * 5.77) % 1)) : targetMM;
+      if (L <= t) continue;
+      this.lengths[i] = t;
+      out.push(i, L - t);
       changed++;
     }
     if (changed) this.syncLengths();
@@ -351,10 +473,10 @@ export class HairSystem {
     this.scalpDirty = false;
     const { geometry, base, verts, starts, list, mask } = this.scalp;
     const col = geometry.attributes.color.array;
-    const hc = this.uniforms.uColor.value;
+    const hc = this.uniforms.uColor.value, lengths = this.shown;
     for (let j = 0; j < verts.length; j++) {
       let sum = 0, cnt = 0;
-      for (let k = starts[j]; k < starts[j + 1]; k++) { sum += this.lengths[list[k]]; cnt++; }
+      for (let k = starts[j]; k < starts[j + 1]; k++) { sum += lengths[list[k]]; cnt++; }
       const avg = cnt ? sum / cnt : 0;
       const dark = avg <= 0.05 ? 0 : (0.18 + 0.77 * (1 - Math.exp(-avg / 1.3))) * mask[j];
       const v = verts[j] * 3;
@@ -388,6 +510,15 @@ export class HairSystem {
       this.syncLengths();
       return true;
     } catch { return false; }
+  }
+
+  /** Median length (mm) of the strands of one zone key. */
+  zoneMedian(key, src = this.lengths) {
+    const idx = ZONE_KEYS.indexOf(key), a = [];
+    for (let i = 0; i < this.count; i++) if (this.zoneIdx[i] === idx) a.push(src[i]);
+    if (!a.length) return null;
+    a.sort((x, y) => x - y);
+    return a[a.length >> 1];
   }
 
   snapshot() { return this.lengths.slice(); }

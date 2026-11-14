@@ -20,17 +20,36 @@ export const LEVER_OPEN_MM = 1.5;
 export const TOOLS = {
   clipper: {
     id: 'clipper', name: 'מכונת תספורת', icon: '✂️',
-    radius: 0.014, // contact footprint (m) of a 46 mm blade working on a curved head
+    radius: 0.02, depth: 0.0045, // footprint: half the 46 mm blade along it, a narrow strip across it
     desc: 'להב רחב (46 מ״מ) למסה של השיער. מחליפים מסרקי גובה כדי לקבוע כמה שיער נשאר. ידית הטייפר פתוחה = +1.5 מ״מ, מתאימה לחצאי מספרים במעברים.',
     usesGuards: true,
   },
   trimmer: {
     id: 'trimmer', name: 'מכונת פיניש (טרימר)', icon: '🪒',
-    radius: 0.0075,
+    radius: 0.011, depth: 0.003,
     desc: 'להב צר ומדויק (Zero-gap, ‏0.2 מ״מ) לקווי מתאר: מסביב לאוזן, פאות ועורף. משאיר עור כמעט חלק — עובדים בעדינות ובתנועות קצרות.',
     usesGuards: false, fixedMM: 0.2,
   },
+  scissors: {
+    id: 'scissors', name: 'מספריים ומסרק', icon: '✂',
+    radius: 0.016, depth: 0.006,
+    desc: 'מספריים על מסרק: המסרק מרים את השיער לגובה שבחרת והמספריים גוזרות את מה שמעליו. לשיער ארוך בחלק העליון, לפוני ולמעברים רכים.',
+    usesLength: true,
+  },
+  thinning: {
+    id: 'thinning', name: 'מספרי דילול', icon: '〰',
+    radius: 0.012, fraction: 0.32,
+    desc: 'להב אחד עם שיניים: גוזר רק חלק מהשערות (כשליש) ומקצר אותן. מוריד נפח ומוסיף טקסטורה בלי לשנות את קו התספורת.',
+  },
+  duster: {
+    id: 'duster', name: 'מברשת צוואר', icon: '🧹',
+    radius: 0.07,
+    desc: 'מנקה שערות שנחתכו מהגלימה, מהצוואר ומהכתפיים. לקוח יוצא נקי = גימור מקצועי.',
+  },
 };
+
+/** Comb heights for scissor-over-comb (mm of hair left). */
+export const SCISSOR_LENGTHS = [8, 10, 13, 16, 20, 25, 30, 35, 40, 45, 50, 55, 60];
 
 function metal(color = '#d9dadc', rough = 0.22) { return new THREE.MeshStandardMaterial({ color, metalness: 1, roughness: rough }); }
 
@@ -85,7 +104,13 @@ export class ToolRig {
   constructor(scene) {
     this.root = new THREE.Group(); this.root.name = 'toolRig';
     scene.add(this.root);
-    this.models = { clipper: this._buildClipper(), trimmer: this._buildTrimmer() };
+    this.models = {
+      clipper: this._buildClipper(), trimmer: this._buildTrimmer(),
+      scissors: this._buildScissors(false), thinning: this._buildScissors(true), duster: this._buildDuster(),
+    };
+    this.scissorLen = 40;
+    this.pointCut = false;
+    this.quality = { clipper: 0.7, trimmer: 0.75, scissors: 0.75, thinning: 1, duster: 1 }; // blade edge sharpness (shop upgrades)
     for (const m of Object.values(this.models)) { m.visible = false; this.root.add(m); }
     this.active = 'clipper';
     this.models.clipper.visible = true;
@@ -162,6 +187,74 @@ export class ToolRig {
     return g;
   }
 
+  _buildScissors(thinning) {
+    const g = new THREE.Group();
+    const steel = metal('#e3e4e6', 0.12);
+    const dark = new THREE.MeshPhysicalMaterial({ color: '#1b1b1d', roughness: 0.35, clearcoat: 0.7 });
+    const bladeShape = new THREE.Shape();
+    bladeShape.moveTo(0, -0.004); bladeShape.lineTo(0.075, -0.0012); bladeShape.lineTo(0.078, 0); bladeShape.lineTo(0, 0.004); bladeShape.lineTo(0, -0.004);
+    const bladeGeo = new THREE.ExtrudeGeometry(bladeShape, { depth: 0.0018, bevelEnabled: false });
+    const blades = [];
+    for (const k of [0, 1]) {
+      const pivot = new THREE.Group();
+      const blade = new THREE.Mesh(bladeGeo, steel);
+      blade.position.set(-0.035, 0, k ? 0.0018 : 0);
+      pivot.add(blade);
+      if (thinning && k === 1) {
+        for (let i = 0; i < 16; i++) {
+          const t = new THREE.Mesh(new THREE.BoxGeometry(0.0016, 0.0035, 0.0018), steel);
+          t.position.set(-0.03 + i * 0.0042, -0.004, 0.0018);
+          pivot.add(t);
+        }
+      }
+      const shank = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.005, 0.0022), steel);
+      shank.position.set(-0.05, 0, k ? 0.0018 : 0);
+      pivot.add(shank);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.0095, 0.0022, 10, 24), dark);
+      ring.position.set(-0.073, k ? 0.006 : -0.006, k ? 0.0018 : 0);
+      pivot.add(ring);
+      g.add(pivot);
+      blades.push(pivot);
+    }
+    const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.006, 16), metal('#c9a45c', 0.3));
+    screw.rotation.x = Math.PI / 2; screw.position.set(-0.035, 0, 0.001);
+    g.add(screw);
+    // the comb held below the scissors: lifts the hair to the chosen height
+    const comb = new THREE.Group();
+    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.006, 0.002), dark);
+    comb.add(spine);
+    for (let i = 0; i < 30; i++) {
+      const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.0012, 0.012, 0.0016), dark);
+      tooth.position.set(-0.058 + i * 0.004, -0.008, 0);
+      comb.add(tooth);
+    }
+    comb.position.set(0, 0.012, -0.004);
+    g.add(comb);
+    g.userData.blades = blades;
+    g.userData.comb = comb;
+    g.rotation.z = 0;
+    // lay the scissors so the blades run along +X (the cutting line) just above the hair ends
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    const wrap = new THREE.Group();
+    wrap.add(g);
+    wrap.userData = g.userData;
+    return wrap;
+  }
+
+  _buildDuster() {
+    const g = new THREE.Group();
+    const wood = new THREE.MeshStandardMaterial({ color: '#7a4a2a', roughness: 0.45 });
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.011, 0.1, 20), wood);
+    handle.position.y = 0.08; g.add(handle);
+    const ferrule = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.016, 0.02, 24), metal('#c9a45c', 0.3));
+    ferrule.position.y = 0.025; g.add(ferrule);
+    const brush = new THREE.Mesh(new THREE.SphereGeometry(0.03, 24, 16), new THREE.MeshStandardMaterial({ color: '#efe6d6', roughness: 1 }));
+    brush.scale.set(1, 0.7, 1); brush.position.y = 0.0;
+    g.add(brush);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    return g;
+  }
+
   select(id) {
     if (!TOOLS[id]) return;
     this.active = id;
@@ -187,6 +280,8 @@ export class ToolRig {
   /** Hair length (mm) the active tool leaves. */
   get cutMM() {
     const t = this.tool;
+    if (t.usesLength) return this.scissorLen;
+    if (t.id === 'thinning' || t.id === 'duster') return null;
     if (!t.usesGuards) return t.fixedMM;
     return this.guard.mm + (this.lever ? LEVER_OPEN_MM : 0);
   }
@@ -194,6 +289,9 @@ export class ToolRig {
   /** Physical standoff of the blade from the scalp (m). */
   get standoff() {
     const t = this.tool;
+    if (t.usesLength) return Math.min(this.scissorLen, 30) * 0.001 + 0.004;
+    if (t.id === 'thinning') return 0.016;
+    if (t.id === 'duster') return 0.025;
     return t.usesGuards && this.guard.color ? this.guard.mm * 0.001 + 0.0015 : 0.0018;
   }
 
@@ -226,7 +324,16 @@ export class ToolRig {
     this._t += dt;
     const m = this.models[this.active];
     const mover = m.userData.blade?.userData.mover;
-    if (this.running) {
+    const bl = m.userData.blades;
+    if (bl) {
+      const open = this.running ? 0.12 + 0.12 * Math.sin(this._t * 22) : 0.18;
+      bl[0].rotation.z = open; bl[1].rotation.z = -open;
+    }
+    if (this.active === 'duster') {
+      m.rotation.z = this.running ? Math.sin(this._t * 14) * 0.35 : 0;
+      return;
+    }
+    if (this.running && !bl) {
       if (mover) mover.position.x = Math.sin(this._t * 380) * 0.0012;
       m.position.set((Math.random() - 0.5) * 0.0004, (Math.random() - 0.5) * 0.0004, 0);
     } else {

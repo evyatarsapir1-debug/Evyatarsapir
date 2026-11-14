@@ -34,6 +34,7 @@ export class Clippings {
     this.state = new Uint8Array(MAX); // 0 = free, 1 = falling, 2 = sliding on cape, 3 = resting
     this.next = 0;
     this.used = 0;
+    this.capeOn = true;
     this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._s = new THREE.Vector3(); this._p = new THREE.Vector3();
   }
 
@@ -65,7 +66,7 @@ export class Clippings {
       if (st === 0 || st === 3) continue;
       const k = i * 3;
       moving++;
-      if (st === 1) {
+      if (st === 1 || st === 4) {
         V[k + 1] -= 9.8 * dt;
         const drag = Math.exp(-dt * 3.5); // light hair, strong air drag
         V[k] *= drag; V[k + 1] *= drag; V[k + 2] *= drag;
@@ -79,7 +80,7 @@ export class Clippings {
       P[k] += V[k] * dt; P[k + 1] += V[k + 1] * dt; P[k + 2] += V[k + 2] * dt;
       // cape collision
       const dy = P[k + 1] - CAPE.top;
-      if (dy < 0 && dy > -0.78) {
+      if (this.capeOn && st !== 4 && dy < 0 && dy > -0.78) {
         const cr = capeRadius(dy);
         const dx = (P[k] - CAPE.cx) / CAPE.sx, dz = (P[k + 2] - CAPE.cz) / CAPE.sz;
         const r = Math.hypot(dx, dz);
@@ -90,7 +91,7 @@ export class Clippings {
         }
       }
       // lap drape
-      if (P[k + 1] < 0.67 && P[k + 1] > 0.6 && Math.abs(P[k]) < 0.3 && P[k + 2] > 0.05 && P[k + 2] < 0.5) {
+      if (this.capeOn && st !== 4 && P[k + 1] < 0.67 && P[k + 1] > 0.6 && Math.abs(P[k]) < 0.3 && P[k + 2] > 0.05 && P[k + 2] < 0.5) {
         P[k + 1] = 0.67; this.state[i] = 3; this._flatten(i);
       }
       if (P[k + 1] <= 0.002) { P[k + 1] = 0.002; this.state[i] = 3; this._flatten(i); }
@@ -109,6 +110,34 @@ export class Clippings {
     }
     this.mesh.count = this.used;
     this.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Hairs lying on the cape / lap / shoulders (not on the floor). */
+  countOnClient() {
+    let c = 0;
+    for (let i = 0; i < this.used; i++) if ((this.state[i] === 2 || this.state[i] === 3) && this.pos[i * 3 + 1] > 0.05) c++;
+    return c;
+  }
+
+  /** Neck duster: knocks hairs near a world point off the client so they fall to the floor. */
+  dust(p, radius) {
+    let n = 0;
+    const r2 = radius * radius;
+    for (let i = 0; i < this.used; i++) {
+      const st = this.state[i];
+      if (st !== 2 && st !== 3) continue;
+      const k = i * 3;
+      if (this.pos[k + 1] <= 0.05) continue;
+      const dx = this.pos[k] - p.x, dy = this.pos[k + 1] - p.y, dz = this.pos[k + 2] - p.z;
+      if (dx * dx + dy * dy + dz * dz > r2) continue;
+      const h = Math.hypot(this.pos[k], this.pos[k + 2]) || 1;
+      this.vel[k] = this.pos[k] / h * 0.6; this.vel[k + 2] = this.pos[k + 2] / h * 0.6; this.vel[k + 1] = 0.3;
+      this.pos[k] *= 1.0 + 0.4 / h * 0.1; this.pos[k + 2] *= 1.0 + 0.4 / h * 0.1;
+      this.state[i] = 4; // brushed: falls without sticking to the cape again
+      n++;
+    }
+    if (n) this.dirty = true;
+    return n;
   }
 
   _flatten(i) {
