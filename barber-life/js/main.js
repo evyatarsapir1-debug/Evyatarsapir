@@ -15,6 +15,7 @@ import { progress } from './game/progress.js';
 import { DemoPlayer, planDemo } from './game/demo.js';
 import { initScreens } from './ui/screens.js';
 import { session } from './game/session.js';
+import { initShop } from './game/shopManager.js';
 
 const $ = (id) => document.getElementById(id);
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600;
@@ -90,6 +91,7 @@ async function init() {
   await nextFrame();
   buildBaseUI();
   initScreens();
+  initShop();
   renderer.compile(scene, camera);
   setLoad(1);
   $('loading').classList.remove('show');

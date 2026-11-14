@@ -46,6 +46,7 @@ export const session = {
     ctx.demo?.stop();
     if (ctx.hair) { ctx.hair.setDisplay('mine'); ctx.hair.highlightZone(null); }
     ctx.state.tapHandler = null;
+    ctx.cam?.setOverview(false);
     this.cfg = null;
     $('sessionBar').classList.add('hidden');
     $('resultModal').classList.add('hidden');

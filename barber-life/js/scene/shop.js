@@ -44,8 +44,9 @@ function woodTexture(base = '#6b4429') {
 }
 
 function wallTexture() {
+  // neutral plaster: the wall colour comes from the material (so the shop can be repainted)
   return canvasTex(512, 512, (g, w, h) => {
-    g.fillStyle = '#26332f'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 6000; i++) {
       g.fillStyle = `rgba(${Math.random() < 0.5 ? '255,255,255' : '0,0,0'},${Math.random() * 0.035})`;
       g.fillRect(Math.random() * w, Math.random() * h, 2, 2);
@@ -64,15 +65,43 @@ function poleTexture() {
   });
 }
 
-function signTexture() {
+export function signTexture(title = 'BARBER LIFE', sub = 'ACADEMY  ·  EST. 2026') {
   return canvasTex(1024, 256, (g, w, h) => {
     g.fillStyle = '#121212'; g.fillRect(0, 0, w, h);
     g.strokeStyle = '#c9a45c'; g.lineWidth = 8; g.strokeRect(14, 14, w - 28, h - 28);
     g.fillStyle = '#e7c983'; g.font = 'bold 120px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('BARBER LIFE', w / 2, h / 2 - 12);
+    g.font = `bold ${title.length > 12 ? Math.max(56, 120 - (title.length - 12) * 6) : 120}px Georgia, "Segoe UI", Arial, serif`;
+    g.fillText(title, w / 2, h / 2 - 12);
     g.font = '32px Georgia, serif'; g.fillStyle = '#bfa06a';
-    g.fillText('ACADEMY  ·  EST. 2026', w / 2, h / 2 + 72);
+    g.fillText(sub, w / 2, h / 2 + 72);
   });
+}
+
+/** Floor finishes the shop owner can choose. */
+export function floorTexture2(style) {
+  if (style === 'wood') return canvasTex(512, 512, (g, w) => {
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle = ['#6b4429', '#7a5132', '#5e3b23', '#73492c'][i % 4]; g.fillRect(0, i * w / 8, w, w / 8);
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, i * w / 8, w, 2);
+      for (let k = 0; k < 40; k++) { g.fillStyle = `rgba(30,15,5,${Math.random() * 0.15})`; g.fillRect(Math.random() * w, i * w / 8 + Math.random() * w / 8, 40 + Math.random() * 80, 1.5); }
+      g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(((i * 197) % w), i * w / 8, 2, w / 8);
+    }
+  });
+  if (style === 'marble') return canvasTex(512, 512, (g, w) => {
+    g.fillStyle = '#ece9e3'; g.fillRect(0, 0, w, w);
+    for (let i = 0; i < 26; i++) {
+      g.strokeStyle = `rgba(120,115,110,${0.1 + Math.random() * 0.2})`; g.lineWidth = 0.5 + Math.random() * 2;
+      g.beginPath(); let x = Math.random() * w, y = 0; g.moveTo(x, y);
+      while (y < w) { x += (Math.random() - 0.5) * 40; y += 20 + Math.random() * 30; g.lineTo(x, y); }
+      g.stroke();
+    }
+    g.strokeStyle = 'rgba(80,80,80,0.4)'; g.lineWidth = 2; g.strokeRect(0, 0, w, w);
+  });
+  if (style === 'concrete') return canvasTex(512, 512, (g, w) => {
+    g.fillStyle = '#7d7f80'; g.fillRect(0, 0, w, w);
+    for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '255,255,255' : '0,0,0'},${Math.random() * 0.08})`; g.fillRect(Math.random() * w, Math.random() * w, 2, 2); }
+  });
+  return floorTexture();
 }
 
 export function buildShop(renderer, { mirrorRes = 512 } = {}) {
@@ -93,7 +122,7 @@ export function buildShop(renderer, { mirrorRes = 512 } = {}) {
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
   group.add(floor);
   const wt = wallTexture(); wt.repeat.set(3, 1.5);
-  const wallMat = new THREE.MeshStandardMaterial({ map: wt, roughness: 0.9 });
+  const wallMat = new THREE.MeshStandardMaterial({ map: wt, roughness: 0.9, color: '#26332f' });
   const wall = (w, h, x, y, z, ry) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMat);
     m.position.set(x, y, z); m.rotation.y = ry; m.receiveShadow = true; group.add(m); return m;
@@ -245,7 +274,7 @@ export function buildShop(renderer, { mirrorRes = 512 } = {}) {
   }
 
   return {
-    group, mirror, chair, pole, poleTex, key, fill, hemi,
+    group, mirror, chair, pole, poleTex, key, fill, hemi, M, wallMat, floor, frame, sign, mirrorLight, lampMat, counter, top,
     toolRest: new THREE.Vector3(0.26, 0.9, 0.98),
     update(dt) { poleTex.offset.y = (poleTex.offset.y + dt * 0.25) % 1; },
   };

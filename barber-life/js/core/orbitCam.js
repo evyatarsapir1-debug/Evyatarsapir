@@ -20,6 +20,19 @@ export class OrbitCam {
     this.update(1);
   }
 
+  /** Wide view of the whole shop (tour). */
+  setOverview(on) {
+    if (on === !!this._saved) return;
+    if (on) {
+      this._saved = { target: this.target.clone(), minR: this.minR, maxR: this.maxR, theta: this.theta, phi: this.phi, r: this.r };
+      this.target.set(0, 1.0, -0.8); this.minR = 0.8; this.maxR = 2.6;
+      this.theta = Math.PI * 0.8; this.phi = 1.15; this.r = 2.2;
+    } else {
+      const s = this._saved; this._saved = null;
+      this.target.copy(s.target); this.minR = s.minR; this.maxR = s.maxR; this.theta = s.theta; this.phi = s.phi; this.r = s.r;
+    }
+  }
+
   rotate(dTheta, dPhi) {
     this.theta += dTheta;
     this.phi = THREE.MathUtils.clamp(this.phi + dPhi, 0.15, 2.2);
@@ -48,8 +61,9 @@ export class OrbitCam {
     let r = c.r * (this.camera.aspect < 1 ? Math.min(1.8, 0.85 / this.camera.aspect) : 1);
     // stay in front of the mirror wall, above the floor, below the ceiling
     if (dir.z > 0) r = Math.min(r, (1.12 - this.target.z) / dir.z);
+    if (dir.z < 0) r = Math.min(r, (this.target.z + 2.85) / -dir.z);
     if (dir.y > 0) r = Math.min(r, (2.85 - this.target.y) / dir.y);
-    if (Math.abs(dir.x) > 0) r = Math.min(r, 2.4 / Math.abs(dir.x));
+    if (Math.abs(dir.x) > 0) r = Math.min(r, (2.45 - Math.abs(this.target.x)) / Math.abs(dir.x));
     this.camera.position.copy(this.target).addScaledVector(dir, r);
     this.camera.lookAt(this.target);
   }
