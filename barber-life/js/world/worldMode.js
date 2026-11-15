@@ -380,7 +380,7 @@ export const world = {
     const el = $('mapOverlay');
     const show = on ?? el.classList.contains('hidden');
     el.classList.toggle('hidden', !show);
-    if (show) this.drawFullMap();
+    if (show) this.drawFullMap(); else life.flushNotes();
   },
   drawFullMap() {
     const cv = $('mapCanvas');

@@ -141,7 +141,7 @@ export const life = {
   notify(opts) { (this.notes ||= []).push(opts); if (this.world?.active) setTimeout(() => this.flushNotes(), 50); },
   flushNotes() {
     if (!this.world?.active || !this.notes?.length) return;
-    if (document.querySelector('.modal:not(.hidden)')) { setTimeout(() => this.flushNotes(), 800); return; }
+    if (document.querySelector('.modal:not(.hidden), #mapOverlay:not(.hidden), #sheet:not(.hidden)')) { setTimeout(() => this.flushNotes(), 800); return; }
     const n = this.notes.shift();
     const buttons = (n.buttons || [{ label: 'המשך', primary: true }]).map((b) => ({ ...b, action: () => { b.action?.(); setTimeout(() => this.flushNotes(), 200); } }));
     ctx.dialog({ ...n, buttons });
