@@ -85,7 +85,22 @@ export class People {
 
   /** Send a waiting client to a chair; after `minutes` of game time (or when released) he leaves. */
   toChair(p, spot) { p.state = 'toChair'; p.goal = spot.world; p.spot = spot; }
-  release(p) { p.state = 'leaving'; p.goal = p.shop.inside; }
+  /** The client leaves the chair; with pay=true he first walks to the reception and pays (hand out, coin pops up). */
+  release(p, pay = false) {
+    if (pay && p.shop.reception && p.state === 'inChair') { p.state = 'looking'; p.timer = 1.4; p.pay = true; return; }
+    p.state = 'leaving'; p.goal = p.shop.inside;
+  }
+
+  /** A staff barber standing at a station; busy=true makes him work on the client in the chair. */
+  addStaff(shop, spot, look) {
+    const mesh = buildPerson({ ...look, apron: look.apron || '#141414' });
+    mesh.position.set(spot.barber.x, 0.14, spot.barber.z);
+    this.group.add(mesh);
+    const st = { mesh, shop, spot, busy: false };
+    (this.staff ||= []).push(st);
+    return st;
+  }
+  removeStaff(st) { this.group.remove(st.mesh); this.staff = (this.staff || []).filter((x) => x !== st); }
 
   remove(p) { this.group.remove(p.mesh); this.list = this.list.filter((x) => x !== p); }
 
@@ -102,7 +117,7 @@ export class People {
   update(dt) {
     for (const p of this.list.slice()) {
       const m = p.mesh;
-      let speed = 0, sitting = false;
+      let speed = 0, sitting = false, pose = null;
       const walkTo = (g, sp = p.speed) => {
         const dx = g.x - m.position.x, dz = g.z - m.position.z, d = Math.hypot(dx, dz);
         if (d < 0.15) return true;
@@ -156,6 +171,17 @@ export class People {
           if (walkTo(p.goal)) { p.state = 'inChair'; m.rotation.y = p.spot.rot + Math.PI; }
           break;
         case 'inChair': sitting = true; break;
+        case 'looking': // checks the haircut in the mirror before getting up
+          sitting = true; pose = 'look'; p.timer -= dt;
+          if (p.timer < 0) { if (p.pay) { p.state = 'toPay'; } else { p.state = 'leaving'; p.goal = p.shop.inside; } }
+          break;
+        case 'toPay':
+          if (walkTo(p.shop.reception)) { p.state = 'paying'; p.timer = 1.5; m.rotation.y = Math.atan2(p.shop.inside.x - p.shop.reception.x, p.shop.inside.z - p.shop.reception.z) + Math.PI / 2; this.onPay?.(p); }
+          break;
+        case 'paying':
+          pose = 'pay'; p.timer -= dt;
+          if (p.timer < 0) { p.pay = false; p.state = 'exit'; }
+          break;
         case 'leaving':
           p.shop.freeSeat?.(p);
           if (walkTo(p.shop.inside)) p.state = 'exit';
@@ -176,7 +202,16 @@ export class People {
         }
       }
       if (sitting) { m.position.y = 0.14; }
-      animatePerson(m, dt, speed, sitting);
+      if (m.visible) animatePerson(m, dt, speed, sitting, pose);
+    }
+    for (const st of this.staff || []) {
+      const m = st.mesh;
+      if (!m.visible) continue;
+      // face the chair while working, the room while idle
+      const want = st.busy ? Math.atan2(st.spot.world.x - m.position.x, st.spot.world.z - m.position.z) : st.spot.rot + Math.PI / 2;
+      let d = want - m.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d));
+      m.rotation.y += d * Math.min(1, dt * 4);
+      animatePerson(m, dt, 0, false, st.busy ? 'cut' : null);
     }
   }
 }

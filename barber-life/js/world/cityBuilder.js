@@ -207,6 +207,19 @@ export function buildCity(shopSrc) {
       box(g, 0.08, 2.4, 0.12, cx - sx * (segW / 2 - 0.04), 1.8, 0, M.frame);
     }
     box(g, DOOR_W, WALL_H - DOOR_H, T, 0, DOOR_H + (WALL_H - DOOR_H) / 2, 0, facadeMat);
+    // automatic sliding glass doors (open when someone walks up: world.updateDoors)
+    const doorPanels = [];
+    for (const sx of [-1, 1]) {
+      const pg = new THREE.Group();
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(DOOR_W / 2 - 0.04, DOOR_H - 0.08), M.glass); pane.position.y = DOOR_H / 2;
+      const fr1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, DOOR_H, 0.06), M.frame); fr1.position.set(sx * (DOOR_W / 4 - 0.02), DOOR_H / 2, 0);
+      const fr2 = fr1.clone(); fr2.position.x = -sx * (DOOR_W / 4 - 0.02);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.5, 0.05), M.frame); handle.position.set(-sx * (DOOR_W / 4 - 0.12), 1.1, -0.05);
+      pg.add(pane, fr1, fr2, handle);
+      pg.position.set(sx * DOOR_W / 4, 0.14, 0.02);
+      pg.userData.base = sx * DOOR_W / 4; pg.userData.dir = sx;
+      g.add(pg); doorPanels.push(pg);
+    }
     // sign above the door
     let signMesh = null;
     if (sign) {
@@ -229,7 +242,7 @@ export function buildCity(shopSrc) {
     const fp = { minX: Math.min(ca.x, cb.x), maxX: Math.max(ca.x, cb.x), minZ: Math.min(ca.z, cb.z), maxZ: Math.max(ca.z, cb.z), kind };
     footprints.push(fp);
     const rec = {
-      id, group: g, frame: fr, w, d, toWorld, block: lot.block, sign: signMesh, facadeMat, footprint: fp,
+      id, group: g, frame: fr, w, d, toWorld, block: lot.block, sign: signMesh, facadeMat, footprint: fp, doorPanels, doorOpen: 0,
       door: toWorld(0, -1.2), inside: toWorld(0, 2.2), interior: new THREE.Group(),
       /** a point inside, in local coordinates (x across, z depth) */
       at: (x, z) => toWorld(x, z),
@@ -281,12 +294,7 @@ export function buildCity(shopSrc) {
     if (staffed) {
       b.owner = npcAt(g, hw - 1.4, b.d - 0.45, Math.PI, null, '#141414');
       b.ownerName = shopDef?.owner;
-      b.staff = [];
-      for (let k = 1; k < n; k++) {
-        const sp = b.stationSpots[k];
-        const p = npcAt(g, -hw + 1.9, sp.local[1] + 0.5, -Math.PI / 2, null, '#141414');
-        b.staff.push(p);
-      }
+      // station barbers are live characters (ShopRuntime.syncStaff) so they can work on clients
     }
     if (!b.pole) {
       b.pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.9, 16), new THREE.MeshStandardMaterial({ map: poleTexture() }));

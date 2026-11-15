@@ -111,6 +111,9 @@ export class ToolRig {
     this.scissorLen = 40;
     this.pointCut = false;
     this.quality = { clipper: 0.7, trimmer: 0.75, scissors: 0.75, thinning: 1, duster: 1 }; // blade edge sharpness (shop upgrades)
+    // a gloved hand holds the clipper and the trimmer (fingers wrapped around the body, forearm out of frame)
+    this.models.clipper.add(this._buildHand(0.1, 0.034));
+    this.models.trimmer.add(this._buildHand(0.085, 0.028));
     for (const m of Object.values(this.models)) { m.visible = false; this.root.add(m); }
     this.active = 'clipper';
     this.models.clipper.visible = true;
@@ -119,6 +122,33 @@ export class ToolRig {
     this.running = false;
     this._t = 0;
     this.setGuard(this.guard.id);
+  }
+
+  /** Black nitrile glove gripping a handle along +y at height y; r = handle radius. */
+  _buildHand(y, r) {
+    const glove = new THREE.MeshPhysicalMaterial({ color: '#17171b', roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.5 });
+    const sleeve = new THREE.MeshStandardMaterial({ color: '#23262e', roughness: 0.85 });
+    const h = new THREE.Group(); h.name = 'hand';
+    // palm behind the handle (+z is the back of the tool)
+    const palm = new THREE.Mesh(new RoundedBoxGeometry(0.078, 0.088, 0.03, 3, 0.012), glove);
+    palm.position.set(0, y, r + 0.016); h.add(palm);
+    // four fingers wrap around the front
+    for (let k = 0; k < 4; k++) {
+      const fy = y - 0.03 + k * 0.021;
+      const f = new THREE.Mesh(new THREE.TorusGeometry(r + 0.008, 0.0085, 8, 16, Math.PI * 1.15), glove);
+      f.rotation.set(Math.PI / 2, 0, -Math.PI * 0.07);
+      f.position.set(0.004, fy, 0.004); h.add(f);
+    }
+    // thumb along the side, pointing toward the blade
+    const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.0095, 0.05, 4, 8), glove);
+    thumb.position.set(-r - 0.006, y - 0.045, 0.008); thumb.rotation.z = 0.25; h.add(thumb);
+    // wrist and forearm leaving the frame
+    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.03, 0.07, 16), glove);
+    wrist.position.set(0, y + 0.07, r + 0.03); wrist.rotation.x = 0.35; h.add(wrist);
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.04, 0.32, 16), sleeve);
+    arm.position.set(0, y + 0.25, r + 0.1); arm.rotation.x = 0.35; h.add(arm);
+    h.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    return h;
   }
 
   _buildClipper() {

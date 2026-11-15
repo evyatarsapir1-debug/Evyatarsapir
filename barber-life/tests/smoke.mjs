@@ -318,6 +318,7 @@ check('day and night: street lights at night', await ev(page, () => { const L = 
 check('weather: rain', await ev(page, () => { __barber.world.sky.setWeather('rain'); __barber.frame(1 / 30, false); const ok = __barber.world.sky.rain.visible; __barber.world.sky.setWeather('clear'); return ok; }));
 await ev(page, () => __barber.world.toggleMap(true));
 check('map with important places', await ev(page, () => document.querySelectorAll('.map-item').length >= 12));
+console.log('DIALOG?', await ev(page, () => document.getElementById('dialogModal').classList.contains('hidden') ? 'none' : document.getElementById('dialogTitle').textContent));
 await page.click('.map-item:nth-child(2)');
 check('set a waypoint from the map', await ev(page, () => !!__barber.world.waypoint));
 // talk to a resident

@@ -41,7 +41,27 @@ class ShopRuntime {
     if (this.kind === 'branch') return this.ref.open && this.ref.stations > 0;
     return true;
   }
-  rebindSeats() { this.seats = (this.b.benchSeats || []).map((s) => ({ ...s, taken: null })); }
+  /** Visible staff barbers at stations 1..n; they work (cutting pose) while a client sits in their chair. */
+  syncStaff() {
+    const people = life.world.people;
+    const n = this.staffCount();
+    this.staffMeshes ||= [];
+    while (this.staffMeshes.length > n) people.removeStaff(this.staffMeshes.pop());
+    while (this.staffMeshes.length < n) {
+      const k = this.staffMeshes.length + 1, spot = this.b.stationSpots?.[k];
+      if (!spot) break;
+      const seed = (this.b.id.length * 31 + k * 17) % 97;
+      const pick = (a) => a[seed % a.length];
+      const emp = this.kind === 'branch' ? this.ref.employees[k - 1] : null;
+      this.staffMeshes.push(people.addStaff(this.b, spot, emp?.look || { skin: pick(['#e2b08c', '#c98e66', '#8d5a3b', '#f0c7a4']), hair: pick(['#151010', '#5a3d26', '#2e2018']), shirt: pick(['#141414', '#e9e5dc', '#2a6f8a', '#7a2b2b']), pants: '#2b2f38', shoes: '#141414' }));
+    }
+    this.staffMeshes.forEach((st, i) => { st.busy = !!this.chairs[i + 1]; st.mesh.visible = this.b.interior.visible; });
+  }
+  rebindSeats() {
+    this.seats = (this.b.benchSeats || []).map((s) => ({ ...s, taken: null }));
+    for (const st of this.staffMeshes || []) life.world.people.removeStaff(st);
+    this.staffMeshes = [];
+  }
   /** staff barbers who can serve here */
   staffCount() {
     if (this.kind === 'job') return Math.max(0, (this.ref.stations || 3) - 1);
@@ -71,7 +91,7 @@ class ShopRuntime {
     for (let k = 1; k <= n; k++) {
       const ch = this.chairs[k];
       if (ch && life.totalMinutes >= ch.until) {
-        people.release(ch.npc);
+        people.release(ch.npc, true);
         if (this.kind === 'branch') business.staffServed(this.ref, ch.npc, k - 1);
         delete this.chairs[k];
       }
@@ -83,6 +103,7 @@ class ShopRuntime {
         this.chairs[k] = { npc, until: life.totalMinutes + 45 };
       }
     }
+    this.syncStaff();
     // clients who waited too long leave
     for (const p of this.waiting.slice()) {
       if (life.totalMinutes - p.arrived > 100) {
@@ -232,8 +253,20 @@ export const life = {
     }
   },
 
-  /** What to do next — one clear goal so the game never feels messy. */
+  /** Urgent things that override the mission line (tired...). */
+  alert() {
+    const s = this.state;
+    if (s.energy < 20) return 'אתה עייף: לך לישון בבית 🏠 או אכול בקפה שיר ☕';
+    if (D.coins < 0) return 'יתרה שלילית! עבוד בכיסא או הורד הוצאות';
+    return null;
+  },
+  /** What to do next — one clear goal so the game never feels messy (the current story mission). */
   goal() {
+    const q = ctx.quests?.current;
+    if (q) return `${q.icon} ${q.title}: ${q.what}`;
+    return this.goalLegacy();
+  },
+  goalLegacy() {
     const s = this.state, rank = progress.rank.id;
     const passed = LESSONS.filter((l) => progress.lessonPassed(l.id)).length;
     const brs = Object.values(s.branches);
@@ -301,6 +334,7 @@ export const life = {
 
   talkNpc(npc) {
     const s = this.state;
+    ctx.tutorial?.flag('talked');
     let text = TIPS[(s.tipsSeen++ + npc.seed) % TIPS.length];
     if (npc.state === 'waiting') text = 'אני מחכה לתספורת. מקווה שזה לא ייקח הרבה זמן...';
     if (npc.customer) text = `היי! הייתי אצלך כבר ${npc.customer.visits} פעמים. ${npc.customer.sat >= 4 ? 'אני ממליץ עליך לכל החברים!' : 'מקווה שהפעם יצא יותר טוב.'}`;
@@ -371,11 +405,12 @@ export const life = {
         ctx.toast(`🔑 ${car.name} חונה מחוץ לסוכנות!`, 3000);
       } }, { label: 'ביטול' }] });
   },
-  openRealty() { business.openRealty(); },
+  openRealty() { ctx.tutorial?.flag('realty'); business.openRealty(); },
 
   // ---------------------------------------------------------------- jobs
   talkOwner(sh) {
     const s = this.state, rt = this.runtimes[sh.id];
+    ctx.tutorial?.flag('ownerTalked');
     const rankOk = progress.rank.id >= sh.needRank;
     const mine = s.job?.shopId === sh.id;
     const need = RANKS[sh.needRank - 1].name;
@@ -421,17 +456,19 @@ export const life = {
     else applyDecor(ctx.shop, { owned: true, name: rt.ref.name, theme: { wall: rt.ref.color, floor: 'checker', leather: rt.ref.leather }, items: {}, stations: 1, rating: 4 }, ctx.tools, TOOLS);
     this.world.suspend();
     ctx.returnTo = 'world';
+    const coinsBefore = D.coins;
     ctx.onClientAbandoned = () => { delete rt.chairs[0]; this.world.people.release(npc); applyDecor(ctx.shop, null, ctx.tools, TOOLS); };
     ctx.startClient(c, {
       title: `${rt.ref.name}: ${c.name}`,
       onEnd: (res) => {
         delete rt.chairs[0];
-        this.world.people.release(npc);
+        this.world.people.release(npc, true);
         this.advance(HAIRCUT_MINUTES);
         const out = isBranch ? business.playerServed(rt.ref, npc, c, res) : this.jobServed(rt.ref, c, res);
         applyDecor(ctx.shop, null, ctx.tools, TOOLS);
         this.checkCareer();
         this.save();
+        ctx.pendingCoins = D.coins - coinsBefore; // coins fly into the wallet back in the city
         return out;
       },
     });
@@ -467,6 +504,7 @@ export const life = {
 
   // ---------------------------------------------------------------- phone
   openPhone() {
+    ctx.tutorial?.flag('phone');
     this.world.suspend();
     const s = this.state, c = this.career();
     const brs = Object.values(s.branches);
@@ -475,7 +513,9 @@ export const life = {
     const daily = home.rent + brs.reduce((a, b) => a + business.dailyCost(b), 0);
     ctx.openSheet('📱 הטלפון', `
       <div class="phone-apps">
+        <button class="app" data-app="profile">👤<span>פרופיל</span></button>
         <button class="app" data-app="map">🗺️<span>מפה</span></button>
+        <button class="app" data-app="settings">⚙️<span>הגדרות</span></button>
         <button class="app" data-app="biz">💈<span>העסק שלי</span></button>
         <button class="app" data-app="awards">🎓<span>תעודות</span></button>
         <button class="app" data-app="dict">📕<span>מילון</span></button>
@@ -492,6 +532,8 @@ export const life = {
       mount: (b) => b.querySelectorAll('[data-app]').forEach((el) => el.addEventListener('click', () => {
         const a = el.dataset.app;
         if (a === 'map') { this.world.resume(); this.world.toggleMap(true); }
+        if (a === 'profile') ctx.openProfile(() => this.openPhone());
+        if (a === 'settings') { this.world.resume(); ctx.openSettings(); }
         if (a === 'biz') business.openChain();
         if (a === 'awards') ctx.openAwards(() => this.openPhone());
         if (a === 'dict') ctx.openDictionary(() => this.openPhone());

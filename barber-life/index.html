@@ -60,22 +60,47 @@
     <div class="w-top">
       <div class="w-stats">
         <div class="w-row"><b id="wClock">יום 1 · 08:00</b></div>
-        <div class="w-row"><b id="wMoney">🪙 0</b><span id="wCareer" class="w-career"></span></div>
+        <div class="w-row"><b id="wMoney" class="w-money">🪙 0</b><span id="wCareer" class="w-career"></span></div>
+        <div class="w-lvl"><span id="wLevel">רמה 1</span><div class="w-xpbar"><i id="wXp"></i></div><small id="wXpText"></small></div>
         <div class="w-energy" title="אנרגיה"><i id="wEnergy"></i></div>
       </div>
-      <canvas id="minimap" width="150" height="150" aria-label="מפה"></canvas>
-    </div>
-    <div id="wGoal" class="w-goal"></div>
-    <div id="joy" class="joy"><i id="joyKnob"></i></div>
-    <div class="w-buttons">
-      <button id="wInteract" class="w-interact hidden"></button>
-      <div class="w-small">
-        <button id="wRun" class="w-btn" title="ריצה (Shift)">🏃</button>
-        <button id="wMap" class="w-btn" title="מפה (M)">🗺️</button>
-        <button id="wPhone" class="w-btn" title="טלפון">📱</button>
+      <div class="w-side">
+        <canvas id="minimap" width="150" height="150" aria-label="מפה"></canvas>
+        <div class="w-menu">
+          <button id="wMap" class="w-btn" title="מפה (M)"><i>🗺️</i><span>מפה</span></button>
+          <button id="wPhone" class="w-btn" title="טלפון (P)"><i>📱</i><span>טלפון</span></button>
+          <button id="wSettings" class="w-btn" title="הגדרות"><i>⚙️</i><span>הגדרות</span></button>
+        </div>
       </div>
     </div>
+    <div id="questPanel" class="quest">
+      <button id="questHead" class="quest-head" title="יומן משימות (Q)"><span class="q-tag">📜 משימה</span><b id="wGoal"></b><i class="q-tog">▾</i></button>
+      <div id="questBody" class="quest-body"></div>
+    </div>
+    <button id="gpsChip" class="gps hidden" title="ניווט — לחץ למפה"></button>
+    <div id="joy" class="joy"><i id="joyKnob"></i><span class="joy-tip">🕹️</span></div>
+    <div id="wActions" class="w-actions">
+      <button id="wInteract" class="w-interact hidden"></button>
+      <div class="w-act-row">
+        <button id="wJump" class="act" title="קפיצה (רווח)"><i>⤴️</i><span>קפיצה</span></button>
+        <button id="wRun" class="act" title="ריצה (Shift)"><i>🏃</i><span>ריצה</span></button>
+      </div>
+    </div>
+    <div id="editBar" class="edit-bar hidden"><span>✋ גרור את הג׳ויסטיק ואת כפתורי הפעולה למקום הנוח לך</span><button id="editDone" class="btn primary sm">✓ סיום</button></div>
   </div>
+
+  <!-- Interactive tutorial -->
+  <div id="tutCard" class="tut-card hidden" role="status">
+    <div class="tut-top"><small id="tutStep"></small><div id="tutDots" class="tut-dots"></div></div>
+    <h3 id="tutTitle"></h3>
+    <p id="tutText"></p>
+    <div id="tutProgress" class="tut-progress"></div>
+    <div id="tutHint" class="tut-hint"></div>
+    <div class="tut-actions"><button id="tutAction" class="btn primary sm hidden"></button><button id="tutSkip" class="tut-skip">דלג על ההדרכה</button></div>
+  </div>
+  <div id="tutArrow" class="tut-arrow hidden"></div>
+  <div id="tutRing" class="tut-ring hidden"></div>
+  <div id="toast" class="toast"></div>
 
   <div id="mapOverlay" class="map-overlay hidden">
     <div class="map-card">
@@ -209,7 +234,6 @@
         <div class="muted small">העבר על הכתפיים, הצוואר והגלימה כדי להוריד שערות שנחתכו.</div>
       </div>
     </footer>
-    <div id="toast" class="toast"></div>
   </div>
 
   <!-- Modals -->

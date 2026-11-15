@@ -176,7 +176,10 @@ export const session = {
     if (!this.cfg) return;
     if (ctx.demo.active) { ctx.toast('עצור קודם את ההדגמה'); return; }
     const res = this.analyze();
-    this._showResult(res);
+    if (this.cfg.client && ctx.lookInMirror && !this._looking) {
+      this._looking = true;
+      ctx.lookInMirror(this.cfg.client.name, () => { this._looking = false; this._showResult(res); });
+    } else if (!this._looking) this._showResult(res);
   },
 
   _showResult(res) {
@@ -207,6 +210,8 @@ export const session = {
     $('btnCompare').classList.toggle('hidden', !c.spec);
     $('btnContinue').classList.toggle('hidden', !c.spec);
     $('resultModal').classList.remove('hidden');
+    ctx.sfx?.play(res.overall >= 60 ? 'success' : 'error');
+    if (res.overall >= 85) ctx.fx?.confetti(50);
     $('btnRec')?.addEventListener('click', () => { const id = res.recommend; this.end(); ctx.openLesson?.(id); });
   },
 

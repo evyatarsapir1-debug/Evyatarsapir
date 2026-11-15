@@ -9,6 +9,12 @@ import { People } from './npcs.js';
 import { buildPerson, animatePerson, dressPerson } from './people.js';
 import { HALF_CITY, BLOCK, N, blockCenter, CARS } from './worldData.js';
 import { life } from './life.js';
+import { progress } from '../game/progress.js';
+import { quests } from './quests.js';
+import { tutorial } from './tutorial.js';
+import { controls } from './controls.js';
+import { sfx } from '../core/sfx.js';
+import { fx } from '../ui/fx.js';
 
 const $ = (id) => document.getElementById(id);
 const keys = new Set();
@@ -16,7 +22,7 @@ const keys = new Set();
 export const world = {
   active: false, ready: false,
   joy: { x: 0, y: 0, id: null }, look: { id: null, x: 0, y: 0 },
-  yaw: Math.PI, pitch: 0.32, camDist: 5, run: false, driving: null, waypoint: null,
+  yaw: Math.PI, pitch: 0.32, camDist: 5, run: false, driving: null, waypoint: null, vy: 0, air: 0, anim: null,
 
   init() {
     const scene = this.scene = new THREE.Scene();
@@ -36,8 +42,16 @@ export const world = {
     this.yaw = p.yaw ?? Math.PI;
     this.drawMapBase();
     this.bindInput();
+    this.buildGps();
+    this.people.onPay = (p) => {
+      if (Math.hypot(p.mesh.position.x - this.player.position.x, p.mesh.position.z - this.player.position.z) < 14) { sfx.play('coin'); this.popIcon('🪙', p.mesh.position); }
+    };
     this.ready = true;
     ctx.world = this;
+    ctx.life = life; ctx.quests = quests;
+    quests.init(life);
+    controls.apply();
+    tutorial.init();
   },
 
   // ---------------------------------------------------------------- mode switching
@@ -52,7 +66,11 @@ export const world = {
     $('hub').classList.add('hidden');
     $('sheet').classList.add('hidden');
     $('worldHud').classList.remove('hidden');
+    document.body.classList.add('in-world');
+    if (this._wasSuspended) fx.flash?.();
+    this._wasSuspended = false;
     this.active = true;
+    if (ctx.pendingCoins) { const c = ctx.pendingCoins; ctx.pendingCoins = 0; setTimeout(() => fx.coins(c), 450); }
     ctx.state.phase = 'world';
     life.onResume();
     this.refreshHud(true);
@@ -64,6 +82,11 @@ export const world = {
     $('worldHud').classList.add('hidden');
     $('mapOverlay').classList.add('hidden');
     $('dialogModal').classList.add('hidden');
+    document.body.classList.remove('in-world');
+    if (this.driving || this.anim) this.finishAnim?.();
+    this._wasSuspended = true;
+    fx.flash?.();
+    sfx.music('shop');
     life.savePos();
   },
 
@@ -75,6 +98,10 @@ export const world = {
       keys.add(e.code);
       if (e.code === 'KeyE' || e.code === 'Enter') this.interact();
       if (e.code === 'KeyM') this.toggleMap();
+      if (e.code === 'Space') { e.preventDefault(); this.jump(); }
+      if (e.code === 'KeyP') life.openPhone();
+      if (e.code === 'KeyQ') this.toggleQuest();
+      tutorial.poke();
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.run = true;
     });
     addEventListener('keyup', (e) => { keys.delete(e.code); if (e.code.startsWith('Shift')) this.run = false; });
@@ -102,14 +129,20 @@ export const world = {
       this.joy.x = x; this.joy.y = y;
       knob.style.transform = `translate(${x * 34}px, ${y * 34}px)`;
     };
-    pad.addEventListener('pointerdown', (e) => { e.stopPropagation(); pad.setPointerCapture(e.pointerId); this.joy.id = e.pointerId; setJoy(e); });
+    pad.addEventListener('pointerdown', (e) => { if (controls.editing) return; e.stopPropagation(); pad.setPointerCapture(e.pointerId); this.joy.id = e.pointerId; setJoy(e); pad.classList.add('active'); tutorial.poke(); });
     pad.addEventListener('pointermove', (e) => { if (this.joy.id === e.pointerId) setJoy(e); });
-    const endJoy = (e) => { if (this.joy.id === e.pointerId) { this.joy.id = null; this.joy.x = this.joy.y = 0; knob.style.transform = ''; } };
+    const endJoy = (e) => { if (this.joy.id === e.pointerId) { this.joy.id = null; this.joy.x = this.joy.y = 0; knob.style.transform = ''; pad.classList.remove('active'); } };
     pad.addEventListener('pointerup', endJoy); pad.addEventListener('pointercancel', endJoy);
     $('wInteract').addEventListener('click', () => this.interact());
     $('wRun').addEventListener('click', () => { this.run = !this.run; $('wRun').classList.toggle('on', this.run); });
     $('wMap').addEventListener('click', () => this.toggleMap());
     $('wPhone').addEventListener('click', () => life.openPhone());
+    $('wJump').addEventListener('click', () => this.jump());
+    $('wSettings').addEventListener('click', () => controls.open());
+    $('questHead').addEventListener('click', () => this.toggleQuest());
+    $('editDone').addEventListener('click', () => controls.editMode(false));
+    $('gpsChip').addEventListener('click', () => this.toggleMap(true));
+    try { if (localStorage.getItem('barber_life_questMin') === '1') $('questPanel').classList.add('min'); } catch { /* ignore */ }
     $('minimap').addEventListener('click', () => this.toggleMap());
     $('mapClose').addEventListener('click', () => this.toggleMap(false));
     $('mapCanvas').addEventListener('click', (e) => this.mapClick(e));
@@ -119,7 +152,9 @@ export const world = {
   frame(dt, render = true) {
     if (!this.active) { if (render) ctx.renderer.render(this.scene, this.camera); return; }
     life.update(dt);
-    this.movePlayer(dt);
+    if (this.anim) this.updateAnim(dt); else this.movePlayer(dt);
+    this.updateDoors(dt);
+    this.updateGps(dt);
     const focus = this.driving ? this.driving.mesh.position : this.player.position;
     this.sky.inside = !this.driving && !!this.insideBuilding(focus);
     this.sky.update(life.hour, focus, this.city.nightMats, performance.now() / 1000);
@@ -129,8 +164,11 @@ export const world = {
     this.people.update(dt);
     this.updateCamera(dt);
     this.cull(dt, focus);
+    this.updatePops(dt);
     this._hudT = (this._hudT || 0) + dt;
     if (this._hudT > 0.2) { this._hudT = 0; this.refreshHud(); }
+    this._qT = (this._qT || 0) + dt;
+    if (this._qT > 1) { this._qT = 0; quests.check(); this.updateMusic(); }
     this.drawMinimap();
     if (render) ctx.renderer.render(this.scene, this.camera);
   },
@@ -189,8 +227,18 @@ export const world = {
     this.collide(p, 0.32);
     const lim = HALF_CITY + 30;
     p.x = THREE.MathUtils.clamp(p.x, -lim, lim); p.z = THREE.MathUtils.clamp(p.z, -lim, lim);
-    p.y = this.groundY(p);
-    animatePerson(this.player, dt, speed);
+    const g = this.groundY(p);
+    if (this.air > 0 || this.vy > 0) { // jump arc
+      this.air += this.vy * dt; this.vy -= 18 * dt;
+      if (this.air <= 0) { this.air = 0; this.vy = 0; sfx.play('land'); }
+    }
+    p.y = g + this.air;
+    if (speed > 0.5 && this.air === 0) { // footsteps
+      this._stepT = (this._stepT || 0) + dt * speed;
+      if (this._stepT > 2.2) { this._stepT = 0; sfx.play('step'); }
+      if (this.joy.id == null || mag > 0.2) tutorial.poke();
+    }
+    animatePerson(this.player, dt, speed, false, null, this.air);
   },
 
   groundY(p) {
@@ -222,6 +270,105 @@ export const world = {
     return hit;
   },
 
+  jump() {
+    if (!this.active || this.driving || this.anim || this.air > 0) return;
+    this.vy = 5.6; this.air = 0.001;
+    sfx.play('jump');
+  },
+
+  // ---------------------------------------------------------------- doors: slide open when someone walks up
+  updateDoors(dt) {
+    const pl = this.player.position;
+    for (const b of Object.values(this.city.buildings)) {
+      if (!b.doorPanels?.length) continue;
+      const dp = Math.hypot(b.door.x - pl.x, b.door.z - pl.z);
+      if (dp > 40) continue;
+      let want = !this.driving && dp < 3.2 ? 1 : 0;
+      if (!want) for (const p of this.people.list) { if (Math.abs(p.mesh.position.x - b.door.x) < 2.6 && Math.abs(p.mesh.position.z - b.door.z) < 2.6) { want = 1; break; } }
+      if (want && b.doorOpen < 0.05 && dp < 3.2) sfx.play('door');
+      b.doorOpen += (want - b.doorOpen) * Math.min(1, dt * 6);
+      for (const pg of b.doorPanels) pg.position.x = pg.userData.base + pg.userData.dir * b.doorOpen * 1.05;
+    }
+  },
+
+  // ---------------------------------------------------------------- GPS: gold arrow at the player's feet + light beacon at the target
+  buildGps() {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0.55); shape.lineTo(0.38, 0.05); shape.lineTo(0.16, 0.05); shape.lineTo(0.16, -0.4); shape.lineTo(-0.16, -0.4); shape.lineTo(-0.16, 0.05); shape.lineTo(-0.38, 0.05); shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.06, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2); // lie flat, tip toward -z
+    geo.rotateY(Math.PI);      // tip toward +z
+    this.gpsArrow = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#ffd36a', transparent: true, opacity: 0.92, depthTest: false }));
+    this.gpsArrow.renderOrder = 10;
+    this.scene.add(this.gpsArrow);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.6, 26, 20, 1, true), new THREE.MeshBasicMaterial({ color: '#ffd36a', transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beam.position.y = 13;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.95, 40), new THREE.MeshBasicMaterial({ color: '#ffd36a', transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.2;
+    this.beacon = new THREE.Group(); this.beacon.add(beam, ring); this.beacon.userData = { beam, ring };
+    this.scene.add(this.beacon);
+  },
+  /** Current navigation target: tutorial step → map waypoint → story mission. */
+  navTarget() {
+    return tutorial.target() || (this.waypoint ? { ...this.waypoint, label: this.waypoint.label || 'יעד במפה' } : null) || (tutorial.active ? null : quests.target());
+  },
+  updateGps(dt) {
+    const t = this.navTarget();
+    const p = this.driving ? this.driving.mesh.position : this.player.position;
+    this._gpsT = (this._gpsT || 0) + dt;
+    const chip = $('gpsChip');
+    if (!t) { this.gpsArrow.visible = this.beacon.visible = false; chip.classList.add('hidden'); return; }
+    const dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz);
+    const ang = Math.atan2(dx, dz);
+    const near = d < 2.2;
+    this.gpsArrow.visible = !near;
+    const rr = this.driving ? 3.2 : 1.15;
+    this.gpsArrow.position.set(p.x + Math.sin(ang) * rr, p.y + 0.12 + Math.sin(this._gpsT * 4) * 0.05, p.z + Math.cos(ang) * rr);
+    this.gpsArrow.rotation.y = ang;
+    this.gpsArrow.scale.setScalar(this.driving ? 2.2 : 1);
+    this.beacon.visible = !t.moving;
+    this.beacon.position.set(t.x, this.groundY(t), t.z);
+    const pulse = 1 + 0.25 * Math.sin(this._gpsT * 3);
+    this.beacon.userData.ring.scale.setScalar(pulse);
+    this.beacon.userData.beam.material.opacity = Math.min(0.24, 0.05 + d / 200);
+    // HUD chip: arrow relative to where the camera looks
+    let rel = ang - (this.yaw + Math.PI);
+    rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+    chip.classList.remove('hidden');
+    if ((this._chipT = (this._chipT || 0) + dt) > 0.15) {
+      this._chipT = 0;
+      chip.innerHTML = `<i style="transform:rotate(${-rel}rad)">➤</i><span><b>${t.label || 'יעד'}</b><small>${near ? 'הגעת!' : `${Math.round(d)} מ׳`}</small></span>`;
+    }
+  },
+
+  /** A small icon that floats up from a point in the world (coin when a client pays). */
+  popIcon(icon, pos) {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+    const g = cv.getContext('2d'); g.font = '48px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(icon, 32, 34);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false }));
+    sp.scale.setScalar(0.45); sp.position.set(pos.x, 2.0, pos.z);
+    this.scene.add(sp);
+    (this.pops ||= []).push({ sp, t: 0 });
+  },
+  updatePops(dt) {
+    for (const o of (this.pops || []).slice()) {
+      o.t += dt; o.sp.position.y += dt * 0.8; o.sp.material.opacity = Math.max(0, 1 - o.t / 1.4);
+      if (o.t > 1.4) { this.scene.remove(o.sp); o.sp.material.map.dispose(); o.sp.material.dispose(); this.pops = this.pops.filter((x) => x !== o); }
+    }
+  },
+
+  updateMusic() {
+    const h = life.hour;
+    const inside = this.insideBuilding(this.player.position);
+    sfx.music(inside && /barber|property/.test(inside.footprint.kind) ? 'shop' : h >= 20 || h < 6 ? 'night' : 'city');
+  },
+
+  toggleQuest() {
+    const el = $('questPanel');
+    el.classList.toggle('min');
+    try { localStorage.setItem('barber_life_questMin', el.classList.contains('min') ? '1' : '0'); } catch { /* ignore */ }
+  },
+
   // ---------------------------------------------------------------- cars
   spawnCarMesh(carState) {
     const def = CARS.find((c) => c.id === carState.id);
@@ -230,24 +377,73 @@ export const world = {
     m.position.set(carState.x, 0.02, carState.z); m.rotation.y = carState.h;
     return m;
   },
+  /** Walk to the driver's door, step in (the car dips), then drive. */
   enterCar(carState) {
+    if (this.anim) return;
     const m = this.spawnCarMesh(carState);
-    this.driving = { state: carState, mesh: m, v: 0, def: CARS.find((c) => c.id === carState.id) };
-    this.player.visible = false;
-    this.camDist = 8;
-    ctx.toast('🚗 נהיגה: קדימה/אחורה להאצה ובלימה, ימינה/שמאלה להיגוי. לחץ שוב על הכפתור כדי לצאת.', 4000);
+    const def = CARS.find((c) => c.id === carState.id);
+    const side = def.kind === 'scooter' ? 0.7 : 1.25;
+    const door = { x: m.position.x + Math.cos(m.rotation.y) * side, z: m.position.z - Math.sin(m.rotation.y) * side };
+    const from = { x: this.player.position.x, z: this.player.position.z };
+    this.anim = { type: 'enter', t: 0, dur: 0.9, from, door, m, carState, def };
+    sfx.play('door');
+  },
+  updateAnim(dt) {
+    const a = this.anim; a.t += dt;
+    const u = Math.min(1, a.t / a.dur), p = this.player.position;
+    if (a.type === 'enter') {
+      const w = Math.min(1, u / 0.55);
+      if (u < 0.55) { // walk to the door
+        p.x = a.from.x + (a.door.x - a.from.x) * w; p.z = a.from.z + (a.door.z - a.from.z) * w;
+        this.player.rotation.y = Math.atan2(a.door.x - a.from.x, a.door.z - a.from.z);
+        animatePerson(this.player, dt, 2.5);
+      } else { // slide in and shrink into the seat
+        const k = (u - 0.55) / 0.45;
+        p.x = a.door.x + (a.m.position.x - a.door.x) * k; p.z = a.door.z + (a.m.position.z - a.door.z) * k;
+        this.player.scale.setScalar(1 - k * 0.6);
+        animatePerson(this.player, dt, 0, k > 0.5);
+        a.m.position.y = 0.02 - Math.sin(k * Math.PI) * 0.06;
+      }
+      if (u >= 1) this.finishAnim();
+    } else if (a.type === 'exit') {
+      const k = u;
+      this.player.visible = true;
+      this.player.scale.setScalar(0.4 + 0.6 * k);
+      p.x = a.m.position.x + (a.door.x - a.m.position.x) * k; p.z = a.m.position.z + (a.door.z - a.m.position.z) * k;
+      a.m.position.y = 0.02 - Math.sin(k * Math.PI) * 0.06;
+      animatePerson(this.player, dt, 1.2);
+      if (u >= 1) this.finishAnim();
+    }
+  },
+  finishAnim() {
+    const a = this.anim; if (!a) return;
+    this.anim = null;
+    this.player.scale.setScalar(1);
+    a.m.position.y = 0.02;
+    if (a.type === 'enter') {
+      this.driving = { state: a.carState, mesh: a.m, v: 0, def: a.def };
+      this.player.visible = false;
+      this.camDist = 8;
+      sfx.play('car');
+      ctx.toast('🚗 נהיגה: קדימה/אחורה להאצה ובלימה, ימינה/שמאלה להיגוי. "צא מהרכב" כדי לצאת.', 4000);
+    } else {
+      this.player.position.set(a.door.x, 0.14, a.door.z);
+      this.collide(this.player.position, 0.32);
+      life.save();
+    }
   },
   exitCar() {
-    const d = this.driving; if (!d) return;
+    const d = this.driving; if (!d || this.anim) return;
     const m = d.mesh;
     Object.assign(d.state, { x: m.position.x, z: m.position.z, h: m.rotation.y });
     const sx = Math.cos(m.rotation.y), sz = -Math.sin(m.rotation.y);
-    this.player.position.set(m.position.x + sx * 1.8, 0.14, m.position.z + sz * 1.8);
-    this.collide(this.player.position, 0.32);
-    this.player.visible = true;
+    const door = { x: m.position.x + sx * 1.8, z: m.position.z + sz * 1.8 };
+    this.collide(door, 0.32);
+    this.player.rotation.y = Math.atan2(sx, sz);
     this.driving = null;
     this.camDist = 5;
-    life.save();
+    this.anim = { type: 'exit', t: 0, dur: 0.6, door, m };
+    sfx.play('door');
   },
   drive(dt, fx, fy) {
     const d = this.driving, m = d.mesh;
@@ -290,7 +486,8 @@ export const world = {
   interact() {
     if (!this.active) return;
     const it = this.current;
-    if (it) it.action();
+    if (it) { sfx.play('tap'); tutorial.poke(); it.action(); }
+    else ctx.toast('אין כאן עם מי לדבר או מה לעשות. חפש את הכפתור שמופיע כשמתקרבים לאנשים, דלפקים וכיסאות.', 2600);
   },
 
   refreshHud(force) {
@@ -300,7 +497,14 @@ export const world = {
     $('wCareer').textContent = life.career().name;
     $('wEnergy').style.width = `${Math.max(0, s.energy)}%`;
     $('wEnergy').classList.toggle('low', s.energy < 25);
-    $('wGoal').textContent = '🎯 ' + life.goal();
+    const lvl = progress.rank, nx = progress.nextRank, xp = progress.data.xp;
+    $('wLevel').textContent = `רמה ${lvl.id}`;
+    $('wXp').style.width = `${nx ? Math.round((xp - lvl.xp) / (nx.xp - lvl.xp) * 100) : 100}%`;
+    $('wXpText').textContent = nx ? `${xp}/${nx.xp} XP` : `${xp} XP`;
+    const q = quests.render(), alert = life.alert();
+    $('wGoal').textContent = alert ? `⚠️ ${alert}` : q.title;
+    $('wGoal').classList.toggle('alert', !!alert);
+    if (q.html !== this._qHtml) { this._qHtml = q.html; $('questBody').innerHTML = q.html; }
     // nearest interaction
     const pos = this.driving ? this.driving.mesh.position : this.player.position;
     const list = life.interactions(pos, !!this.driving);
@@ -312,7 +516,8 @@ export const world = {
     this.current = best;
     const btn = $('wInteract');
     btn.classList.toggle('hidden', !best);
-    if (best) btn.innerHTML = `<b>${best.icon || '👆'}</b><span>${best.label}</span><small class="kbd">E</small>`;
+    if (best && best.label !== this._lastLabel) { btn.innerHTML = `<b>${best.icon || '👆'}</b><span>${best.label}</span><small class="kbd">E</small>`; btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop'); }
+    this._lastLabel = best?.label;
     void force;
   },
 
@@ -366,7 +571,7 @@ export const world = {
       const dx = x - S / 2, dy = y - S / 2, d = Math.hypot(dx, dy), lim = S / 2 - 8;
       if (d > lim) { x = S / 2 + dx / d * lim; y = S / 2 + dy / d * lim; }
       g.fillStyle = '#ff4fd8'; g.beginPath(); g.arc(x, y, 5, 0, Math.PI * 2); g.fill();
-      if (Math.hypot(w.x - p.x, w.z - p.z) < 4) { this.waypoint = null; ctx.toast('📍 הגעת ליעד'); }
+      if (Math.hypot(w.x - p.x, w.z - p.z) < 4) { this.waypoint = null; ctx.toast('📍 הגעת ליעד'); sfx.play('task'); }
     }
     // player arrow (map is north-up; heading from the model/car)
     const h = this.driving ? this.driving.mesh.rotation.y : this.player.rotation.y;
@@ -380,7 +585,7 @@ export const world = {
     const el = $('mapOverlay');
     const show = on ?? el.classList.contains('hidden');
     el.classList.toggle('hidden', !show);
-    if (show) this.drawFullMap(); else life.flushNotes();
+    if (show) this.drawFullMap(); else { sfx.play('close'); life.flushNotes(); }
   },
   drawFullMap() {
     const cv = $('mapCanvas');
@@ -412,7 +617,7 @@ export const world = {
     if (best) this.setWaypoint(best);
   },
   setWaypoint(m) {
-    this.waypoint = { x: m.x, z: m.z };
+    this.waypoint = { x: m.x, z: m.z, label: m.label };
     ctx.toast(`📍 יעד במפה: ${m.label || ''}`);
     this.toggleMap(false);
   },

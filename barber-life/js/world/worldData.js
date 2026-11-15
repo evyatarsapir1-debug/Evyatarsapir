@@ -28,7 +28,7 @@ export function lotFrame(i, j, side, off = 0) {
 export const SHOPS = [
   {
     id: 'fadeHouse', name: 'Fade House', he: 'פייד האוס', block: [2, 1], side: 'n', off: -8, w: 11, d: 12, color: '#1f2b3a', leather: '#141414',
-    tier: 1, priceMult: 1.0, commission: 0.5, basePay: 80, needRank: 2, owner: 'מוטי', stations: 3,
+    tier: 1, priceMult: 1.0, commission: 0.5, basePay: 80, needRank: 1, owner: 'מוטי', stations: 3,
     pitch: 'מספרה שכונתית צעירה. מחפשים ספרים מתחילים שמוכנים ללמוד.',
   },
   {

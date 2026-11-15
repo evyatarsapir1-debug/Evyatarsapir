@@ -16,6 +16,10 @@ import { DemoPlayer, planDemo } from './game/demo.js';
 import { initScreens } from './ui/screens.js';
 import { session } from './game/session.js';
 import { world } from './world/worldMode.js';
+import { fx } from './ui/fx.js';
+import { sfx } from './core/sfx.js';
+import { controls } from './world/controls.js';
+import { openProfile } from './ui/profile.js';
 
 const $ = (id) => document.getElementById(id);
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600;
@@ -91,10 +95,26 @@ async function init() {
   await nextFrame();
   buildBaseUI();
   initScreens();
+  fx.init();
+  ctx.fx = fx; ctx.sfx = sfx;
+  ctx.openProfile = openProfile;
+  ctx.openSettings = () => controls.open();
+  ctx.cutCount = {};
+  /** The client turns his head left and right to check the haircut in the mirror, then cb() (the result). */
+  ctx.lookInMirror = (name, cb) => {
+    if (MANUAL) { cb(); return; }
+    state.mirror = { t: 0, dur: 2.2, cb, base: client.head.rotation.y, baseX: client.head.rotation.x };
+    toast(`👀 ${name} מסתכל במראה...`, 2000);
+  };
+  ctx.registerHubCard?.({ go: 'profile', icon: '👤', title: 'הפרופיל שלי', sub: () => `רמה ${progress.rank.id} · ${progress.data.xp} XP` }, () => openProfile(() => ctx.showHub()));
   ctx.startWorld = () => {
     world.start();
-    if (!save.seenWorldHelp) { save.seenWorldHelp = true; progress.save(); $('worldHelp').classList.remove('hidden'); }
+    if (!save.seenWorldHelp) { save.seenWorldHelp = true; progress.save(); if (!ctx.tutorial?.active) $('worldHelp').classList.remove('hidden'); }
   };
+  // never lose progress: save when the app goes to the background or closes
+  const saveNow = () => { if (world.ready) ctx.life?.savePos(); else progress.save(); };
+  addEventListener('pagehide', saveNow);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
   renderer.compile(scene, camera);
   setLoad(1);
   $('loading').classList.remove('show');
@@ -243,6 +263,7 @@ function strokeTo(hit) {
   } else cut += cutAtLocal(hit.local);
   s.lastLocal = hit.local.clone();
   s.cut += cut;
+  if (cut > 0) { ctx.cutCount[tools.active] = (ctx.cutCount[tools.active] || 0) + 1; ctx.tutorial?.poke(); }
   state.cuttingAmount = Math.min(1, state.cuttingAmount + cut / 60);
 }
 
@@ -383,6 +404,7 @@ fitCamera();
 let toastTimer = 0;
 function toast(msg, ms = 2400) {
   const t = $('toast');
+  t.classList.remove('show'); void t.offsetWidth;
   t.textContent = msg; t.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
 }
@@ -547,6 +569,13 @@ function frame(dt, render = true) {
   if (world.active) { world.frame(dt, render); return; }
   if (state.phase !== 'play') cam.theta += dt * 0.12;
   cam.update(dt);
+  if (state.mirror) { // the client checks the result: look left, right, tilt
+    const m = state.mirror; m.t += dt;
+    const u = Math.min(1, m.t / m.dur);
+    client.head.rotation.y = m.base + Math.sin(u * Math.PI * 2) * 0.45 * Math.sin(u * Math.PI);
+    client.head.rotation.x = m.baseX - Math.sin(u * Math.PI) * 0.08;
+    if (u >= 1) { client.head.rotation.y = m.base; client.head.rotation.x = m.baseX; state.mirror = null; m.cb(); }
+  }
   let h = state.hover;
   if (demo.active) {
     const local = demo.update(dt);

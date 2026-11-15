@@ -137,15 +137,8 @@ export const business = {
     const city = this.world.city;
     city.furnishBarbershop(b, br.stations, br.theme.leather, false);
     const g = b.interior;
-    // employees stand at their stations
-    br.employees.forEach((e, k) => {
-      const sp = b.stationSpots[k + 1];
-      if (!sp) return;
-      e.look ||= randomLook(mulberry32(e.name.length * 97 + k));
-      const p = buildPerson({ ...e.look, apron: '#141414' });
-      p.position.set(sp.local[0] + 0.8, 0.14, sp.local[1] + 0.5); p.rotation.y = -Math.PI / 2;
-      g.add(p);
-    });
+    // employees are live characters at their stations (ShopRuntime.syncStaff)
+    br.employees.forEach((e, k) => { e.look ||= randomLook(mulberry32(e.name.length * 97 + k)); });
     const hw = b.w / 2;
     if (br.items.sofa) {
       const sofa = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 2), new THREE.MeshStandardMaterial({ color: br.theme.leather }));
