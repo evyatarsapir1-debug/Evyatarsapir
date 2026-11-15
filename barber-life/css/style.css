@@ -633,3 +633,45 @@ body:has(#hud:not(.hidden)) .tut-card { top: auto; bottom: calc(150px + var(--sa
 @keyframes arrowBobX { 50% { transform: translateX(-9px); } }
 @keyframes arrowBobX2 { 50% { transform: translateX(9px); } }
 #worldHud.editing .w-actions, #worldHud.editing .joy { touch-action: none; }
+
+/* ================================================================ side touchpad + sight (cut without covering the head) */
+.pad-wrap { position: absolute; left: 10px; bottom: calc(150px + var(--safe-b)); z-index: 3; }
+.touch-pad { position: relative; width: 190px; height: 150px; border-radius: 18px; touch-action: none; overflow: hidden;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03)); border: 1.5px solid rgba(240, 211, 149, 0.45);
+  backdrop-filter: blur(8px); box-shadow: var(--shadow); display: grid; place-items: center; transition: border-color 0.15s, box-shadow 0.15s; }
+.touch-pad.active { border-color: var(--gold-2); box-shadow: 0 0 22px rgba(240, 211, 149, 0.35); }
+.touch-pad span { font-size: 12px; color: #e9e2d4; opacity: 0.8; pointer-events: none; text-align: center; padding: 0 10px; }
+.pad-grid { position: absolute; inset: 0; pointer-events: none; opacity: 0.25;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.35) 1px, transparent 1px); background-size: 24px 24px; }
+.pad-cut { position: absolute; right: 96px; bottom: calc(150px + var(--safe-b)); z-index: 3; width: 92px; height: 92px; border-radius: 50%; touch-action: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; color: #1b1408;
+  background: radial-gradient(circle at 35% 30%, var(--gold-2), var(--gold)); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 -4px 0 rgba(0, 0, 0, 0.15); }
+.pad-cut b { font-size: 30px; line-height: 1; }
+.pad-cut span { font-size: 10.5px; font-weight: 700; max-width: 80px; text-align: center; line-height: 1.15; }
+.pad-cut.on { transform: scale(0.93); filter: brightness(1.1); box-shadow: 0 0 0 6px rgba(240, 211, 149, 0.35), 0 0 30px rgba(240, 211, 149, 0.6); }
+.pad-cut.latched { background: radial-gradient(circle at 35% 30%, #ff9b8a, #e35b4f); color: #fff; animation: glowRed 1s infinite; }
+@keyframes glowRed { 50% { box-shadow: 0 0 0 9px rgba(227, 91, 79, 0.25), 0 0 28px rgba(227, 91, 79, 0.6); } }
+.aim { position: fixed; left: 0; top: 0; z-index: 4; width: 0; height: 0; pointer-events: none; }
+.aim i { position: absolute; left: -16px; top: -16px; width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 0, 0, 0.4); transition: border-color 0.1s, transform 0.1s; }
+.aim i::before, .aim i::after { content: ''; position: absolute; background: rgba(255, 255, 255, 0.9); box-shadow: 0 0 2px #000; }
+.aim i::before { left: 50%; top: -7px; bottom: -7px; width: 2px; margin-left: -1px; }
+.aim i::after { top: 50%; left: -7px; right: -7px; height: 2px; margin-top: -1px; }
+.aim.on-head i { border-color: var(--gold-2); }
+.aim.cutting i { border-color: #ff6b5a; transform: scale(0.8); }
+#btnPad.on { border-color: var(--gold); background: rgba(217, 180, 106, 0.3); }
+body.pad-on:has(#hud:not(.hidden)) .tut-card { bottom: auto; top: calc(70px + var(--safe-t)); }
+@media (max-height: 520px) {
+  .pad-wrap { left: 8px; bottom: calc(64px + var(--safe-b)); }
+  .touch-pad { width: 170px; height: 128px; }
+  .pad-cut { right: 74px; bottom: calc(66px + var(--safe-b)); width: 78px; height: 78px; }
+  .pad-cut b { font-size: 24px; }
+  body.pad-on:has(#hud:not(.hidden)) .tut-card { top: calc(52px + var(--safe-t)); width: min(240px, 30vw); }
+}
+@media (max-width: 640px) {
+  .pad-wrap { bottom: calc(200px + var(--safe-b)); }
+  .pad-cut { right: 12px; bottom: calc(200px + var(--safe-b)); }
+}
+body.lefty .pad-wrap { left: auto; right: 84px; }
+body.lefty .pad-cut { right: auto; left: 12px; }
+@media (max-height: 520px) { body:not(.in-world) .toast { top: calc(50px + var(--safe-t)); bottom: auto; font-size: 12px; padding: 6px 10px; } }

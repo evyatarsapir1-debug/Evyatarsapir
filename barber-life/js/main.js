@@ -129,6 +129,7 @@ async function init() {
  * opts: { mannequin, skin, cape, seed, saved (serialized lengths) }
  */
 function setupHead(preset, opts = {}) {
+  if (pad.on) setTimeout(() => { padStop(); padCenter(); }, 60);
   const mannequin = !!opts.mannequin;
   if (client) { scene.remove(client.group); client.group.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); }
   if (hair) hair.dispose();
@@ -171,7 +172,7 @@ function saveFreeHair() {
   progress.save();
 }
 function saveSettings() {
-  save.settings = { sound: sound.enabled, guard: tools.guard.id, lever: tools.lever, tool: tools.active, scissorLen: tools.scissorLen };
+  save.settings = { pad: pad.on, sound: sound.enabled, guard: tools.guard.id, lever: tools.lever, tool: tools.active, scissorLen: tools.scissorLen };
   progress.save();
 }
 
@@ -354,12 +355,103 @@ function endPointer(e) {
   if (state.dusting && state.dusting.id === e.pointerId) state.dusting = null;
   if (orbitDrag && orbitDrag.id === e.pointerId) orbitDrag = null;
   if (pointers.size < 2) pinch = null;
-  if (e.pointerType !== 'mouse') state.hover = null;
+  if (e.pointerType !== 'mouse' && !pad.on) state.hover = null;
 }
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && !state.stroke) state.hover = null; });
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.zoom(Math.exp(e.deltaY * 0.0012)); }, { passive: false });
+
+// ---------------------------------------------------------------- side touchpad (remote aim)
+// Drag on the pad at the edge of the screen: a sight moves over the head (like a laptop touchpad), so the finger
+// never covers the client. Hold the ✂️ button to cut along the sight; a quick tap locks cutting on/off.
+const pad = { on: false, x: 0, y: 0, drag: null, cutId: null, latch: false, down: 0, sens: 1.7 };
+function padSet(on) {
+  pad.on = on;
+  $('btnPad').classList.toggle('on', on);
+  document.body.classList.toggle('pad-on', on);
+  $('padWrap').classList.toggle('hidden', !on);
+  $('padCut').classList.toggle('hidden', !on);
+  $('aimCursor').classList.toggle('hidden', !on);
+  padStop();
+  if (on) padCenter(); else state.hover = null;
+  const s = progress.data.settings ||= {}; s.pad = on; progress.save();
+}
+/** sight on the middle of the head (the side the camera looks at) */
+function padCenter() {
+  const v = client.head.localToWorld(new THREE.Vector3(0, 0.02, 0)).project(camera);
+  pad.x = (v.x + 1) / 2 * innerWidth; pad.y = (1 - v.y) / 2 * innerHeight;
+}
+function padHit() {
+  if (tools.active === 'duster') return pickBody(pad.x, pad.y) || pickHead(pad.x, pad.y);
+  return pickHead(pad.x, pad.y);
+}
+function padBegin() {
+  if (!playing() || demo.active || state.mode !== 'cut') return;
+  const hit = padHit();
+  if (state.tapHandler) { if (hit) state.tapHandler(hit); return; }
+  if (tools.active === 'duster') { state.dusting = { id: 'pad' }; if (hit) dustAt(hit); return; }
+  if (hair.display === 'pro') { toast('זו תצוגת התוצאה המקצועית. חזור ל"שלי" כדי להמשיך לספר.'); return; }
+  pushUndo();
+  state.strokeId++;
+  state.stroke = { lastLocal: null, cut: 0, id: 'pad' };
+  if (hit) { state.hover = hit; strokeTo(hit); }
+}
+function padStop() {
+  if (state.stroke?.id === 'pad') endStroke();
+  if (state.dusting?.id === 'pad') state.dusting = null;
+  pad.latch = false; pad.cutId = null;
+  $('padCut').classList.remove('on', 'latched');
+  $('padCutText').textContent = 'החזק לחיתוך';
+}
+function padMoveAim(dx, dy) {
+  pad.x = THREE.MathUtils.clamp(pad.x + dx * pad.sens, 0, innerWidth);
+  pad.y = THREE.MathUtils.clamp(pad.y + dy * pad.sens, 0, innerHeight);
+  const hit = padHit();
+  if (state.stroke?.id === 'pad') { if (hit && !hit.body) strokeTo(hit); else state.stroke.lastLocal = null; }
+  else if (state.dusting?.id === 'pad' && hit) dustAt(hit);
+}
+function bindPad() {
+  const tp = $('touchPad'), cut = $('padCut');
+  tp.addEventListener('pointerdown', (e) => { e.preventDefault(); tp.setPointerCapture(e.pointerId); pad.drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; tp.classList.add('active'); sound.unlock(); });
+  tp.addEventListener('pointermove', (e) => {
+    if (pad.drag?.id !== e.pointerId) return;
+    padMoveAim(e.clientX - pad.drag.x, e.clientY - pad.drag.y);
+    pad.drag.x = e.clientX; pad.drag.y = e.clientY;
+  });
+  const endDrag = (e) => { if (pad.drag?.id === e.pointerId) { pad.drag = null; tp.classList.remove('active'); } };
+  tp.addEventListener('pointerup', endDrag); tp.addEventListener('pointercancel', endDrag);
+  tp.addEventListener('dblclick', () => padCenter());
+  cut.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); cut.setPointerCapture(e.pointerId); sound.unlock();
+    if (pad.latch) { padStop(); return; } // tap again: stop the locked cut
+    pad.cutId = e.pointerId; pad.down = performance.now();
+    cut.classList.add('on'); $('padCutText').textContent = 'חותך...';
+    padBegin();
+  });
+  const cutUp = (e) => {
+    if (pad.cutId !== e.pointerId) return;
+    pad.cutId = null;
+    if (performance.now() - pad.down < 260 && !state.tapHandler && (state.stroke?.id === 'pad' || state.dusting?.id === 'pad')) {
+      pad.latch = true; cut.classList.add('latched'); $('padCutText').textContent = 'נעול — לחץ לעצירה';
+      return;
+    }
+    padStop();
+  };
+  cut.addEventListener('pointerup', cutUp); cut.addEventListener('pointercancel', cutUp);
+  $('btnPad').addEventListener('click', () => { padSet(!pad.on); toast(pad.on ? '🎯 משטח כיוון: גרור במשטח כדי להזיז את הכוונת, והחזק ✂️ כדי לספר. לחיצה קצרה על ✂️ נועלת חיתוך.' : 'מצב רגיל: גוררים ישר על הראש.', 4200); });
+}
+function padFrame() {
+  if (!pad.on || !playing()) { if (pad.on) $('aimCursor').classList.add('hidden'); return; }
+  const el = $('aimCursor');
+  el.classList.remove('hidden');
+  el.style.transform = `translate(${pad.x}px, ${pad.y}px)`;
+  const hit = state.mode === 'cut' && !demo.active ? padHit() : null;
+  el.classList.toggle('on-head', !!hit);
+  el.classList.toggle('cutting', state.stroke?.id === 'pad' || state.dusting?.id === 'pad');
+  if (!state.stroke || state.stroke.id === 'pad') state.hover = hit;
+}
+ctx.pad = pad; ctx.padSet = padSet; ctx.padCenter = padCenter;
 
 function endStroke() {
   const s = state.stroke;
@@ -475,6 +567,8 @@ function undo() {
 const fmt = (v) => (Math.round(v * 10) / 10).toString();
 
 function buildBaseUI() {
+  bindPad();
+  { const sp = progress.data.settings?.pad; if (sp ?? isMobile) setTimeout(() => padSet(true), 0); }
   const gbox = $('guards');
   for (const g of GUARDS) {
     const b = document.createElement('button');
@@ -576,6 +670,7 @@ function frame(dt, render = true) {
     client.head.rotation.x = m.baseX - Math.sin(u * Math.PI) * 0.08;
     if (u >= 1) { client.head.rotation.y = m.base; client.head.rotation.x = m.baseX; state.mirror = null; m.cb(); }
   }
+  padFrame();
   let h = state.hover;
   if (demo.active) {
     const local = demo.update(dt);

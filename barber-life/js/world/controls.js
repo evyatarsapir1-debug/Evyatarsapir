@@ -18,6 +18,7 @@ export const controls = {
     const hud = $('worldHud'); if (!hud) return;
     hud.style.setProperty('--ctl', this.cfg.scale);
     hud.classList.toggle('lefty', !!this.cfg.left);
+    document.body.classList.toggle('lefty', !!this.cfg.left); // also swaps the cutting touchpad
     for (const id of ['joy', 'wActions']) {
       const el = $(id), p = this.cfg.pos[id];
       if (!el) continue;

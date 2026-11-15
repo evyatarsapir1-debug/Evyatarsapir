@@ -131,6 +131,7 @@
         <span class="avatar" id="clientAvatar">👤</span><span><b id="clientName">דניאל</b><small id="clientHair">שיער חלק</small></span>
       </button>
       <div class="top-actions">
+        <button id="btnPad" class="icon-btn" title="משטח כיוון: מספרים מהצד בלי להסתיר את הראש" aria-label="משטח כיוון">🎯</button>
         <button id="btnViewCycle" class="icon-btn view-cycle" title="החלף זווית צפייה" aria-label="החלף זווית צפייה">📷</button>
         <button id="btnUndo" class="icon-btn" title="ביטול פעולה אחרונה" aria-label="ביטול">↶</button>
         <button id="btnMap" class="icon-btn" title="מפת אורכים" aria-label="מפת אורכים">🌈</button>
@@ -206,6 +207,12 @@
       <div class="lg-row"><i style="background:#2633f2"></i>קצר מדי</div>
     </div>
 
+    <!-- side touchpad: aim a sight on the head from the edge of the screen, cut with the button -->
+    <div id="padWrap" class="pad-wrap hidden">
+      <div id="touchPad" class="touch-pad"><i class="pad-grid"></i><span>🎯 גרור כאן כדי לכוון</span></div>
+    </div>
+    <button id="padCut" class="pad-cut hidden"><b>✂️</b><span id="padCutText">החזק לחיתוך</span></button>
+    <div id="aimCursor" class="aim hidden"><i></i></div>
     <footer class="bottom">
       <div class="mode-toggle" role="group" aria-label="מצב">
         <button id="modeCut" class="mode active">✋ <span>עבודה</span></button>

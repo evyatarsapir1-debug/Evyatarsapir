@@ -260,6 +260,39 @@ await page.tap('#tutSkip'); await wait(150);
 await ev(() => document.querySelector('#dialogButtons .btn:not(.primary)').click()); await wait(200);
 check('tutorial can be skipped', (await tutStep()) === 'done');
 
+// ---------------------------------------------------------------- side touchpad: aim + cut without covering the head
+await ev(() => { __barber.world.suspend(); __barber.ctx.returnTo = 'hub'; __barber.ctx.showHub(); });
+await page.tap('[data-go="practice"]'); await wait(150);
+await page.tap('[data-free="daniel"]'); await wait(150);
+await ev(() => document.querySelectorAll('.modal').forEach((m) => m.classList.add('hidden')));
+await ev(() => { __barber.selectTool('clipper'); __barber.cam.setView('left'); for (let i = 0; i < 40; i++) __barber.frame(1 / 30, false); __barber.ctx.padCenter(); __barber.frame(1 / 30, false); });
+check('phone: cutting touchpad + sight shown by default', await ev(() => !document.getElementById('padWrap').classList.contains('hidden') && !document.getElementById('aimCursor').classList.contains('hidden')));
+check('sight starts on the head', await ev(() => document.getElementById('aimCursor').classList.contains('on-head')));
+const pr = await ev(() => { const r = document.getElementById('touchPad').getBoundingClientRect(), c = document.getElementById('padCut').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, cx: c.left + c.width / 2, cy: c.top + c.height / 2 }; });
+const a0 = await ev(() => ({ ...__barber.ctx.pad }));
+const t2 = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+await t2('touchStart', [{ x: pr.x, y: pr.y, id: 5 }]);
+for (let k = 1; k <= 5; k++) await t2('touchMove', [{ x: pr.x, y: pr.y - k * 4, id: 5 }]);
+await t2('touchEnd', []);
+const a1 = await ev(() => ({ ...__barber.ctx.pad }));
+check('dragging the pad moves the sight (not the finger on the head)', Math.abs(a1.y - a0.y) > 20 && Math.abs(a1.y - a0.y) < 60, `${(a1.y - a0.y).toFixed(0)} px`);
+const hc0 = await ev(() => __barber.state.stats.hairsCut);
+await t2('touchStart', [{ x: pr.cx, y: pr.cy, id: 7 }]);
+await wait(300);
+await t2('touchStart', [{ x: pr.cx, y: pr.cy, id: 7 }, { x: pr.x, y: pr.y, id: 8 }]);
+for (let k = 1; k <= 12; k++) { await t2('touchMove', [{ x: pr.cx, y: pr.cy, id: 7 }, { x: pr.x, y: pr.y + k * 3, id: 8 }]); await ev(() => __barber.frame(1 / 30, false)); }
+check('holding ✂️ while dragging the pad cuts hair at the sight', (await ev(() => __barber.state.stats.hairsCut)) - hc0 > 30, `${(await ev(() => __barber.state.stats.hairsCut)) - hc0} strands`);
+await shot('u09-touchpad-cutting');
+await t2('touchEnd', []);
+check('releasing ✂️ stops cutting', await ev(() => !__barber.state.stroke));
+await page.tap('#padCut');
+check('quick tap on ✂️ locks cutting on', await ev(() => __barber.ctx.pad.latch && !!__barber.state.stroke));
+await page.tap('#padCut');
+check('tap again unlocks', await ev(() => !__barber.ctx.pad.latch && !__barber.state.stroke));
+await page.tap('#btnPad');
+check('🎯 button turns the touchpad off (direct cutting again)', await ev(() => document.getElementById('padWrap').classList.contains('hidden') && !__barber.ctx.pad.on));
+await page.tap('#btnPad');
+
 check('no page errors', errors.length === 0, errors.slice(0, 5).join(' | '));
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
