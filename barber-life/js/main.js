@@ -364,11 +364,16 @@ addEventListener('keydown', (e) => {
   if (e.key === 't' || e.key === 'T') selectTool(tools.active === 'clipper' ? 'trimmer' : 'clipper');
 });
 
-addEventListener('resize', () => {
+/** On short screens the panels sit at the top/right, so shift the picture to keep the head in the free area. */
+function fitCamera() {
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
+  if (innerHeight <= 520) camera.setViewOffset(innerWidth, innerHeight, 22, -Math.round(innerHeight * 0.03), innerWidth, innerHeight);
+  else camera.clearViewOffset();
   camera.updateProjectionMatrix();
-});
+}
+addEventListener('resize', fitCamera);
+fitCamera();
 
 // ---------------------------------------------------------------- base HUD
 let toastTimer = 0;
@@ -465,6 +470,14 @@ function buildBaseUI() {
   $('btnLever').addEventListener('click', () => { tools.setLever(!tools.lever); refreshToolUI(); scheduleSave(); });
   document.querySelectorAll('.tool-card').forEach((b) => b.addEventListener('click', () => selectTool(b.dataset.tool)));
   document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => cam.setView(b.dataset.view)));
+  // compact screens (phone held sideways) have one button that cycles the camera views
+  const cycle = ['work', 'left', 'back', 'right', 'front', 'top'];
+  let ci = 0;
+  $('btnViewCycle').addEventListener('click', () => {
+    ci = (ci + 1) % cycle.length;
+    cam.setView(cycle[ci]);
+    toast({ work: 'מבט עבודה', left: 'צד שמאל', back: 'מאחור', right: 'צד ימין', front: 'חזית', top: 'מלמעלה' }[cycle[ci]], 1000);
+  });
   $('zoomIn').addEventListener('click', () => cam.zoom(0.82));
   $('zoomOut').addEventListener('click', () => cam.zoom(1.22));
   $('modeCut').addEventListener('click', () => setMode('cut'));

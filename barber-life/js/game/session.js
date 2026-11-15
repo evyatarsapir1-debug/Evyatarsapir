@@ -232,6 +232,7 @@ export const session = {
     $('btnFinish').addEventListener('click', () => this.finish());
     $('btnDemo').addEventListener('click', () => this.toggleDemo());
     $('btnSteps').addEventListener('click', () => $('stepsList').classList.toggle('hidden'));
+    $('taskSub').addEventListener('click', () => $('taskSub').classList.toggle('expanded'));
     $('btnHygiene').addEventListener('click', () => this.disinfect());
     $('btnRequest').addEventListener('click', () => ctx.showRequest?.(this.cfg.client, true));
     document.querySelectorAll('[data-cmp]').forEach((b) => b.addEventListener('click', () => this._setCompare(b.dataset.cmp)));

@@ -330,3 +330,71 @@ body.in-session .toast { bottom: calc(205px + var(--safe-b)); }
 .ledger td, .ledger th { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: right; }
 .illu-wrap { font-size: 64px; text-align: center; }
 .req-list { line-height: 1.9; }
+
+/* ================================================================ short screens (phone held sideways, embedded viewers) */
+.view-cycle { display: none; }
+@media (max-height: 520px) {
+  .topbar { top: calc(4px + var(--safe-t)); left: 4px; right: 4px; padding: 3px 6px; gap: 5px; border-radius: 10px; }
+  .topbar .brand { display: none; }
+  .icon-btn { width: 30px; height: 30px; font-size: 14px; border-radius: 8px; }
+  .top-actions { gap: 4px; }
+  .client-chip { padding: 2px 8px 2px 6px; gap: 5px; }
+  .client-chip small { display: none; }
+  .client-chip b { font-size: 12px; }
+  .avatar { width: 22px; height: 22px; font-size: 13px; }
+  .view-cycle { display: inline-grid; place-items: center; }
+  .view-panel, .readout, .legend { display: none !important; }
+
+  .tool-panel, body.in-session .tool-panel { top: calc(44px + var(--safe-t)); right: 4px; gap: 3px; }
+  .tool-card { width: 38px; padding: 4px 0; border-radius: 9px; }
+  .tool-card span:last-child { display: none; }
+  .tool-card .ti { font-size: 17px; }
+
+  .bottom { left: 4px; right: 48px; bottom: calc(4px + var(--safe-b)); gap: 4px; flex-wrap: nowrap; align-items: stretch; }
+  .mode-toggle { padding: 2px; border-radius: 10px; align-items: center; }
+  .mode { padding: 6px 9px; font-size: 15px; border-radius: 7px; white-space: nowrap; }
+  .mode span { display: none; }
+  .guard-box { max-height: 44px; }
+  .guard-box { min-width: 0 !important; max-width: none; flex: 1; padding: 4px 6px; display: flex; align-items: center; gap: 6px; border-radius: 10px; }
+  .guard-box.hidden { display: none !important; }
+  .guard-title { flex-direction: column; margin: 0; font-size: 10.5px; white-space: nowrap; gap: 0; }
+  .guards { flex: 1; min-width: 0; gap: 3px; padding: 0; }
+  .guard { min-width: 32px; padding: 3px 4px; border-radius: 8px; }
+  .guard b { font-size: 13px; }
+  .guard small, .guard-box > .muted.small { display: none; }
+  .guard .sw { width: 16px; height: 3px; }
+  .lever { margin: 0; width: auto; padding: 4px 7px; font-size: 10.5px; white-space: nowrap; border-radius: 8px; }
+  .lever b { font-weight: 700; }
+
+  .session-bar { top: calc(42px + var(--safe-t)); left: 4px; right: 48px; width: auto; transform: none; }
+  .task-card { padding: 4px 8px; border-radius: 10px; }
+  .task-top b { font-size: 12px; }
+  .task-sub { font-size: 11.5px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .task-sub.expanded { white-space: normal; }
+  .task-actions { margin-top: 3px; gap: 3px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .task-actions::-webkit-scrollbar { display: none; }
+  .sb { padding: 3px 7px; font-size: 11px; border-radius: 7px; }
+  .cmp button { padding: 3px 6px; font-size: 11px; }
+  .steps { max-height: 45vh; }
+  .pro-badge { font-size: 10px; padding: 2px 8px; margin-top: 3px; }
+
+  .toast, body.in-session .toast { bottom: calc(58px + var(--safe-b)); font-size: 12px; padding: 6px 10px; }
+  .modal { padding: 8px; }
+  .modal-card { max-height: 94vh; padding: 12px 14px; }
+  .modal-card h2 { font-size: 16px; margin-bottom: 8px; }
+  .howto { font-size: 12.5px; line-height: 1.5; }
+  .hub { padding: 8px 12px; }
+  .hub-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+  .hub-card { min-height: 72px; padding: 8px 10px; gap: 1px; }
+  .hc-icon { font-size: 20px; }
+  .hub-card b { font-size: 14px; }
+  .xp-row { margin: 6px 0 8px; }
+  .sheet { padding: 4px; }
+  .sheet-head { padding: 4px 8px; }
+  .sheet-head h2 { font-size: 15px; }
+  .sheet-body { padding: 8px 12px 16px; }
+  .screen { gap: 8px; padding: 10px; }
+  .brand.big { font-size: clamp(28px, 8vh, 48px); }
+  .pole-mini { display: none; }
+  .phase-note { display: none; }
+}
