@@ -36,6 +36,7 @@ export function showHub() {
   closeSheet();
   $('hud').classList.add('hidden');
   $('hub').classList.remove('hidden');
+  $('hubCity').classList.toggle('hidden', !ctx.world);
   ctx.state.phase = 'hub';
   ctx.state.hover = null;
   renderHub();
@@ -51,6 +52,13 @@ function enter3D() {
 }
 
 function goHub(out) {
+  // sessions started in the city return to the city; sessions started in the academy return to the academy
+  if (ctx.returnTo === 'world' && ctx.world) {
+    ctx.world.resume();
+    if (out?.lines?.length) showReward(out.title || 'סיכום', out.lines);
+    return;
+  }
+  if (ctx.world) ctx.academyMinutes = (ctx.academyMinutes || 0) + 35;
   showHub();
   if (out?.reopen) out.reopen();
   if (out?.lines?.length) showReward(out.title || 'סיכום', out.lines);
@@ -578,12 +586,12 @@ function quizSummary(l, score, passed, lines) {
 }
 
 // ================================================================ dictionary
-function openDictionary() {
+function openDictionary(back = showHub) {
   openSheet('מילון ספרות מקצועי', `
     <input id="dictSearch" class="text-input" placeholder="חיפוש בעברית או באנגלית (למשל: fade, פאות)" />
     <div id="dictList" class="dict-list"></div>`,
   {
-    back: showHub,
+    back,
     mount: (b) => {
       const list = b.querySelector('#dictList');
       const render = (q) => {
@@ -632,7 +640,7 @@ function drawCertificate(c) {
   return cv;
 }
 
-function openAwards() {
+function openAwards(back = showHub) {
   const r = progress.rank;
   const ranks = RANKS.map((k) => `<div class="rank ${k.id <= r.id ? 'got' : ''}"><b>${k.id}</b><span>${k.name}</span><small>${k.xp} XP</small></div>`).join('');
   const certs = D.certificates.length ? D.certificates.map((c, i) => `<div class="cert"><div class="cert-img" data-ci="${i}"></div><b>${esc(c.title)}</b><small>${c.date} · ציון ${c.score}</small><button class="btn ghost sm" data-dl="${i}">⬇ הורדה</button></div>`).join('')
@@ -640,12 +648,12 @@ function openAwards() {
   const ach = ACHIEVEMENTS.map((a) => `<div class="ach ${D.achievements[a.id] ? 'got' : ''}"><span>${D.achievements[a.id] ? '🏆' : '🔒'}</span><div><b>${a.name}</b><small>${a.desc}${D.achievements[a.id] ? ` · ${D.achievements[a.id]}` : ''}</small></div></div>`).join('');
   const hist = D.history.slice(0, 10).map((h) => `<li>${esc(HAIRCUT_BY_ID[h.id]?.he || specById(h.id)?.he || h.id)} — ${h.score} <small class="muted">(${{ lab: 'מעבדה', practice: 'תרגול', client: 'לקוח' }[h.kind] || h.kind})</small></li>`).join('');
   openSheet('תעודות והישגים', `
-    <h3 class="grp">דרגות</h3><div class="ranks">${ranks}</div>
+    <h3 class="grp">דרגות במקצוע (אקדמיה)</h3><div class="ranks">${ranks}</div>
     <h3 class="grp">🎓 תעודות</h3><div class="certs">${certs}</div>
     <h3 class="grp">🏆 משימות והישגים</h3><div class="achs">${ach}</div>
     ${hist ? `<h3 class="grp">📈 תספורות אחרונות</h3><ul class="hist">${hist}</ul>` : ''}`,
   {
-    back: showHub,
+    back,
     mount: (b) => {
       b.querySelectorAll('[data-ci]').forEach((el) => { const cv = drawCertificate(D.certificates[+el.dataset.ci]); cv.style.width = '100%'; el.appendChild(cv); });
       b.querySelectorAll('[data-dl]').forEach((el) => el.addEventListener('click', () => {
@@ -691,24 +699,57 @@ export function initScreens() {
   $('btnStart').addEventListener('click', () => {
     $('title').classList.remove('show');
     ctx.sound.unlock();
-    if (!D.profile.name) askName(showHub); else { showHub(); ctx.toast(`ברוך שובך, ${D.profile.name}!`); }
+    const go = () => { if (ctx.startWorld) ctx.startWorld(); else showHub(); };
+    if (!D.profile.name) askName(go); else { go(); ctx.toast(`ברוך שובך, ${D.profile.name}!`); }
   });
   $('btnHowTo').addEventListener('click', () => $('helpModal').classList.remove('hidden'));
   $('profileChip').addEventListener('click', () => askName(renderHub));
-  $('sheetBack').addEventListener('click', () => (sheetBackFn ? sheetBackFn() : showHub()));
-  $('sheetClose').addEventListener('click', showHub);
+  const away = () => (ctx.returnTo === 'world' && ctx.world ? ctx.world.resume() : showHub());
+  $('sheetBack').addEventListener('click', () => (sheetBackFn ? sheetBackFn() : away()));
+  $('sheetClose').addEventListener('click', away);
+  $('hubCity').addEventListener('click', () => ctx.world?.resume());
   $('btnHome').addEventListener('click', () => {
     if (session.active && session.cfg.kind !== 'view' && session.cfg.spec) {
       $('leaveText').textContent = 'העבודה הנוכחית לא תיבדק ולא תקבל עליה ניקוד.';
       $('leaveModal').classList.remove('hidden');
-    } else { session.stop(); showHub(); }
+    } else { session.stop(); away(); }
   });
-  $('leaveYes').addEventListener('click', () => { $('leaveModal').classList.add('hidden'); session.stop(); showHub(); });
+  $('leaveYes').addEventListener('click', () => {
+    $('leaveModal').classList.add('hidden');
+    const c = session.cfg?.client;
+    session.stop();
+    if (c && ctx.returnTo === 'world') ctx.onClientAbandoned?.();
+    away();
+  });
   $('clientChip').addEventListener('click', () => {
     if (session.active) { ctx.toast('בחירת ראש זמינה באימון חופשי. כרגע אתה בתוך משימה.'); return; }
     renderFreeList(); $('clientModal').classList.remove('hidden');
   });
+  ctx.openAwards = openAwards;
+  ctx.openDictionary = openDictionary;
+  ctx.showReward = showReward;
+  ctx.dialog = dialog;
+  ctx.closeDialog = () => $('dialogModal').classList.add('hidden');
+  ctx.showWorldHelp = () => $('worldHelp').classList.remove('hidden');
   progress.onChange((d, ev) => { if (ev?.achievement && ctx.state.phase === 'play') ctx.announce(ev.achievement); });
+}
+
+/** Generic dialog: { title, html, buttons: [{ label, primary, disabled, action }], mount(body) } */
+function dialog({ title, html = '', buttons = [{ label: 'סגור', primary: true }], mount = null }) {
+  $('dialogTitle').textContent = title;
+  $('dialogBody').innerHTML = html;
+  const bar = $('dialogButtons');
+  bar.innerHTML = '';
+  for (const b of buttons) {
+    const el = document.createElement('button');
+    el.className = `btn ${b.primary ? 'primary' : 'ghost'}`;
+    el.textContent = b.label;
+    el.disabled = !!b.disabled;
+    el.addEventListener('click', () => { $('dialogModal').classList.add('hidden'); b.action?.(); });
+    bar.appendChild(el);
+  }
+  $('dialogModal').classList.remove('hidden');
+  mount?.($('dialogBody'));
 }
 
 function renderFreeList() {

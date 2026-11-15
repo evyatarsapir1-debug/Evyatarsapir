@@ -22,6 +22,14 @@ const settle = (page, n = 30) => page.evaluate((n) => { for (let i = 0; i < n; i
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, timeout: 180000 });
 const ev = (page, fn, arg) => page.evaluate(fn, arg);
 const closeModals = (page) => ev(page, () => document.querySelectorAll('.modal').forEach((m) => m.classList.add('hidden')));
+const stepW = (page, n = 10) => page.evaluate((n) => { for (let i = 0; i < n; i++) __barber.frame(1 / 30, false); }, n);
+/** Walk up to the academy reception in the city and talk to the secretary. */
+async function enterAcademy(page) {
+  await closeModals(page);
+  await ev(page, () => { const b = __barber.world.city.buildings.academy; __barber.world.teleport(b.desk.x, b.desk.z); });
+  await stepW(page, 10);
+  await ev(page, () => __barber.world.interact());
+}
 
 const { ctx, page } = await open({ width: 1100, height: 720 });
 await page.goto(URL);
@@ -36,9 +44,11 @@ await page.click('#btnStart');
 check('asks for a name on first start', await page.isVisible('#nameModal'));
 await page.fill('#nameInput', 'נועה');
 await page.click('#nameSave');
-check('hub shown with name and rank', await ev(page, () => !document.getElementById('hub').classList.contains('hidden') && document.getElementById('hubName').textContent === 'נועה'));
+check('game starts in the open world', await ev(page, () => __barber.state.phase === 'world' && !document.getElementById('worldHud').classList.contains('hidden')));
+await enterAcademy(page);
+check('academy reception opens the school menu', await ev(page, () => !document.getElementById('hub').classList.contains('hidden') && document.getElementById('hubName').textContent === 'נועה' && !document.getElementById('hubCity').classList.contains('hidden')));
 const cards = await ev(page, () => [...document.querySelectorAll('[data-go]')].map((b) => b.dataset.go));
-check('hub has all sections', ['lessons', 'lab', 'practice', 'clients', 'daily', 'library', 'dictionary', 'awards', 'shop'].every((c) => cards.includes(c)), cards.join(','));
+check('academy has all sections', ['lessons', 'lab', 'practice', 'clients', 'daily', 'library', 'dictionary', 'awards'].every((c) => cards.includes(c)), cards.join(','));
 await settle(page, 2);
 await shot(page, '01-hub');
 
@@ -114,6 +124,7 @@ check('free-practice haircut is saved and restored after reload', Math.abs(sig -
 check('settings restored (guard 2 + lever)', await ev(page, () => __barber.tools.guard.id === '2' && __barber.tools.lever));
 await page.click('#btnStart');
 check('no name prompt the second time', await ev(page, () => document.getElementById('nameModal').classList.contains('hidden')));
+await enterAcademy(page);
 
 // ---------------------------------------------------------------- library, lab, demo, real analysis
 await page.click('[data-go="library"]');
@@ -288,51 +299,134 @@ await page.click('[data-go="awards"]');
 check('awards: certificate drawn + achievements', await ev(page, () => document.querySelectorAll('.cert canvas').length >= 1 && document.querySelectorAll('.ach.got').length >= 3));
 await shot(page, '08-awards');
 
-// ---------------------------------------------------------------- own barbershop
+// ---------------------------------------------------------------- open world
 await ev(page, () => __barber.ctx.showHub());
-await page.click('[data-go="shop"]');
-check('shop opening follows rank 3 + 800 coins', await ev(page, () => { const d = __barber.progress.data, ok = __barber.progress.rank.id >= 3 && d.coins >= 800; return ok === !!document.getElementById('btnOpenShop'); }));
-await ev(page, () => { __barber.progress.reward(400, 3000); __barber.ctx.showHub(); });
-await page.click('[data-go="shop"]');
-await page.fill('#shopName', 'Fade Kings');
-await page.click('#btnOpenShop');
-check('shop opened with a name (cost paid)', await ev(page, () => __barber.progress.data.shop.owned && __barber.progress.data.shop.name === 'Fade Kings'));
-await page.click('[data-wall="#5a4636"]');
-check('design: wall colour changes the 3D shop', await ev(page, () => __barber.ctx.shop.wallMat.color.getHexString() === '5a4636'));
-await page.click('[data-floor="wood"]');
-await page.click('[data-tab="store"]');
-const c0 = await ev(page, () => __barber.progress.data.coins);
-await page.click('[data-buy="chair_classic"]');
-check('buy a barber chair: new station in 3D, coins paid', await ev(page, () => __barber.progress.data.shop.stations === 2 && __barber.scene.getObjectByName('decor').children.length > 0) && (await ev(page, () => __barber.progress.data.coins)) === c0 - 400);
-await page.click('[data-buy="clipper_pro"]');
-check('pro clipper improves the blade', await ev(page, () => __barber.tools.quality.clipper > 0.8));
-await page.click('[data-tab="staff"]');
-await page.click('[data-hire]');
-check('hire a barber', await ev(page, () => __barber.progress.data.shop.employees.length === 1));
-await page.click('[data-tab="day"]');
-await page.click('#btnOpenDay');
-const q0 = await ev(page, () => __barber.progress.data.shop.queue.length);
-check('work day opens with a queue of clients', q0 >= 3, `${q0} clients`);
-await shot(page, '11-shop-day');
-await page.click('#btnServe');
+await page.click('#hubCity');
+check('back to the city from the academy (time passed)', await ev(page, () => __barber.state.phase === 'world'));
+await closeModals(page);
+await ev(page, () => { const L = __barber.progress.data.life; L.minute = 9 * 60 + 30; L.energy = 90; L.weather = 'clear'; __barber.world.sky.setWeather('clear'); });
+// walking + walls
+const w0 = await ev(page, () => { const b = __barber.world.city.buildings.studio; __barber.world.teleport(b.door.x + b.frame.out[0] * 3, b.door.z + b.frame.out[1] * 3, Math.atan2(b.frame.out[0], b.frame.out[1])); return { ...__barber.world.player.position }; });
+await page.keyboard.down('KeyW'); await stepW(page, 45); await page.keyboard.up('KeyW');
+const w1 = await ev(page, () => ({ ...__barber.world.player.position }));
+check('walk with the keyboard', Math.hypot(w1.x - w0.x, w1.z - w0.z) > 2, `${Math.hypot(w1.x - w0.x, w1.z - w0.z).toFixed(1)} m`);
+const wall = await ev(page, () => { const W = __barber.world, c = W.city.colliders.find((k) => k.maxX - k.minX > 6 && k.maxZ - k.minZ > 6); W.teleport((c.minX + c.maxX) / 2, c.minZ - 1, 0); for (let i = 0; i < 60; i++) { W.player.position.z += 0.1; W.collide(W.player.position, 0.32); } return W.player.position.z <= c.minZ; });
+check('buildings are solid (collisions)', wall);
+check('residents walk and cars drive', await ev(page, () => { const W = __barber.world; const a = W.people.list.map((p) => ({ ...p.mesh.position })), b = W.traffic.cars.map((c) => ({ ...c.mesh.position })); for (let i = 0; i < 30; i++) __barber.frame(1 / 30, false); return W.people.list.some((p, i) => a[i] && Math.hypot(p.mesh.position.x - a[i].x, p.mesh.position.z - a[i].z) > 0.5) && W.traffic.cars.some((c, i) => Math.hypot(c.mesh.position.x - b[i].x, c.mesh.position.z - b[i].z) > 2); }));
+check('cars stop for a person on the road', await ev(page, () => { const W = __barber.world, car = W.traffic.cars[0]; const p = car.mesh.position, h = car.mesh.rotation.y; W.teleport(p.x + Math.sin(h) * 4, p.z + Math.cos(h) * 4); for (let i = 0; i < 40; i++) __barber.frame(1 / 30, false); return car.v < 1; }));
+check('day and night: street lights at night', await ev(page, () => { const L = __barber.progress.data.life; L.minute = 22 * 60; __barber.frame(1 / 30, false); const night = __barber.world.sky.night; L.minute = 12 * 60; __barber.frame(1 / 30, false); const day = __barber.world.sky.night; L.minute = 9 * 60 + 30; return night > 0.6 && day < 0.2; }));
+check('weather: rain', await ev(page, () => { __barber.world.sky.setWeather('rain'); __barber.frame(1 / 30, false); const ok = __barber.world.sky.rain.visible; __barber.world.sky.setWeather('clear'); return ok; }));
+await ev(page, () => __barber.world.toggleMap(true));
+check('map with important places', await ev(page, () => document.querySelectorAll('.map-item').length >= 12));
+await page.click('.map-item:nth-child(2)');
+check('set a waypoint from the map', await ev(page, () => !!__barber.world.waypoint));
+// talk to a resident
+const talked = await ev(page, () => { const W = __barber.world, p = W.people.list.find((x) => x.state === 'loop'); W.teleport(p.mesh.position.x + 0.8, p.mesh.position.z); for (let i = 0; i < 8; i++) __barber.frame(1 / 30, false); const it = W.current; if (it?.icon === '💬') { W.interact(); return document.getElementById('dialogTitle').textContent; } return it?.label; });
+check('talk to people in the street', /💬/.test(talked || ''), talked);
+await closeModals(page);
+// a job in a barbershop
+await ev(page, () => { const b = __barber.world.city.buildings.fadeHouse; __barber.world.teleport(b.reception.x, b.reception.z); });
+await stepW(page, 10);
+await ev(page, () => __barber.world.interact());
+check('the owner offers a job (rank requirement met)', await ev(page, () => [...document.querySelectorAll('#dialogButtons button')].some((b) => b.textContent.includes('לעבוד כאן'))));
+await page.click('#dialogButtons .btn.primary');
+check('hired at Fade House', await ev(page, () => __barber.progress.data.life.job?.shopId === 'fadeHouse'));
+await closeModals(page);
+let seated = false;
+for (let k = 0; k < 45 && !seated; k++) { await stepW(page, 60); seated = await ev(page, async () => (await import('./js/world/life.js')).life.runtimes.fadeHouse.waiting.length > 0); }
+check('clients walk in from the street and sit down', seated);
+await ev(page, () => { const sp = __barber.world.city.buildings.fadeHouse.stationSpots[0].barber; __barber.world.teleport(sp.x, sp.z); });
+await stepW(page, 10);
+const coinsJob = await ev(page, () => __barber.progress.data.coins);
+await ev(page, () => __barber.world.interact());
+check('working the chair starts a real haircut', await ev(page, () => __barber.session.active && __barber.state.phase === 'play'));
 await page.click(`.choice[data-id="${await ev(page, () => __barber.session.cfg.client.base.id)}"]`);
 await page.click('#reqGo');
 await page.click('#btnHygiene');
 await ev(page, () => __barber.autoCut());
 await page.click('#btnFinish');
 await page.click('#btnEnd');
-const day = await ev(page, () => { const s = __barber.progress.data.shop; return { mine: s.today.mine, staff: s.today.staff, income: s.today.income, q: s.queue.length, reviews: s.reviews.length }; });
-check('served client pays the shop; staff serves too', day.mine === 1 && day.staff === 1 && day.income > 0 && day.q === q0 - 2, JSON.stringify(day));
+check('paid by quality, back in the city, time moved', await ev(page, (c0) => __barber.state.phase === 'world' && __barber.progress.data.coins > c0 && __barber.progress.data.life.jobServed === 1, coinsJob));
 await closeModals(page);
-await page.click('#btnClose');
-check('closing the day writes income/expenses/profit', await ev(page, () => { const l = __barber.progress.data.shop.ledger[0]; return !!l && l.expenses > 0 && typeof l.profit === 'number'; }));
+await shot(page, '11-city');
+// real estate + your own barbershop
+await ev(page, () => { __barber.progress.data.coins += 6000; __barber.progress.data.life.minute = 10 * 60; });
+await ev(page, () => { const b = __barber.world.city.buildings.p1; __barber.world.teleport(b.inside.x, b.inside.z); });
+await stepW(page, 10);
+await ev(page, () => __barber.world.interact());
+check('property details (size, location, rent, price)', await ev(page, () => /עמדות/.test(document.getElementById('dialogBody').textContent) && /שכירות/.test(document.getElementById('dialogBody').textContent)));
+await page.click('#dialogButtons .btn.primary');
+await page.waitForTimeout(600);
+check('lease signed: branch created', await ev(page, () => !!__barber.progress.data.life.branches.p1));
+await page.click('[data-buy="chair_classic"]');
+await page.click('[data-buy="chair_classic"]');
+await page.click('[data-tab="staff"]');
+await page.click('[data-hire="0"]');
+check('hire staff with salary + commission terms', await ev(page, () => { const e = __barber.progress.data.life.branches.p1.employees[0]; return !!e && e.salary > 0 && e.commission >= 0; }));
+await page.click('[data-tab="design"]');
+await page.fill('#brName', 'Fade Kings');
+await page.click('#btnRename');
+check('own shop furnished in 3D (stations + sign)', await ev(page, () => __barber.world.city.buildings.p1.stationSpots.length === 2));
+await page.click('#sheetClose');
 await closeModals(page);
-check('after closing the day the shop reopens on the finance tab', await ev(page, () => !document.getElementById('sheet').classList.contains('hidden') && !!document.querySelector('.ledger')));
-await page.click('#btnTour');
-await settle(page, 60);
-check('3D tour of the shop', await ev(page, () => __barber.cam.target.z < -0.5 && __barber.state.phase === 'play'));
-await shot(page, '12-shop-tour');
-await page.click('#btnHome');
+let bseated = false;
+for (let k = 0; k < 45 && !bseated; k++) { await stepW(page, 60); bseated = await ev(page, async () => (await import('./js/world/life.js')).life.runtimes.p1.waiting.length > 0); }
+check('clients come to your shop by themselves', bseated);
+await ev(page, () => { const sp = __barber.world.city.buildings.p1.stationSpots[0].barber; __barber.world.teleport(sp.x, sp.z); });
+await stepW(page, 10);
+await ev(page, () => __barber.world.interact());
+await page.click(`.choice[data-id="${await ev(page, () => __barber.session.cfg.client.base.id)}"]`);
+await page.click('#reqGo');
+await page.click('#btnHygiene');
+await ev(page, () => __barber.autoCut());
+await page.click('#btnFinish');
+await page.click('#btnEnd');
+check('your shop: payment, review, customer remembered', await ev(page, () => { const b = __barber.progress.data.life.branches.p1; return b.today.income > 0 && b.reviews.length === 1 && Object.keys(b.customers).length === 1; }));
+await closeModals(page);
+await shot(page, '12-my-shop');
+// life: cafe, clothes, car, sleep + daily accounts
+await ev(page, () => { const L = __barber.progress.data.life; L.energy = 40; const b = __barber.world.city.buildings.cafe; __barber.world.teleport(b.counter.x, b.counter.z); });
+await stepW(page, 10);
+await ev(page, () => __barber.world.interact());
+await page.click('#dialogButtons .btn.primary');
+check('cafe meal restores energy', await ev(page, () => __barber.progress.data.life.energy > 90));
+await ev(page, () => { const b = __barber.world.city.buildings.clothes; __barber.world.teleport(b.racks.x, b.racks.z); });
+await stepW(page, 10);
+await ev(page, () => __barber.world.interact());
+await page.click('.outfit[data-cat="shirt"][data-col="#141414"]');
+check('buy clothes and change the look', await ev(page, () => __barber.progress.data.life.outfit.wear.shirt === '#141414'));
+await closeModals(page);
+await ev(page, () => { __barber.progress.data.coins += 2000; const s = __barber.world.city.buildings.cars.carSpots[0].world; __barber.world.teleport(s.x, s.z); });
+await stepW(page, 10);
+await ev(page, () => __barber.world.interact());
+await page.click('#dialogButtons .btn.primary');
+check('buy a car', await ev(page, () => __barber.progress.data.life.cars.length === 1));
+await ev(page, () => { const c = __barber.progress.data.life.cars[0]; __barber.world.teleport(c.x + 1, c.z); });
+await stepW(page, 10);
+await ev(page, () => __barber.world.interact());
+await closeModals(page);
+const d0 = await ev(page, () => ({ ...__barber.world.driving.mesh.position }));
+await page.keyboard.down('KeyW'); await stepW(page, 60); await page.keyboard.up('KeyW');
+check('drive the car around the city', await ev(page, (d0) => { const p = __barber.world.driving.mesh.position; return Math.hypot(p.x - d0.x, p.z - d0.z) > 5; }, d0));
+await ev(page, () => __barber.world.exitCar());
+const beforeSleep = await ev(page, () => ({ coins: __barber.progress.data.coins, day: __barber.progress.data.life.day }));
+await ev(page, () => { __barber.progress.data.life.minute = 21 * 60; const b = __barber.world.city.buildings[__barber.progress.data.life.home]; __barber.world.teleport(b.bed.x, b.bed.z); });
+await stepW(page, 10);
+await ev(page, () => __barber.world.interact());
+await page.click('#dialogButtons .btn.primary');
+await page.waitForTimeout(500);
+check('sleep: new day, daily report, rent and salaries paid', await ev(page, (b) => __barber.progress.data.life.day === b.day + 1 && /סיכום יום/.test(document.getElementById('dialogTitle').textContent) && __barber.progress.data.coins < b.coins && __barber.progress.data.life.branches.p1.ledger.length === 1, beforeSleep));
+await shot(page, '13-daily-report');
+await closeModals(page);
+await page.click('#wPhone');
+check('phone: career ladder + money', await ev(page, () => document.querySelectorAll('.ranks .rank').length === 7 && /כספים/.test(document.getElementById('sheetBody').textContent)));
+await page.click('#sheetClose');
+const lifeSig = await ev(page, () => JSON.stringify({ d: __barber.progress.data.life.day, b: Object.keys(__barber.progress.data.life.branches), c: __barber.progress.data.life.cars.length }));
+await ev(page, () => __barber.world.suspend());
+await page.reload();
+await page.waitForFunction(() => window.__barber && __barber.state.phase === 'title', null, { timeout: 180000 });
+await page.click('#btnStart');
+check('the city life is saved (day, shop, car)', (await ev(page, () => JSON.stringify({ d: __barber.progress.data.life.day, b: Object.keys(__barber.progress.data.life.branches), c: __barber.progress.data.life.cars.length }))) === lifeSig);
 await ctx.close();
 
 // ---------------------------------------------------------------- phone
@@ -343,10 +437,11 @@ await ev(m.page, () => { localStorage.setItem('barber_life_v1', JSON.stringify({
 await m.page.reload();
 await m.page.waitForFunction(() => window.__barber && __barber.state.phase === 'title', null, { timeout: 180000 });
 await m.page.tap('#btnStart');
-check('phone: hub without horizontal overflow', await ev(m.page, () => document.documentElement.scrollWidth <= innerWidth));
-await settle(m.page, 2);
-await shot(m.page, '09-phone-hub');
-await ev(m.page, () => { __barber.progress.reward(600, 0); __barber.ctx.showHub(); });
+check('phone: city with joystick, no horizontal overflow', await ev(m.page, () => document.documentElement.scrollWidth <= innerWidth && getComputedStyle(document.getElementById('joy')).display !== 'none'));
+await closeModals(m.page);
+await ev(m.page, () => __barber.frame(1 / 30));
+await shot(m.page, '09-phone-city');
+await ev(m.page, () => { __barber.progress.reward(600, 0); __barber.world.suspend(); __barber.ctx.returnTo = 'hub'; __barber.ctx.showHub(); });
 await m.page.tap('[data-go="lab"]');
 await m.page.tap('[data-cut="lowFade"]');
 await m.page.tap('#btnLab');

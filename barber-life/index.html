@@ -48,9 +48,40 @@
           <span class="pc-text"><b id="hubName">ספר/ית</b><small id="hubRank">מתחיל</small></span>
         </button>
         <div class="coins" title="מטבעות"><span>🪙</span><b id="hubCoins">0</b></div>
+        <button id="hubCity" class="btn primary sm hidden">🏙️ חזרה לעיר</button>
       </header>
       <div class="xp-row"><div class="xpbar"><i id="hubXp"></i></div><small id="hubXpText" class="muted"></small></div>
       <div class="hub-grid" id="hubGrid"></div>
+    </div>
+  </div>
+
+  <!-- Open world HUD -->
+  <div id="worldHud" class="hidden">
+    <div class="w-top">
+      <div class="w-stats">
+        <div class="w-row"><b id="wClock">יום 1 · 08:00</b></div>
+        <div class="w-row"><b id="wMoney">🪙 0</b><span id="wCareer" class="w-career"></span></div>
+        <div class="w-energy" title="אנרגיה"><i id="wEnergy"></i></div>
+      </div>
+      <canvas id="minimap" width="150" height="150" aria-label="מפה"></canvas>
+    </div>
+    <div id="wGoal" class="w-goal"></div>
+    <div id="joy" class="joy"><i id="joyKnob"></i></div>
+    <div class="w-buttons">
+      <button id="wInteract" class="w-interact hidden"></button>
+      <div class="w-small">
+        <button id="wRun" class="w-btn" title="ריצה (Shift)">🏃</button>
+        <button id="wMap" class="w-btn" title="מפה (M)">🗺️</button>
+        <button id="wPhone" class="w-btn" title="טלפון">📱</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mapOverlay" class="map-overlay hidden">
+    <div class="map-card">
+      <header class="sheet-head"><h2>🗺️ מפת העיר</h2><button id="mapClose" class="icon-btn" aria-label="סגירה">✕</button></header>
+      <div class="map-body"><canvas id="mapCanvas"></canvas><div id="mapList" class="map-list"></div></div>
+      <p class="muted small">לחץ על מקום כדי לסמן אליו יעד. היעד מופיע בוורוד במפה הקטנה.</p>
     </div>
   </div>
 
@@ -258,6 +289,29 @@
       <p>איך קוראים לך? השם יופיע על התעודות שלך.</p>
       <input id="nameInput" class="text-input" maxlength="24" placeholder="השם שלך" />
       <div class="row"><button id="nameSave" class="btn primary">שמירה</button></div>
+    </div>
+  </div>
+
+  <div id="dialogModal" class="modal hidden">
+    <div class="modal-card">
+      <h2 id="dialogTitle"></h2>
+      <div id="dialogBody"></div>
+      <div id="dialogButtons" class="row dialog-buttons"></div>
+    </div>
+  </div>
+
+  <div id="worldHelp" class="modal hidden">
+    <div class="modal-card">
+      <h2>🏙️ החיים בעיר</h2>
+      <ul class="howto">
+        <li><b>הליכה:</b> ג׳ויסטיק בצד שמאל (או W A S D / חיצים). גרירה על המסך מסובבת את המצלמה. 🏃 לריצה.</li>
+        <li><b>פעולה:</b> כשמתקרבים לאדם, לדלפק, לכיסא או למיטה מופיע כפתור פעולה (או מקש E).</li>
+        <li><b>🎯 המטרה</b> למעלה תמיד אומרת מה הצעד הבא בקריירה.</li>
+        <li><b>הדרך:</b> לומדים באקדמיה 🎓 ← מתקבלים לעבודה במספרה ✂️ ← חוסכים ← שוכרים או קונים חנות 🏷️ ← פותחים מספרה 💈 ← מגייסים צוות ופותחים עוד סניפים.</li>
+        <li><b>זמן וכסף:</b> שנייה אמיתית = 2 דקות במשחק. כל תספורת לוקחת 40 דקות. בחצות משולמים שכירות, חשבונות ומשכורות. אנרגיה יורדת — ישנים בבית ואוכלים בקפה.</li>
+        <li><b>📱 הטלפון:</b> מפה, הקריירה, כספים, העסק שלך, תעודות ומילון.</li>
+      </ul>
+      <button class="btn primary" data-close>יאללה לעבודה!</button>
     </div>
   </div>
 

@@ -15,7 +15,7 @@ import { progress } from './game/progress.js';
 import { DemoPlayer, planDemo } from './game/demo.js';
 import { initScreens } from './ui/screens.js';
 import { session } from './game/session.js';
-import { initShop } from './game/shopManager.js';
+import { world } from './world/worldMode.js';
 
 const $ = (id) => document.getElementById(id);
 const isMobile = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600;
@@ -80,7 +80,7 @@ async function init() {
     Object.defineProperty(ctx, k, { get, configurable: true });
   }
   Object.assign(ctx, {
-    THREE, renderer, scene, camera, state, isMobile, MANUAL,
+    THREE, renderer, scene, camera, state, isMobile, MANUAL, progress, session,
     setupHead, setFreeHead, cutAtLocal, pickHead, toast, selectTool, selectGuard, setMap, setMode, refreshToolUI,
     saveSettings, frame, undo, pushUndo, renderView,
   });
@@ -91,7 +91,10 @@ async function init() {
   await nextFrame();
   buildBaseUI();
   initScreens();
-  initShop();
+  ctx.startWorld = () => {
+    world.start();
+    if (!save.seenWorldHelp) { save.seenWorldHelp = true; progress.save(); $('worldHelp').classList.remove('hidden'); }
+  };
   renderer.compile(scene, camera);
   setLoad(1);
   $('loading').classList.remove('show');
@@ -371,6 +374,7 @@ function fitCamera() {
   if (innerHeight <= 520) camera.setViewOffset(innerWidth, innerHeight, 22, -Math.round(innerHeight * 0.03), innerWidth, innerHeight);
   else camera.clearViewOffset();
   camera.updateProjectionMatrix();
+  if (world.camera) { world.camera.aspect = innerWidth / innerHeight; world.camera.updateProjectionMatrix(); }
 }
 addEventListener('resize', fitCamera);
 fitCamera();
@@ -540,6 +544,7 @@ function loop(now) {
 }
 
 function frame(dt, render = true) {
+  if (world.active) { world.frame(dt, render); return; }
   if (state.phase !== 'play') cam.theta += dt * 0.12;
   cam.update(dt);
   let h = state.hover;
@@ -597,7 +602,7 @@ function updateReadout() {
 window.__barber = {
   get state() { return state; }, get hair() { return hair; }, get tools() { return tools; }, get cam() { return cam; },
   get clippings() { return clippings; }, get client() { return client; }, get demo() { return demo; },
-  get progress() { return progress; }, get session() { return session; }, ctx,
+  get progress() { return progress; }, get session() { return session; }, get world() { return world; }, ctx,
   scene, camera, renderer, frame, pickHead, setFreeHead, selectGuard, selectTool, setMap, planDemo,
   /** run the professional plan instantly on the current head (tests) */
   autoCut(spec) { const prev = tools.active; demo.start(planDemo(spec || session.cfg.spec)); demo.finishNow(); selectTool(prev, true); },
