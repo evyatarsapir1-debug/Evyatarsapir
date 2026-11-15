@@ -316,9 +316,9 @@ check('residents walk and cars drive', await ev(page, () => { const W = __barber
 check('cars stop for a person on the road', await ev(page, () => { const W = __barber.world, car = W.traffic.cars[0]; const p = car.mesh.position, h = car.mesh.rotation.y; W.teleport(p.x + Math.sin(h) * 4, p.z + Math.cos(h) * 4); for (let i = 0; i < 40; i++) __barber.frame(1 / 30, false); return car.v < 1; }));
 check('day and night: street lights at night', await ev(page, () => { const L = __barber.progress.data.life; L.minute = 22 * 60; __barber.frame(1 / 30, false); const night = __barber.world.sky.night; L.minute = 12 * 60; __barber.frame(1 / 30, false); const day = __barber.world.sky.night; L.minute = 9 * 60 + 30; return night > 0.6 && day < 0.2; }));
 check('weather: rain', await ev(page, () => { __barber.world.sky.setWeather('rain'); __barber.frame(1 / 30, false); const ok = __barber.world.sky.rain.visible; __barber.world.sky.setWeather('clear'); return ok; }));
+await closeModals(page);
 await ev(page, () => __barber.world.toggleMap(true));
 check('map with important places', await ev(page, () => document.querySelectorAll('.map-item').length >= 12));
-console.log('DIALOG?', await ev(page, () => document.getElementById('dialogModal').classList.contains('hidden') ? 'none' : document.getElementById('dialogTitle').textContent));
 await page.click('.map-item:nth-child(2)');
 check('set a waypoint from the map', await ev(page, () => !!__barber.world.waypoint));
 // talk to a resident
@@ -406,10 +406,12 @@ await ev(page, () => { const c = __barber.progress.data.life.cars[0]; __barber.w
 await stepW(page, 10);
 await ev(page, () => __barber.world.interact());
 await closeModals(page);
+await stepW(page, 40); // get-in animation
 const d0 = await ev(page, () => ({ ...__barber.world.driving.mesh.position }));
 await page.keyboard.down('KeyW'); await stepW(page, 60); await page.keyboard.up('KeyW');
 check('drive the car around the city', await ev(page, (d0) => { const p = __barber.world.driving.mesh.position; return Math.hypot(p.x - d0.x, p.z - d0.z) > 5; }, d0));
 await ev(page, () => __barber.world.exitCar());
+await stepW(page, 30);
 const beforeSleep = await ev(page, () => ({ coins: __barber.progress.data.coins, day: __barber.progress.data.life.day }));
 await ev(page, () => { __barber.progress.data.life.minute = 21 * 60; const b = __barber.world.city.buildings[__barber.progress.data.life.home]; __barber.world.teleport(b.bed.x, b.bed.z); });
 await stepW(page, 10);

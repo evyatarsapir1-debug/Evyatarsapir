@@ -87,7 +87,7 @@ export class People {
   toChair(p, spot) { p.state = 'toChair'; p.goal = spot.world; p.spot = spot; }
   /** The client leaves the chair; with pay=true he first walks to the reception and pays (hand out, coin pops up). */
   release(p, pay = false) {
-    if (pay && p.shop.reception && p.state === 'inChair') { p.state = 'looking'; p.timer = 1.4; p.pay = true; return; }
+    if (pay && p.shop.reception && (p.state === 'inChair' || p.state === 'toChair')) { p.state = p.state === 'inChair' ? 'looking' : 'toPay'; p.timer = 1.4; p.pay = true; return; }
     p.state = 'leaving'; p.goal = p.shop.inside;
   }
 

@@ -151,7 +151,7 @@ await ev(() => { __barber.autoCut(__barber.session.cfg.spec); __barber.session.f
 await wait(200);
 check('client checks the mirror then the result shows', await ev(() => !document.getElementById('resultModal').classList.contains('hidden')));
 const coins0 = await ev(() => __barber.progress.data.coins);
-await ev(() => document.getElementById('btnContinue').click());
+await ev(() => document.getElementById('btnEnd').click());
 await ev(() => document.querySelectorAll('.modal').forEach((m) => m.classList.add('hidden')));
 check('paid for the haircut', (await ev(() => __barber.progress.data.coins)) > coins0);
 check('serving completes step 8', await waitStep(8));
@@ -160,6 +160,7 @@ check('client walks to the reception to pay', await ev(() => __barber.world.peop
 await wait(1700);
 
 // --- 9. money → phone
+await ev(() => document.querySelectorAll('.modal').forEach((m) => m.classList.add('hidden'))); // promotion notices
 await stepW(2); await wait(300);
 check('step 9 points at the phone', await pointerOn('#wPhone'));
 await page.tap('#wPhone');
@@ -173,6 +174,7 @@ await stepW(12); await wait(300);
 await page.tap('#wInteract');
 check('visiting the realty office finishes the tutorial', await waitStep('done', 5000));
 await ev(() => document.querySelectorAll('.modal').forEach((m) => m.classList.add('hidden')));
+await ev(() => __barber.world.resume()); // leave the realty screen
 await wait(2500);
 check('tutorial card gone; mission log visible', await ev(() => document.getElementById('tutCard').classList.contains('hidden') && getComputedStyle(document.getElementById('questPanel')).display !== 'none'));
 
@@ -208,7 +210,7 @@ await ev(() => document.getElementById('wSettings').click()); await wait(100);
 await ev(() => document.getElementById('setMove').click()); await wait(100);
 check('move-buttons mode', await ev(() => document.getElementById('worldHud').classList.contains('editing')));
 const ar = await ev(() => { const r = document.getElementById('wActions').getBoundingClientRect(); return { x: r.left + 20, y: r.top + 20 }; });
-await page.mouse.move(ar.x, ar.y); await page.mouse.down(); await page.mouse.move(ar.x + 0, ar.y - 120, { steps: 5 }); await page.mouse.up();
+await touch('touchStart', ar.x, ar.y); for (let k = 1; k <= 6; k++) await touch('touchMove', ar.x, ar.y - k * 20); await touch('touchEnd');
 check('dragging moves the action buttons and saves', await ev(() => !!JSON.parse(localStorage.getItem('barber_life_controls')).pos.wActions));
 await page.tap('#editDone');
 await ev(() => { document.getElementById('wSettings').click(); }); await wait(100);

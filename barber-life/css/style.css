@@ -626,4 +626,10 @@ body.in-world .toast { bottom: calc(170px + var(--safe-b)); }
 .tut-card { pointer-events: none; }
 .tut-card button { pointer-events: auto; }
 body:has(#hub:not(.hidden)) .tut-card, body:has(#sheet:not(.hidden)) .tut-card { top: auto; bottom: calc(12px + var(--safe-b)); left: 12px; transform: none; width: min(340px, calc(100% - 24px)); animation: none; }
-body:has(#hud:not(.hidden)) .tut-card { top: 50%; left: 8px; transform: translateY(-50%); width: min(270px, 34vw); min-width: 0; animation: none; }
+body:has(#hud:not(.hidden)) .tut-card { top: auto; bottom: calc(150px + var(--safe-b)); left: 8px; transform: none; width: min(270px, 34vw); min-width: 0; animation: none; }
+@media (max-height: 520px) { body:has(#hud:not(.hidden)) .tut-card { bottom: calc(64px + var(--safe-b)); } }
+.tut-arrow.from-left::before { content: '👉'; left: -48px; top: -24px; animation-name: arrowBobX; }
+.tut-arrow.from-right::before { content: '👈'; left: 4px; top: -24px; animation-name: arrowBobX2; }
+@keyframes arrowBobX { 50% { transform: translateX(-9px); } }
+@keyframes arrowBobX2 { 50% { transform: translateX(9px); } }
+#worldHud.editing .w-actions, #worldHud.editing .joy { touch-action: none; }

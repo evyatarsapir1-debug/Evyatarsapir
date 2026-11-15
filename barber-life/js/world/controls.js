@@ -78,8 +78,8 @@ export const controls = {
           this.cfg.pos[id] = { x: x / innerWidth, y: y / innerHeight };
           this.apply();
         };
-        const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
-        el.addEventListener('pointermove', move); el.addEventListener('pointerup', up);
+        const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); this.save(); };
+        el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
       }, { capture: true });
     }
   },

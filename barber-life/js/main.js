@@ -112,7 +112,7 @@ async function init() {
     if (!save.seenWorldHelp) { save.seenWorldHelp = true; progress.save(); if (!ctx.tutorial?.active) $('worldHelp').classList.remove('hidden'); }
   };
   // never lose progress: save when the app goes to the background or closes
-  const saveNow = () => { if (world.ready) ctx.life?.savePos(); else progress.save(); };
+  const saveNow = () => { if (world.ready && ctx.life) ctx.life.savePos(); }; // nothing to save on the title screen
   addEventListener('pagehide', saveNow);
   document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
   renderer.compile(scene, camera);

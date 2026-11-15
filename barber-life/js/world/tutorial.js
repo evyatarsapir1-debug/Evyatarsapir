@@ -28,7 +28,7 @@ function backToCity() {
 
 const STEPS = [
   {
-    id: 'move', title: 'זזים בעיר', icon: '🕹️',
+    id: 'move', worldOnly: true, title: 'זזים בעיר', icon: '🕹️',
     text: () => touch() ? 'גרור את העיגול שבפינה כדי ללכת. דחיפה עד הקצה = ריצה. גרירת אצבע על המסך מסובבת את המצלמה.' : 'לך עם W A S D או החיצים. Shift = ריצה, רווח = קפיצה. גרור עם העכבר כדי לסובב את המצלמה.',
     point: () => touch() ? ['#joy'] : [],
     start: (T) => { const p = ctx.world.player.position; T.base.x = p.x; T.base.z = p.z; T.base.walked = 0; },
@@ -38,7 +38,7 @@ const STEPS = [
     idleHint: () => touch() ? 'שים את האגודל על העיגול השקוף בפינה וגרור לכיוון שאתה רוצה ללכת.' : 'לחץ והחזק W (או ↑) כדי ללכת קדימה.',
   },
   {
-    id: 'map', title: 'המפה', icon: '🗺️',
+    id: 'map', worldOnly: true, title: 'המפה', icon: '🗺️',
     text: (T) => T.flags.mapOpen ? 'זו מפת העיר: 🎓 אקדמיה, ✂️ מספרות, 🏠 הבית שלך. לחיצה על מקום מסמנת אליו יעד. עכשיו סגור את המפה (✕).' : 'לחץ על כפתור המפה 🗺️ (או על המפה הקטנה בפינה) כדי לראות את כל העיר.',
     point: (T) => T.flags.mapOpen ? ['#mapClose'] : ['#wMap'],
     tick: (T) => { if (!$('mapOverlay').classList.contains('hidden')) T.flags.mapOpen = true; },
@@ -46,7 +46,7 @@ const STEPS = [
     idleHint: () => 'הכפתור 🗺️ נמצא למעלה ליד המפה הקטנה. במחשב אפשר גם ללחוץ M.',
   },
   {
-    id: 'talk', title: 'מדברים עם אנשים', icon: '💬',
+    id: 'talk', worldOnly: true, title: 'מדברים עם אנשים', icon: '💬',
     text: () => 'תושבי העיר נותנים טיפים על המקצוע. לך לאדם הקרוב (החץ הזהב מוביל אליו) ולחץ על כפתור "💬 דבר עם..." כשהוא מופיע.',
     point: () => ['#wInteract'],
     target: () => { const w = ctx.world, n = w.people.nearest(w.player.position, 60); return n ? { x: n.mesh.position.x, z: n.mesh.position.z, label: n.name, moving: true } : null; },
@@ -54,7 +54,7 @@ const STEPS = [
     idleHint: () => 'התקרב לאדם עד שכפתור "💬 דבר עם..." מופיע בפינה, ואז לחץ עליו (או E במחשב).',
   },
   {
-    id: 'enter', title: 'נכנסים למספרה', icon: '🚪',
+    id: 'enter', worldOnly: true, title: 'נכנסים למספרה', icon: '🚪',
     text: () => 'עקוב אחרי החץ הזהב אל המספרה Fade House. הדלתות נפתחות לבד — פשוט תיכנס.',
     target: () => ({ ...ctx.world.city.buildings.fadeHouse.inside, label: 'Fade House' }),
     done: () => ctx.world.insideBuilding(ctx.world.player.position)?.id === 'fadeHouse',
@@ -62,7 +62,7 @@ const STEPS = [
     idleHint: () => 'החץ הזהב ליד הרגליים שלך מצביע לכיוון. העמוד הזוהר מסמן את היעד.',
   },
   {
-    id: 'job', title: 'מוצאים עבודה', icon: '💼',
+    id: 'job', worldOnly: true, title: 'מוצאים עבודה', icon: '💼',
     text: () => 'גש לדלפק בסוף המספרה ודבר עם מוטי, הבעלים. בקש לעבוד אצלו.',
     point: () => document.querySelector('#dialogModal:not(.hidden)') ? ['#dialogButtons .btn.primary'] : ['#wInteract'],
     target: () => ({ ...ctx.world.city.buildings.fadeHouse.reception, label: 'מוטי — הדלפק' }),
@@ -249,8 +249,9 @@ export const tutorial = {
     card.classList.remove('hidden');
     $('tutStep').textContent = `הדרכה · שלב ${T.step + 1}/10`;
     $('tutTitle').textContent = `${s.icon} ${s.title}`;
-    $('tutText').textContent = s.text(T);
-    $('tutProgress').textContent = s.progress ? s.progress(T) : '';
+    const away = s.worldOnly && !inWorld() ? backToCity() : null;
+    $('tutText').textContent = away ? `השלב הזה מתבצע בעיר. ${away.text}` : s.text(T);
+    $('tutProgress').textContent = s.progress && !away ? s.progress(T) : '';
     $('tutDots').innerHTML = STEPS.map((_, i) => `<i class="${i < T.step ? 'done' : i === T.step ? 'cur' : ''}"></i>`).join('');
     const a = s.action?.(T);
     const btn = $('tutAction');
@@ -260,7 +261,7 @@ export const tutorial = {
   },
 
   _pointer(s, T) {
-    const sels = s.point?.(T) || [];
+    const sels = (s.worldOnly && !inWorld() ? backToCity()?.point : null) || s.point?.(T) || [];
     const el = first(sels);
     const arrow = $('tutArrow'), ring = $('tutRing');
     // the card itself never covers the thing it points at
@@ -268,10 +269,13 @@ export const tutorial = {
     const r = el.getBoundingClientRect();
     ring.style.cssText = `left:${r.left - 6}px;top:${r.top - 6}px;width:${r.width + 12}px;height:${r.height + 12}px`;
     ring.classList.remove('hidden');
+    // buttons at a screen edge get the arrow from the side (so it never hides the neighbouring button)
+    const side = r.right > innerWidth - 90 && r.width < 120 ? 'from-left' : r.left < 90 && r.width < 120 && r.top > 120 ? 'from-right' : '';
     const above = r.top > 90;
-    arrow.classList.toggle('up', !above);
-    arrow.style.left = `${r.left + r.width / 2}px`;
-    arrow.style.top = `${above ? r.top - 12 : r.bottom + 12}px`;
+    arrow.className = `tut-arrow ${side || (above ? '' : 'up')}`;
+    if (side === 'from-left') { arrow.style.left = `${r.left - 12}px`; arrow.style.top = `${r.top + r.height / 2}px`; }
+    else if (side === 'from-right') { arrow.style.left = `${r.right + 12}px`; arrow.style.top = `${r.top + r.height / 2}px`; }
+    else { arrow.style.left = `${r.left + r.width / 2}px`; arrow.style.top = `${above ? r.top - 12 : r.bottom + 12}px`; }
     arrow.classList.remove('hidden');
   },
   _hidePointer() { $('tutArrow')?.classList.add('hidden'); $('tutRing')?.classList.add('hidden'); },
