@@ -157,11 +157,24 @@ function editSingle(ctx, title, options, key, extra) {
 }
 
 function doExport() {
-  const blob = new Blob([JSON.stringify(exportData(), null, 2)], { type: 'application/json' });
-  const a = h('a', { href: URL.createObjectURL(blob), download: `glowup-backup-${new Date().toISOString().slice(0, 10)}.json` });
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  toast('קובץ הגיבוי ירד', 'download');
+  const text = JSON.stringify(exportData(), null, 2);
+  try {
+    const blob = new Blob([text], { type: 'application/json' });
+    const a = h('a', { href: URL.createObjectURL(blob), download: `glowup-backup-${new Date().toISOString().slice(0, 10)}.json` });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch { /* downloads can be blocked (e.g. embedded views) – the copy option below always works */ }
+  // Some embedded views block downloads, so always offer copy as well.
+  sheet((api) => {
+    const ta = h('textarea', { class: 'input ltr', rows: 8, readonly: true, 'data-no-autofocus': '1', style: { fontSize: '12px' } }, text);
+    return h('div', null,
+      sheetHead('גיבוי המידע', 'אם ההורדה לא התחילה, אפשר להעתיק את הטקסט ולשמור אותו בקובץ או בהערה.', api),
+      ta,
+      h('button', { class: 'btn primary block mt', onclick: async () => {
+        try { await navigator.clipboard.writeText(text); toast('הגיבוי הועתק', 'check'); }
+        catch { ta.focus(); ta.select(); toast('סמנו והעתיקו את הטקסט', 'info'); }
+      } }, ic('layers'), 'העתקת הגיבוי'));
+  });
 }
 
 function doImport(ctx) {
