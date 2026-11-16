@@ -118,7 +118,7 @@ class ShopRuntime {
 }
 
 export const life = {
-  get state() { D.life ||= defaults(); return D.life; },
+  get state() { if (!D.life || !D.life._v) D.life = { ...defaults(), ...(D.life || {}), _v: 1 }; return D.life; },
   get hour() { return this.state.minute / 60; },
   get totalMinutes() { return this.state.day * 1440 + this.state.minute; },
   clock() { const m = Math.floor(this.state.minute); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; },

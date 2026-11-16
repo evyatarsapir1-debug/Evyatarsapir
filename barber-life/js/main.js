@@ -10,6 +10,7 @@ import { RADII, rayEllipsoid, hairlineY, azimuth, zoneOf, surfaceNormal } from '
 import { ToolRig, GUARDS, TOOLS, SCISSOR_LENGTHS } from './tools/tools.js';
 import { OrbitCam } from './core/orbitCam.js';
 import { ClipperSound } from './core/audio.js';
+import { HairClips } from './scene/hairClips.js';
 import { ctx } from './game/context.js';
 import { progress } from './game/progress.js';
 import { DemoPlayer, planDemo } from './game/demo.js';
@@ -140,6 +141,7 @@ function setupHead(preset, opts = {}) {
   const seed = opts.seed ?? (11 + Math.max(0, Object.keys(HAIR_PRESETS).indexOf(preset.id)));
   hair = new HairSystem({ count: isMobile ? 13000 : 22000, seed, preset });
   client.head.add(hair.mesh);
+  (ctx.clips ||= new HairClips()).attach(client.head); ctx.clips._t = 0;
   hair.bindScalp(client.headMesh.geometry, client.baseColors);
   if (opts.saved) hair.deserialize(opts.saved);
   hair.updateScalp();
@@ -363,15 +365,15 @@ canvas.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' &
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.zoom(Math.exp(e.deltaY * 0.0012)); }, { passive: false });
 
 // ---------------------------------------------------------------- side touchpad (remote aim)
-// Drag on the pad at the edge of the screen: a sight moves over the head (like a laptop touchpad), so the finger
-// never covers the client. Hold the ✂️ button to cut along the sight; a quick tap locks cutting on/off.
-const pad = { on: false, x: 0, y: 0, drag: null, cutId: null, latch: false, down: 0, sens: 1.7 };
+// One pad at the side of the screen, nothing else: the sight (crosshair) shows where the machine is on the head.
+// Put your thumb on the pad → the machine runs and cuts at the sight; drag → it moves along the head like a laptop
+// touchpad; lift your thumb → it stops. Double-tap the pad to bring the sight back to the middle of the head.
+const pad = { on: false, x: 0, y: 0, drag: null, sens: 1.6, lastTap: 0 };
 function padSet(on) {
   pad.on = on;
   $('btnPad').classList.toggle('on', on);
   document.body.classList.toggle('pad-on', on);
   $('padWrap').classList.toggle('hidden', !on);
-  $('padCut').classList.toggle('hidden', !on);
   $('aimCursor').classList.toggle('hidden', !on);
   padStop();
   if (on) padCenter(); else state.hover = null;
@@ -400,9 +402,6 @@ function padBegin() {
 function padStop() {
   if (state.stroke?.id === 'pad') endStroke();
   if (state.dusting?.id === 'pad') state.dusting = null;
-  pad.latch = false; pad.cutId = null;
-  $('padCut').classList.remove('on', 'latched');
-  $('padCutText').textContent = 'החזק לחיתוך';
 }
 function padMoveAim(dx, dy) {
   pad.x = THREE.MathUtils.clamp(pad.x + dx * pad.sens, 0, innerWidth);
@@ -412,34 +411,27 @@ function padMoveAim(dx, dy) {
   else if (state.dusting?.id === 'pad' && hit) dustAt(hit);
 }
 function bindPad() {
-  const tp = $('touchPad'), cut = $('padCut');
-  tp.addEventListener('pointerdown', (e) => { e.preventDefault(); tp.setPointerCapture(e.pointerId); pad.drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; tp.classList.add('active'); sound.unlock(); });
+  const tp = $('touchPad');
+  tp.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); tp.setPointerCapture(e.pointerId); sound.unlock();
+    if (pad.drag) return; // one thumb drives the machine
+    const now = performance.now();
+    if (now - pad.lastTap < 280) { pad.lastTap = 0; padCenter(); toast('🎯 הכוונת חזרה למרכז הראש', 1200); return; }
+    pad.lastTap = now;
+    pad.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    tp.classList.add('active');
+    padBegin(); // thumb down = machine on
+  });
   tp.addEventListener('pointermove', (e) => {
     if (pad.drag?.id !== e.pointerId) return;
-    padMoveAim(e.clientX - pad.drag.x, e.clientY - pad.drag.y);
+    const dx = e.clientX - pad.drag.x, dy = e.clientY - pad.drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 6) pad.lastTap = 0; // a drag, not a tap
+    padMoveAim(dx, dy);
     pad.drag.x = e.clientX; pad.drag.y = e.clientY;
   });
-  const endDrag = (e) => { if (pad.drag?.id === e.pointerId) { pad.drag = null; tp.classList.remove('active'); } };
+  const endDrag = (e) => { if (pad.drag?.id === e.pointerId) { pad.drag = null; tp.classList.remove('active'); padStop(); } }; // thumb up = machine off
   tp.addEventListener('pointerup', endDrag); tp.addEventListener('pointercancel', endDrag);
-  tp.addEventListener('dblclick', () => padCenter());
-  cut.addEventListener('pointerdown', (e) => {
-    e.preventDefault(); cut.setPointerCapture(e.pointerId); sound.unlock();
-    if (pad.latch) { padStop(); return; } // tap again: stop the locked cut
-    pad.cutId = e.pointerId; pad.down = performance.now();
-    cut.classList.add('on'); $('padCutText').textContent = 'חותך...';
-    padBegin();
-  });
-  const cutUp = (e) => {
-    if (pad.cutId !== e.pointerId) return;
-    pad.cutId = null;
-    if (performance.now() - pad.down < 260 && !state.tapHandler && (state.stroke?.id === 'pad' || state.dusting?.id === 'pad')) {
-      pad.latch = true; cut.classList.add('latched'); $('padCutText').textContent = 'נעול — לחץ לעצירה';
-      return;
-    }
-    padStop();
-  };
-  cut.addEventListener('pointerup', cutUp); cut.addEventListener('pointercancel', cutUp);
-  $('btnPad').addEventListener('click', () => { padSet(!pad.on); toast(pad.on ? '🎯 משטח כיוון: גרור במשטח כדי להזיז את הכוונת, והחזק ✂️ כדי לספר. לחיצה קצרה על ✂️ נועלת חיתוך.' : 'מצב רגיל: גוררים ישר על הראש.', 4200); });
+  $('btnPad').addEventListener('click', () => { padSet(!pad.on); toast(pad.on ? '🎯 משטח כיוון: שים אצבע על המשטח — המכונה עובדת בכוונת. הרם — היא נעצרת.' : 'מצב רגיל: גוררים ישר על הראש.', 4000); });
 }
 function padFrame() {
   if (!pad.on || !playing()) { if (pad.on) $('aimCursor').classList.add('hidden'); return; }
@@ -449,6 +441,7 @@ function padFrame() {
   const hit = state.mode === 'cut' && !demo.active ? padHit() : null;
   el.classList.toggle('on-head', !!hit);
   el.classList.toggle('cutting', state.stroke?.id === 'pad' || state.dusting?.id === 'pad');
+  $('touchPad').classList.toggle('cutting', state.stroke?.id === 'pad' && state.cuttingAmount > 0.05);
   if (!state.stroke || state.stroke.id === 'pad') state.hover = hit;
 }
 ctx.pad = pad; ctx.padSet = padSet; ctx.padCenter = padCenter;
@@ -689,6 +682,7 @@ function frame(dt, render = true) {
   const cutting = tools.active === 'clipper' || tools.active === 'trimmer';
   sound.set(cutting && (state.stroke || demo.active) ? 1 : cutting && h ? 0.55 : 0, state.cuttingAmount);
   clippings.update(dt);
+  ctx.clips?.update(dt, hair, tools.active, playing() && hair.display !== 'pro');
   shop.update(dt);
   session.update?.(dt);
   scalpTimer += dt;
