@@ -419,12 +419,95 @@ await step('coach knows the transformation plan', async () => {
   await page.locator('.composer .btn').click();
   await page.locator('.msg.bot', { hasText: 'המסלול שלך' }).waitFor({ timeout: 4000 });
 });
+console.log('Stage 9 – glow-up scan & shopping');
+await step('manual scan (no AI): measurements → face shape + plan', async () => {
+  await page.goto(BASE + '#/home');
+  await page.locator('[data-scan-cta]').click();
+  await expectText('בדיקה ידנית');
+  for (const [k, v] of [['forehead', '13'], ['cheek', '13.5'], ['jaw', '11.5'], ['length', '19']]) await page.locator(`[data-measure="${k}"]`).fill(v);
+  await page.locator('[data-manual-go]').click();
+  await expectText('צורת פנים: אובלי');
+  await expectText('מה לעשות השבוע');
+  await expectText('בגדים לקנות');
+  await page.locator('[data-scan-plan] .check').first().click();
+  await expectText('1/5 בוצעו');
+  await shot('24-scan-manual');
+});
+await step('scan → shopping list → bought goes to wardrobe', async () => {
+  await page.getByRole('button', { name: 'לרשימה' }).first().click();
+  await page.goto(BASE + '#/style?tab=shop');
+  await expectText('רשימת הקניות שלך');
+  const before = await page.evaluate(() => JSON.parse(localStorage.getItem('glowup.state.v1') || '{}').wardrobe?.length || 0);
+  await page.getByRole('button', { name: 'קניתי' }).first().click();
+  await expectText('נוסף לארון הדיגיטלי');
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(async () => (await import('./js/store.js')).getState().wardrobe.length);
+  if (after !== before + 1 && after < 1) throw new Error(`wardrobe ${before} -> ${after}`);
+  await shot('25-shop');
+});
+await step('home shows the plan from the scan', async () => {
+  await page.goto(BASE + '#/home');
+  await expectText('תוכנית הגלואו אפ שלך');
+});
 await step('delete all data resets to onboarding', async () => {
   await page.goto(BASE + '#/settings');
   await page.locator('.list-row', { hasText: 'מחיקת כל המידע' }).click();
   await page.locator('.sheet').getByRole('button', { name: 'מחיקה מלאה' }).click();
   await expectText('בואו נתחיל');
 });
+
+// ---- AI photo scan with a simulated Claude (the viewer's `sample` capability) ----
+console.log('Stage 10 – AI photo scan (simulated Claude)');
+{
+  const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'he-IL' });
+  const p2 = await ctx2.newPage();
+  p2.on('pageerror', (e) => errors.push('pageerror(ai): ' + e.message));
+  await p2.addInitScript(() => {
+    const result = { faceShape: 'square', faceShapeWhy: 'לסת רחבה וזוויתית, מצח ולחיים ברוחב דומה.', strengths: ['גבות מלאות'],
+      jaw: { observation: 'קו לסת רחב.', actions: ['הכנסת סנטר 3×10'] },
+      hair: { current: 'שיער בינוני ללא צורה', recommended: [{ id: 'textured-crop', why: 'טקסטורה מרככת את הזוויות', askBarber: 'קרופ עם פייד אמצעי' }, { id: 'nope', why: 'x' }], avoid: [{ name: 'באז קאט', why: 'מבליט' }], styling: 'קליי מט', products: ['קליי'] },
+      beard: 'זיפים קצרים', skin: { observation: 'אזור T שומני', actions: ['SPF'], seeDermatologist: false }, brows: 'לנקות במרכז',
+      body: { seen: true, observation: 'גוף רזה', recommendation: 'bulk', why: 'למלא כתפיים' },
+      style: { colors: ['navy', 'olive', 'pink-ish'], colorsWhy: 'מתאים לגוון', buy: [{ name: 'אוברשירט זית', category: 'layer', color: 'olive', why: 'מוסיף נפח', price: '₪150' }], avoid: ['לוגו ענק'] },
+      quickWins: [{ title: 'לקבוע תור לספר', minutes: 5 }, { title: 'לקנות קליי', minutes: 10 }], plan: [{ weeks: '1-2', focus: 'שיער', actions: ['תספורת'] }], summary: 'סיכום קצר.' };
+    let calls = 0;
+    const sample = async () => ({ text: 'שלום! אני המאמן.', truncated: false });
+    sample.json = async (input, opts) => { calls++; window.__scanCall = { hasImages: !!opts?.images?.length, prompt: String(input).slice(0, 2000) }; return result; };
+    sample.limits = async () => ({ maxPromptBytes: 262144, images: { maxCount: 5, maxInputBytes: 2e7, mediaTypes: ['image/jpeg', 'image/png'] } });
+    window.claude = { use: async (n) => (n === 'sample' ? sample : null) };
+    const today = new Date().toISOString().slice(0, 10);
+    localStorage.setItem('glowup.state.v1', JSON.stringify({ version: 1, onboarded: true, tourDone: true,
+      profile: { name: 'בדיקה', address: 'm', age: 16, goals: ['hair'], areas: ['hair'], skinType: 'oily', hairType: 'straight', hairLength: 'medium', styles: ['casual'], fitnessLevel: 'beginner', careHabits: [], minutes: 20, createdAt: 1 },
+      program: { length: 30, startDate: today, pace: 'normal', extraTasks: [], hiddenTasks: [], history: [] }, days: {}, reminders: [], savedCuts: [], savedExercises: [], wardrobe: [], looks: [], budget: { monthly: 0, expenses: [] }, shopping: [], myProducts: [], photos: [], scans: [], styleShop: [],
+      coach: { messages: [], provider: 'local', apiKey: '', shareProfile: true }, settings: { theme: 'dark', motion: 'reduce' },
+      routines: { wake: '07:00', bed: '22:30', morning: [], evening: [], screenBreak: { on: false, every: 45 }, waterGoal: 8, sleepGoal: 9, blocks: [] } }));
+  });
+  await p2.goto(BASE + '#/scan');
+  await step('AI scan: upload photo, analysis, sanitized results', async () => {
+    await p2.locator('[data-slot="front"]').waitFor({ timeout: 6000 });
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC', 'base64');
+    const [chooser] = await Promise.all([p2.waitForEvent('filechooser'), p2.locator('[data-slot="front"]').click()]);
+    await chooser.setFiles({ name: 'face.png', mimeType: 'image/png', buffer: png });
+    await p2.locator('[data-slot="front"] img').waitFor();
+    await p2.locator('[data-scan-go]').click();
+    await p2.getByText('צורת פנים: מרובע').waitFor({ timeout: 8000 });
+    const call = await p2.evaluate(() => window.__scanCall);
+    if (!call?.hasImages) throw new Error('image not sent');
+    if (!/מתחת לגיל 18/.test(call.prompt)) throw new Error('teen safety rule missing from prompt');
+    await p2.getByText('טקסצ׳רד קרופ').first().waitFor();
+    if (await p2.getByText('ההמלצה: חיטוב').count()) throw new Error('teen got cut');
+    await p2.getByText('ההמלצה: בניית מסה').waitFor();
+    if (SHOTS) await p2.screenshot({ path: `${SHOTS}/26-scan-ai.png`, fullPage: true });
+  });
+  await step('coach uses the real model when the viewer provides Claude', async () => {
+    await p2.goto(BASE + '#/coach');
+    await p2.getByText('AI מחובר').waitFor({ timeout: 6000 });
+    await p2.locator('.composer textarea').fill('היי');
+    await p2.locator('.composer .btn').click();
+    await p2.locator('.msg.bot', { hasText: 'אני המאמן' }).waitFor({ timeout: 5000 });
+  });
+  await ctx2.close();
+}
 
 await browser.close();
 console.log(`\n${passed} passed, ${errors.length} problem(s)`);

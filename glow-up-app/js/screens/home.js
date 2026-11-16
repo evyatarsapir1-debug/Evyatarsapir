@@ -92,6 +92,7 @@ export default function home(ctx) {
         heroRingSlot)));
   }
 
+  root.append(scanCard(ctx));
   root.append(transformCard(ctx));
 
   // tasks
@@ -173,4 +174,23 @@ function transformCard(ctx) {
       tg.kcal ? mini('חלבון', Math.round(ft.p), tg.protein, '#f472b6') : mini('צעדים', steps, tg.steps, '#22d3ee'),
       tg.kcal ? mini('צעדים', steps, tg.steps, '#22d3ee') : h('div', { class: 'stat', style: { padding: '10px' } }, h('div', { class: 'tiny muted' }, 'אימון'), h('div', { style: { fontWeight: 700, fontSize: '13px' } }, isTrainingDay() ? nextSession().name : 'מנוחה'))),
     h('button', { class: 'btn sm block mt', onclick: () => ctx.go('#/transform') }, ic('flame'), 'למסלול המלא'));
+}
+
+function scanCard(ctx) {
+  const s = getState();
+  const sc = s.scans?.[0];
+  if (!sc) {
+    return h('button', { class: 'coach-cta', style: { marginTop: '12px', background: 'linear-gradient(120deg,#f472b6,#a855f7 55%,#6d28d9)' }, 'data-scan-cta': '', onclick: () => ctx.go('#/scan') },
+      h('span', { class: 'ci' }, ic('camera')),
+      h('div', { class: 'grow' }, h('b', null, 'סריקת גלואו אפ'), h('div', { class: 'small', style: { opacity: 0.9 } }, 'תמונה של הפנים והשיער → איזו תספורת, קו לסת, בגדים, חיטוב או מסה')),
+      ic('back'));
+  }
+  const r = sc.result;
+  const done = sc.done || {};
+  const next = r.quickWins.find((_, i) => !done[i]);
+  const n = r.quickWins.filter((_, i) => done[i]).length;
+  return h('button', { class: 'card tap glow', style: { marginTop: '12px' }, onclick: () => ctx.go('#/scan') },
+    h('div', { class: 'row between' }, h('b', null, 'תוכנית הגלואו אפ שלך'), h('span', { class: 'tag purple' }, `${n}/${r.quickWins.length}`)),
+    h('div', { class: 'bar', style: { marginTop: '8px' } }, h('i', { style: { width: (r.quickWins.length ? Math.round((n / r.quickWins.length) * 100) : 0) + '%' } })),
+    h('p', { class: 'small mt' }, next ? `הצעד הבא: ${next.title}` : 'סיימת את כל הצעדים לשבוע! אפשר לעשות סריקה חדשה ולראות את ההתקדמות.'));
 }

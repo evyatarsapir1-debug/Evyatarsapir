@@ -19,6 +19,8 @@ import products from './screens/products.js';
 import settings from './screens/settings.js';
 import guide, { learn } from './screens/guide.js';
 import transform from './screens/transform.js';
+import scan from './screens/scan.js';
+import { initAI } from './ai.js';
 
 const ROUTES = {
   home: { render: home, tab: 'home' },
@@ -40,6 +42,7 @@ const ROUTES = {
   products: { render: products, tab: 'home' },
   settings: { render: settings, tab: null },
   transform: { render: transform, tab: 'home' },
+  scan: { render: scan, tab: 'home' },
 };
 
 const TABS = [
@@ -151,6 +154,8 @@ subscribe(() => applyTheme());
 
 render();
 startReminderLoop();
+// light up AI features once the viewer's Claude (or none) is known
+initAI().then(() => { if (getState().onboarded && /^#\/(coach|scan|home|style)/.test(location.hash || '#/home')) softRefresh(); });
 if (getState().onboarded) setTimeout(() => maybeStartTour(false), 600);
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {

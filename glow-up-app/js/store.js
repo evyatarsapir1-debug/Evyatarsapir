@@ -41,6 +41,8 @@ export function defaultState() {
     settings: { theme: 'dark', motion: 'auto', notifications: false, units: 'metric' },
     achievementsSeen: [],
     transform: null,          // transformation program (see transform.js)
+    scans: [],                // glow-up scans { id, date, result, done, photoId }
+    styleShop: [],            // clothes to buy { id, name, category, color, why, price, bought }
   };
 }
 

@@ -6,14 +6,15 @@ import { tasksFor, dayIndexOf, streak, completion, PROGRAMS } from './plan.js';
 import { labelOf, SKIN_TYPES, HAIR_TYPES, STYLES, FITNESS_LEVELS, AREAS, GOALS } from './data/profile.js';
 import { COLOR, CATEGORIES } from './data/style.js';
 import { computeTargets, currentWeight } from './transform.js';
+import { aiOn, hasSample, ask, aiErrorText } from './ai.js';
 
 export const MODEL = 'claude-opus-5-5';
 let clientPromise = null;
 let clientKey = '';
 
+/** A real model is available (Artifact viewer's Claude, or the user's own API key). */
 export function aiAvailable() {
-  const c = getState().coach;
-  return c.provider === 'claude' && !!c.apiKey;
+  return aiOn();
 }
 
 async function client() {
@@ -48,7 +49,7 @@ const SYSTEM = `את/ה "המאמן של GLOW UP" – מאמן גלואו אפ �
 אפליקציה: אפשר להפנות למסכים: בית, טיפוח (שגרה, מדריכי עור, מראה הפנים), שיער ותספורות (ספרייה עם שמירה), כושר (אימונים, ספריית תרגילים, התאוששות), תזונה, סטייל (ארון דיגיטלי, סטייליסט, לוקים), שינה ושגרה (תזכורות), התקדמות, מוצרים ותקציב, התוכנית שלי (7/30/90 ימים, קצב).
 כשמציעים לוק – להשתמש רק בפריטים מרשימת הארון של המשתמש (אם יש), ולהסביר למה הצבעים עובדים.`;
 
-function profileContext() {
+export function profileContext() {
   const s = getState();
   const p = s.profile;
   if (!p) return '';
@@ -93,6 +94,16 @@ function profileContext() {
  * Throws an Error with a Hebrew, user-facing message on failure.
  */
 export async function askClaude(history, onText, signal) {
+  if (hasSample()) {
+    // Artifact viewer: memory-less calls, so the instructions travel as a leading user turn.
+    const turns = history.filter((m) => (m.role === 'user' || m.role === 'assistant') && m.text).slice(-16).map((m) => ({ role: m.role, content: m.text }));
+    while (turns.length && turns[0].role !== 'user') turns.shift();
+    const lead = { role: 'user', content: `${SYSTEM}\n\nמידע על המשתמש (מהאפליקציה):\n${profileContext()}\n\nענה רק על ההודעה האחרונה של המשתמש, בעברית.` };
+    let last = '';
+    try {
+      return await ask([lead, ...turns], { onText: (t) => { onText(t.slice(last.length)); last = t; }, signal, fresh: true, tier: 'default' });
+    } catch (e) { throw new Error(aiErrorText(e)); }
+  }
   const { Anthropic, api } = await client();
   // history: [{role:'user'|'assistant', text}] – keep the last turns, must start with a user turn
   let msgs = history.filter((m) => m.role === 'user' || m.role === 'assistant').slice(-20).map((m) => ({ role: m.role, content: m.text }));
@@ -130,4 +141,45 @@ export async function testKey() {
   const { api } = await client();
   const r = await api.messages.create({ model: getState().coach.model || MODEL, max_tokens: 64, output_config: { effort: 'low' }, messages: [{ role: 'user', content: 'ענה במילה אחת: שלום' }] });
   return r.content.some((b) => b.type === 'text');
+}
+
+async function blobToBase64(b) {
+  const buf = await b.arrayBuffer();
+  let bin = '';
+  const bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+/** Generic call with the user's API key (used by ai.js): prompt string or turns, optional images. */
+export async function askRaw(input, opts = {}) {
+  const { Anthropic, api } = await client();
+  let msgs = typeof input === 'string' ? [{ role: 'user', content: input }] : input.map((m) => ({ role: m.role, content: m.content }));
+  if (opts.images?.length) {
+    const last = msgs[msgs.length - 1];
+    const imgs = await Promise.all(opts.images.map(async (b) => ({ type: 'image', source: { type: 'base64', media_type: b.type || 'image/jpeg', data: await blobToBase64(b) } })));
+    last.content = [...imgs, { type: 'text', text: last.content }];
+  }
+  try {
+    const stream = api.beta.messages.stream({
+      model: getState().coach.model || MODEL,
+      max_tokens: 16000,
+      messages: msgs,
+      output_config: { effort: opts.tier === 'complex' ? 'high' : 'medium' },
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+    }, { signal: opts.signal });
+    let acc = '';
+    stream.on('text', (d) => { acc += d; opts.onText?.(acc); });
+    const final = await stream.finalMessage();
+    if (final.stop_reason === 'refusal') throw Object.assign(new Error('Claude לא יכול לעזור בבקשה הזו.'), { code: 'refused' });
+    return final.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+  } catch (e) {
+    if (e?.code) throw e;
+    if (e instanceof Anthropic.AuthenticationError) throw new Error('מפתח ה-API לא תקין. אפשר לעדכן אותו בהגדרות.');
+    if (e instanceof Anthropic.RateLimitError) throw new Error('יותר מדי בקשות כרגע. נסו שוב בעוד דקה.');
+    if (e instanceof Anthropic.APIConnectionError) throw new Error('אין חיבור לשרת של Anthropic.');
+    if (e instanceof Anthropic.APIError) throw new Error(`שגיאה מהשרת (${e.status ?? '—'}).`);
+    throw e instanceof Error ? e : new Error('משהו השתבש.');
+  }
 }

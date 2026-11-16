@@ -40,7 +40,7 @@ function setup(ctx) {
   const adult = p.age >= 18;
   const prev = s.transform || {};
   const t = {
-    goal: prev.goal || (adult ? 'cut' : 'bulk'), sex: prev.sex || '', heightCm: prev.heightCm || '', startWeight: prev.startWeight || '',
+    goal: (['cut', 'bulk', 'recomp', 'face'].includes(ctx.query.get('goal')) ? ctx.query.get('goal') : null) || prev.goal || (adult ? 'cut' : 'bulk'), sex: prev.sex || '', heightCm: prev.heightCm || '', startWeight: prev.startWeight || '',
     goalWeight: prev.goalWeight || '', activity: prev.activity || 'light', equipment: prev.equipment || 'home',
     daysPerWeek: prev.daysPerWeek || (p.fitnessLevel === 'intermediate' || p.fitnessLevel === 'advanced' ? 4 : 3), weighIns: prev.weighIns ?? adult,
   };

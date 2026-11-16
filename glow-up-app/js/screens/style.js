@@ -6,6 +6,7 @@ import { STYLES, labelOf } from '../data/profile.js';
 import { guidesByArea } from '../data/guides.js';
 import { topbar, section } from './common.js';
 import { aiAvailable } from '../coach-ai.js';
+import { capsuleFor } from '../scan.js';
 
 const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[0];
 
@@ -214,8 +215,39 @@ export default function style(ctx) {
   const s = getState();
   const root = h('main');
   root.append(topbar('סטייל ולבוש', { sub: (s.profile.styles || []).map((id) => labelOf(STYLES, id)).join(' · ') || 'הארון הדיגיטלי שלך' }));
-  const tabs = [['wardrobe', 'ארון'], ['stylist', 'סטייליסט'], ['looks', `לוקים (${s.looks.length})`], ['guides', 'מדריכים']];
+  const tabs = [['wardrobe', 'ארון'], ['stylist', 'סטייליסט'], ['shop', `קניות (${(s.styleShop || []).filter((x) => !x.bought).length})`], ['looks', `לוקים (${s.looks.length})`], ['guides', 'מדריכים']];
   root.append(h('div', { class: 'tabs', role: 'tablist', 'data-tour': 'style-tabs' }, tabs.map(([id, label]) => h('button', { role: 'tab', 'aria-selected': tab === id ? 'true' : 'false', class: tab === id ? 'on' : '', onclick: () => ctx.go(`#/style?tab=${id}`) }, label))));
-  root.append(tab === 'wardrobe' ? wardrobeTab(ctx) : tab === 'stylist' ? stylistTab(ctx) : tab === 'looks' ? looksTab(ctx) : guidesTab(ctx));
+  root.append(tab === 'wardrobe' ? wardrobeTab(ctx) : tab === 'stylist' ? stylistTab(ctx) : tab === 'shop' ? shopTab(ctx) : tab === 'looks' ? looksTab(ctx) : guidesTab(ctx));
   return root;
+}
+
+function shopTab(ctx) {
+  const s = getState();
+  const list = s.styleShop || [];
+  const wrap = h('div');
+  const toBuy = list.filter((x) => !x.bought), bought = list.filter((x) => x.bought);
+  wrap.append(h('div', { class: 'card hero' },
+    h('b', null, 'רשימת הקניות שלך'),
+    h('p', { class: 'small' }, 'פריטים שבאמת ישדרגו את הלוק – לפי הסגנון שלך, הצבעים שמתאימים לך ומה שכבר יש בארון. כשקונים – לוחצים "קניתי" והפריט נכנס לארון הדיגיטלי.'),
+    h('button', { class: 'btn sm mt', onclick: () => ctx.go('#/scan') }, ic('camera'), 'התאמה אישית מסריקת תמונה')));
+  const row = (it) => h('div', { class: 'list-row', style: { alignItems: 'flex-start' } },
+    h('span', { class: 'swatch', style: { background: COLOR[it.color]?.hex, width: '26px', height: '26px', marginTop: '2px' } }),
+    h('div', { class: 'grow' }, h('div', { class: 't', style: it.bought ? { textDecoration: 'line-through', opacity: 0.6 } : null }, it.name), h('div', { class: 'd' }, [catOf(it.category).label, it.price, it.why].filter(Boolean).join(' · '))),
+    it.bought ? null : h('button', { class: 'btn sm primary', onclick: () => {
+      update((st) => { const x = st.styleShop.find((y2) => y2.id === it.id); x.bought = true; st.wardrobe.push({ id: uid(), name: it.name, category: it.category, color: it.color, occasions: ['daily', 'out', 'school'], imageId: null }); });
+      toast('מעולה! נוסף לארון הדיגיטלי', 'shirt'); ctx.refresh();
+    } }, ic('check'), 'קניתי'),
+    h('button', { class: 'icon-btn', 'aria-label': 'הסרה', onclick: () => { update((st) => { st.styleShop = st.styleShop.filter((y2) => y2.id !== it.id); }); ctx.refresh(); } }, ic('x')));
+  if (toBuy.length) { wrap.append(section(`לקנות (${toBuy.length})`)); wrap.append(h('div', { class: 'list' }, toBuy.map(row))); }
+  const sugg = capsuleFor(s.profile.styles, s.wardrobe).filter((c) => !list.some((x) => x.name === c.name));
+  if (sugg.length) {
+    wrap.append(section('מומלץ לסגנון שלך'));
+    wrap.append(h('div', { class: 'list' }, sugg.map((it) => h('div', { class: 'list-row', style: { alignItems: 'flex-start' } },
+      h('span', { class: 'swatch', style: { background: COLOR[it.color]?.hex, width: '26px', height: '26px', marginTop: '2px' } }),
+      h('div', { class: 'grow' }, h('div', { class: 't' }, it.name), h('div', { class: 'd' }, `${it.why} · ${it.price}`)),
+      h('button', { class: 'btn sm', onclick: () => { update((st) => { st.styleShop = [...(st.styleShop || []), { id: uid(), ...it, bought: false }]; }); toast('נוסף לרשימה', 'bag'); ctx.refresh(); } }, ic('plus'), 'לרשימה')))));
+  }
+  if (bought.length) { wrap.append(section(`נקנו (${bought.length})`)); wrap.append(h('div', { class: 'list' }, bought.map(row))); }
+  wrap.append(h('div', { class: 'mt' }, note('טיפ: לקנות קודם את פריטי הבסיס (טי, ג׳ינס, סניקרס) – הם יוצרים הכי הרבה לוקים. מידה נכונה חשובה יותר ממותג.')));
+  return wrap;
 }
