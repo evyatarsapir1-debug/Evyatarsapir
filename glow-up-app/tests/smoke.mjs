@@ -181,6 +181,41 @@ await step('stylist suggests outfits and saves a look', async () => {
   await shot('11-looks');
 });
 
+await step('stylist: "plain shirts only" builds full outfits (top + pants + shoes)', async () => {
+  await page.goto(BASE + '#/style?tab=stylist&mode=dress');
+  await page.locator('[data-stylist-q]').fill('רק חולצות חלקות לבית ספר');
+  await page.locator('[data-stylist-ask]').click();
+  await page.getByText('הלוקים שלך · בית ספר', { exact: false }).waitFor();
+  const cards = page.locator('.outfit-card');
+  if ((await cards.count()) < 2) throw new Error('expected outfits');
+  const txt = await page.locator('.outfit-card').allInnerTexts();
+  if (txt.some((t) => t.includes('הדפס'))) throw new Error('printed shirt in plain-only results');
+  for (const t of txt) for (const need of ['חולצה', 'מכנסיים', 'נעליים']) if (!t.includes(need) && !(need === 'חולצה' && t.includes('שכבה'))) throw new Error('outfit missing ' + need + ': ' + t.slice(0, 80));
+  if (!(await page.locator('[data-plain]').isChecked())) throw new Error('plain toggle not set');
+  await shot('27-stylist');
+  await page.locator('[data-save-look]').first().click();
+  await expectText('הלוק נשמר');
+});
+await step('stylist: what goes with a hoodie – and what does not', async () => {
+  await page.locator('[data-stylist-q]').fill('מה לא מתאים לפוטר אפור?');
+  await page.locator('[data-stylist-ask]').click();
+  await page.locator('[data-match="hoodie"]').waitFor();
+  await page.locator('[data-avoid]', { hasText: 'מכנסיים מחויטים' }).waitFor();
+  await page.locator('[data-match="hoodie"]', { hasText: 'ג׳ינס' }).waitFor();
+  await expectText('3 לוקים עם קפוצ׳ון אפור');
+  await shot('28-match');
+});
+await step('stylist: from my wardrobe + generic look saved + photos need AI', async () => {
+  await page.goto(BASE + '#/style?tab=stylist&mode=wardrobe');
+  await expectText('הצעה 1');
+  await page.locator('[data-my-pick] .ward-item').first().click();
+  await page.locator('[data-my-match]').waitFor();
+  await page.goto(BASE + '#/style?tab=looks');
+  await page.locator('.pieces').first().waitFor();
+  await page.goto(BASE + '#/style?tab=stylist&mode=photos');
+  await expectText('התייעצות עם תמונות צריכה AI');
+});
+
 console.log('Stage 5 – fitness & nutrition');
 await step('exercise library with filters', async () => {
   await page.goto(BASE + '#/fitness?tab=library&lv=all');
@@ -472,7 +507,13 @@ console.log('Stage 10 – AI photo scan (simulated Claude)');
       quickWins: [{ title: 'לקבוע תור לספר', minutes: 5 }, { title: 'לקנות קליי', minutes: 10 }], plan: [{ weeks: '1-2', focus: 'שיער', actions: ['תספורת'] }], summary: 'סיכום קצר.' };
     let calls = 0;
     const sample = async () => ({ text: 'שלום! אני המאמן.', truncated: false });
-    sample.json = async (input, opts) => { calls++; window.__scanCall = { hasImages: !!opts?.images?.length, prompt: String(input).slice(0, 2000) }; return result; };
+    const stylist = { intro: 'הנה לוקים עם הקפוצ׳ון.', outfits: [{ name: 'לוק רחוב', pieces: [{ slot: 'layer', garment: 'hoodie', label: 'קפוצ׳ון', color: 'grey', fromPhoto: 1 }, { slot: 'top', garment: 'tee', label: 'טי לבנה', color: 'white' }, { slot: 'bottom', garment: 'slim-jeans', label: 'ג׳ינס כהה', color: 'denim' }, { slot: 'shoes', garment: 'white-sneakers', label: 'סניקרס', color: 'nope' }], why: ['ניטרלי ונקי'] }],
+      works: ['ג׳ינס כהה'], avoid: [{ what: 'נעלי עור', why: 'רשמי מדי' }], tips: ['מידה נכונה'], items: [{ photo: 1, name: 'קפוצ׳ון אפור', garment: 'hoodie', category: 'layer', color: 'grey' }, { photo: 9, name: 'רפאים', category: 'top', color: 'black' }], missing: [{ name: 'סניקרס לבנות', category: 'shoes', color: 'white', why: 'משלים', price: '₪250' }] };
+    sample.json = async (input, opts) => {
+      calls++;
+      if (/סטייליסט\/ית אישי/.test(String(input))) { window.__styCall = { hasImages: !!opts?.images?.length, prompt: String(input) }; return stylist; }
+      window.__scanCall = { hasImages: !!opts?.images?.length, prompt: String(input).slice(0, 2000) }; return result;
+    };
     sample.limits = async () => ({ maxPromptBytes: 262144, images: { maxCount: 5, maxInputBytes: 2e7, mediaTypes: ['image/jpeg', 'image/png'] } });
     window.claude = { use: async (n) => (n === 'sample' ? sample : null) };
     const today = new Date().toISOString().slice(0, 10);
@@ -505,6 +546,34 @@ console.log('Stage 10 – AI photo scan (simulated Claude)');
     await p2.locator('.composer textarea').fill('היי');
     await p2.locator('.composer .btn').click();
     await p2.locator('.msg.bot', { hasText: 'אני המאמן' }).waitFor({ timeout: 5000 });
+  });
+  await step('AI stylist: typed question → Claude outfits, sanitized', async () => {
+    await p2.goto(BASE + '#/style?tab=stylist');
+    await p2.getByText('מחובר ל-Claude').waitFor({ timeout: 6000 });
+    await p2.locator('[data-stylist-q]').fill('רק חולצות חלקות, מה עם פוטר אפור?');
+    await p2.locator('[data-stylist-ask]').click();
+    await p2.locator('[data-ai-answer]').waitFor({ timeout: 6000 });
+    await p2.getByText('לוק רחוב').waitFor();
+    await p2.getByText('✗ מה לא יתאים').waitFor();
+    const call = await p2.evaluate(() => window.__styCall);
+    if (!/רק חולצות חלקות/.test(call.prompt)) throw new Error('plain constraint not sent');
+    if (call.hasImages) throw new Error('images sent without photos');
+  });
+  await step('AI stylist: clothing photos → identified items + outfits', async () => {
+    await p2.goto(BASE + '#/style?tab=stylist&mode=photos');
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC', 'base64');
+    const [chooser] = await Promise.all([p2.waitForEvent('filechooser'), p2.locator('[data-photo="0"]').click()]);
+    await chooser.setFiles({ name: 'hoodie.png', mimeType: 'image/png', buffer: png });
+    await p2.locator('[data-photo="0"] img').waitFor();
+    await p2.locator('[data-photos-go]').click();
+    await p2.getByText('מה זיהיתי בתמונות').waitFor({ timeout: 8000 });
+    const call = await p2.evaluate(() => window.__styCall);
+    if (!call.hasImages) throw new Error('photo not sent');
+    if (await p2.getByText('רפאים').count()) throw new Error('item from a non-existent photo kept');
+    await p2.getByText('מתמונה 1').first().waitFor();
+    await p2.locator('.list-row', { hasText: 'קפוצ׳ון אפור' }).getByRole('button', { name: 'לארון' }).click();
+    await p2.getByText('נוסף לארון').waitFor();
+    if (SHOTS) await p2.screenshot({ path: `${SHOTS}/29-stylist-photos.png`, fullPage: true });
   });
   await ctx2.close();
 }

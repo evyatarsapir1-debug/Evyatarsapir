@@ -1,9 +1,9 @@
 // GLOW UP service worker: offline cache for the app shell (network-first for freshness).
-const CACHE = 'glowup-v3';
+const CACHE = 'glowup-v4';
 const SHELL = [
   './', './index.html', './css/app.css', './icon.svg', './manifest.webmanifest',
   './js/main.js', './js/ui.js', './js/icons.js', './js/store.js', './js/plan.js', './js/figure.js', './js/tour.js',
-  './js/reminders.js', './js/routines.js', './js/coach-local.js', './js/coach-ai.js', './js/transform.js', './js/ai.js', './js/scan.js', './js/screens/scan.js', './js/data/foods.js', './js/screens/transform.js',
+  './js/reminders.js', './js/routines.js', './js/coach-local.js', './js/coach-ai.js', './js/transform.js', './js/ai.js', './js/scan.js', './js/screens/scan.js', './js/stylist-ai.js', './js/screens/stylist.js', './js/data/stylist.js', './js/data/foods.js', './js/screens/transform.js',
   './js/data/profile.js', './js/data/fitness.js', './js/data/guides.js', './js/data/haircuts.js', './js/data/nutrition.js',
   './js/data/style.js', './js/data/products.js', './js/data/tips.js',
   './js/screens/common.js', './js/screens/onboarding.js', './js/screens/home.js', './js/screens/care.js', './js/screens/hair.js',

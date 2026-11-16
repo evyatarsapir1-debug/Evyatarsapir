@@ -11,7 +11,7 @@ import { topbar, section, fmtDate, cheer } from './common.js';
 const REC = { cut: ['חיטוב', 'flame', 'להוריד אחוז שומן'], bulk: ['בניית מסה', 'dumbbell', 'לבנות שריר'], recomp: ['ריקומפוזיציה', 'refresh', 'שריר + פחות שומן'], none: ['', 'info', ''] };
 
 /** Downscale a picked file to a JPEG Blob (keeps uploads small and strips EXIF). */
-function fileToBlob(file, maxSide = 1280) {
+export function fileToBlob(file, maxSide = 1280) {
   return new Promise((resolve, reject) => {
     if (!file?.type?.startsWith('image/')) return reject(new Error('not an image'));
     const url = URL.createObjectURL(file);

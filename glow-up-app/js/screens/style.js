@@ -1,12 +1,13 @@
-// Style: digital wardrobe, smart stylist (rule-based, uses only the user's items), saved looks, guides.
+// Style: digital wardrobe, personal stylist (screens/stylist.js – outfits, "what goes with", photo consult, from my wardrobe), saved looks, guides.
 import { h, ic, sheet, sheetHead, toast, confirmDialog, emptyState, note, listRow, pickImage, readImage } from '../ui.js';
 import { getState, update, uid, images, storedImg, todayKey } from '../store.js';
 import { CATEGORIES, OCCASIONS, COLORS, COLOR, suggestOutfits, scoreOutfit, slotOf, STYLE_TIPS, colorsWork } from '../data/style.js';
 import { STYLES, labelOf } from '../data/profile.js';
 import { guidesByArea } from '../data/guides.js';
 import { topbar, section } from './common.js';
-import { aiAvailable } from '../coach-ai.js';
 import { capsuleFor } from '../scan.js';
+import { stylistTab } from './stylist.js';
+import { garmentSVG, short as shortLabel } from '../data/stylist.js';
 
 const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[0];
 
@@ -67,7 +68,7 @@ function itemSheet(existing, ctx) {
           onclick: async () => {
             if (!(await confirmDialog('למחוק את הפריט?', 'הפריט והתמונה שלו יימחקו מהמכשיר.', { ok: 'מחיקה', danger: true }))) return;
             if (existing.imageId) await images.del(existing.imageId);
-            update((s) => { s.wardrobe = s.wardrobe.filter((x) => x.id !== it.id); s.looks = s.looks.map((l) => ({ ...l, itemIds: l.itemIds.filter((x) => x !== it.id) })).filter((l) => l.itemIds.length); });
+            update((s) => { s.wardrobe = s.wardrobe.filter((x) => x.id !== it.id); s.looks = s.looks.map((l) => ({ ...l, itemIds: (l.itemIds || []).filter((x) => x !== it.id) })).filter((l) => l.itemIds.length || l.pieces?.length); });
             api.close(); toast('נמחק', 'trash'); ctx.refresh();
           },
         }, ic('trash')) : null,
@@ -114,15 +115,15 @@ function starterWardrobe(ctx) {
   ctx.refresh();
 }
 
-function stylistTab(ctx) {
+export function wardrobeStylist(ctx) {
   const s = getState();
   const occ = ctx.query.get('occ') || 'daily';
   const seed = +(ctx.query.get('seed') || 1);
   const wrap = h('div');
   wrap.append(h('div', { class: 'card hero' },
     h('div', { class: 'row' }, h('span', { class: 'ibox' }, ic('wand')), h('div', { class: 'grow' }, h('b', null, 'סטייליסט חכם'),
-      h('div', { class: 'small muted' }, 'מציע שילובים רק מהפריטים שבארון שלך, לפי כללי התאמת צבעים ואירוע.'))),
-    h('div', { class: 'chips mt' }, OCCASIONS.map((o) => h('button', { class: 'chip' + (occ === o.id ? ' on' : ''), onclick: () => ctx.go(`#/style?tab=stylist&occ=${o.id}`) }, o.label)))));
+      h('div', { class: 'small muted' }, 'לוקים רק מהפריטים שבארון שלך, לפי כללי התאמת צבעים ואירוע.'))),
+    h('div', { class: 'chips mt' }, OCCASIONS.map((o) => h('button', { class: 'chip' + (occ === o.id ? ' on' : ''), onclick: () => ctx.go(`#/style?tab=stylist&mode=wardrobe&occ=${o.id}`) }, o.label)))));
   if (s.profile.styles?.length) wrap.append(h('p', { class: 'small muted', style: { margin: '10px 4px' } }, ic('info'), ' ', s.profile.styles.map((id) => `${labelOf(STYLES, id)}: ${STYLE_TIPS[id]}`).join(' ')));
   const outfits = suggestOutfits(s.wardrobe, occ, { count: 3, seed: seed * 7919 + occ.length });
   if (!outfits.length) {
@@ -133,11 +134,11 @@ function stylistTab(ctx) {
       h('button', { class: 'btn sm mt', onclick: () => ctx.go('#/style?tab=wardrobe') }, ic('plus'), 'לארון'))));
   } else {
     outfits.forEach((o, i) => wrap.append(outfitCard(o, occ, ctx, i)));
-    wrap.append(h('button', { class: 'btn block mt', onclick: () => ctx.go(`#/style?tab=stylist&occ=${occ}&seed=${seed + 1}`) }, ic('refresh'), 'הצעות נוספות'));
+    wrap.append(h('button', { class: 'btn block mt', onclick: () => ctx.go(`#/style?tab=stylist&mode=wardrobe&occ=${occ}&seed=${seed + 1}`) }, ic('refresh'), 'הצעות נוספות'));
   }
   wrap.append(h('div', { class: 'row mt' },
     h('button', { class: 'btn grow', onclick: () => buildLook(ctx, occ) }, ic('layers'), 'לבנות לוק בעצמי'),
-    h('button', { class: 'btn grow', onclick: () => ctx.go(`#/coach?q=${encodeURIComponent(`תציע לי לוק ל${OCCASIONS.find((x) => x.id === occ).label} מהבגדים שלי`)}`) }, ic('bot'), aiAvailable() ? 'AI Stylist' : 'לשאול את המאמן')));
+    h('button', { class: 'btn grow', onclick: () => ctx.go('#/style?tab=stylist&mode=dress') }, ic('wand'), 'לוקים גם מחוץ לארון')));
   return wrap;
 }
 
@@ -188,7 +189,10 @@ function looksTab(ctx) {
   return h('div', null, s.looks.map((l) => h('div', { class: 'card', style: { marginTop: '12px' } },
     h('div', { class: 'row between mb' }, h('div', null, h('b', null, l.name), h('div', { class: 'tiny muted' }, OCCASIONS.find((o) => o.id === l.occasion)?.label || '')),
       h('button', { class: 'icon-btn', 'aria-label': 'מחיקת לוק', onclick: async () => { if (await confirmDialog('למחוק את הלוק?', l.name, { ok: 'מחיקה', danger: true })) { update((st) => { st.looks = st.looks.filter((x) => x.id !== l.id); }); ctx.refresh(); } } }, ic('trash'))),
-    h('div', { class: 'outfit' }, l.itemIds.map((id) => byId[id]).filter(Boolean).map((it) => itemTile(it))))));
+    l.pieces?.length
+      ? h('div', null, h('div', { class: 'pieces' }, l.pieces.map((p) => h('div', { class: 'piece' }, h('div', { class: 'pic', html: garmentSVG(p.id || 'tee', p.color, 48) }), h('div', { class: 'small pn' }, shortLabel(p.label)), h('div', { class: 'tiny' }, COLOR[p.color]?.label || '')))),
+        h('div', { class: 'small mt' }, l.pieces.map((p) => `${shortLabel(p.label)} ${COLOR[p.color]?.label || ''}`).join(' + ')))
+      : h('div', { class: 'outfit' }, (l.itemIds || []).map((id) => byId[id]).filter(Boolean).map((it) => itemTile(it))))));
 }
 
 function guidesTab(ctx) {

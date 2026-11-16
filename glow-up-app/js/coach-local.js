@@ -102,10 +102,11 @@ export function localReply(text) {
       const occ = OCCASIONS.find((o) => text.includes(o.label))?.id || (has(text, ['אירוע', 'חתונה', 'בר מצווה', 'בת מצווה']) ? 'event' : has(text, ['יציאה', 'לצאת', 'מסיבה']) ? 'out' : has(text, ['בית ספר', 'בית הספר']) ? 'school' : has(text, ['ספורט', 'אימון']) ? 'sport' : 'daily');
       const outfits = suggestOutfits(s.wardrobe, occ, { count: 1, seed: Date.now() });
       const occLabel = OCCASIONS.find((o) => o.id === occ).label;
-      if (!s.wardrobe.length) return { text: `כדי להציע לוק מהבגדים שלך, צריך קודם להוסיף כמה פריטים לארון הדיגיטלי (תמונה לא חובה).\n\nבינתיים, נוסחה בטוחה ל${occLabel}: פריט אחד צבעוני על בסיס ניטרלי (שחור/לבן/אפור/נייבי/בז׳), נעליים נקיות ואביזר אחד.`, actions: [{ label: 'לארון הדיגיטלי', go: '#/style' }, { label: 'מדריך צבעים', go: '#/guide/colors' }] };
-      if (!outfits.length) return { text: `לא מצאתי שילוב מלא ל${occLabel} מהפריטים שבארון. כדאי לוודא שיש לפחות חולצה, מכנס ונעליים שמסומנים כמתאימים ל${occLabel}.`, actions: [{ label: 'לארון', go: '#/style' }] };
+      const styl = { label: '👕 הסטייליסט: לוקים מלאים', go: '#/style?tab=stylist&mode=dress' };
+      if (!s.wardrobe.length) return { text: `כדי להציע לוק מהבגדים שלך, צריך קודם להוסיף כמה פריטים לארון הדיגיטלי (תמונה לא חובה).\n\nבינתיים, נוסחה בטוחה ל${occLabel}: פריט אחד צבעוני על בסיס ניטרלי (שחור/לבן/אפור/נייבי/בז׳), נעליים נקיות ואביזר אחד.`, actions: [styl, { label: 'לארון הדיגיטלי', go: '#/style' }, { label: 'מדריך צבעים', go: '#/guide/colors' }] };
+      if (!outfits.length) return { text: `לא מצאתי שילוב מלא ל${occLabel} מהפריטים שבארון. כדאי לוודא שיש לפחות חולצה, מכנס ונעליים שמסומנים כמתאימים ל${occLabel}.`, actions: [styl, { label: 'לארון', go: '#/style' }] };
       const o = outfits[0];
-      return { text: `לוק ל${occLabel} מהארון שלך:\n\n${o.items.map((i) => `• ${i.name} (${COLOR[i.color]?.label})`).join('\n')}\n\n**למה זה עובד:** ${o.reasons.slice(0, 2).join('; ') || 'שילוב צבעים מאוזן'}.`, actions: [{ label: 'עוד הצעות בסטייליסט', go: `#/style?tab=stylist&occ=${occ}` }] };
+      return { text: `לוק ל${occLabel} מהארון שלך:\n\n${o.items.map((i) => `• ${i.name} (${COLOR[i.color]?.label})`).join('\n')}\n\n**למה זה עובד:** ${o.reasons.slice(0, 2).join('; ') || 'שילוב צבעים מאוזן'}.`, actions: [{ label: 'עוד הצעות מהארון', go: `#/style?tab=stylist&mode=wardrobe&occ=${occ}` }, styl] };
     }
     case 'workout': {
       const w = p.areas.includes('fitness') ? workoutFor(p, s.program, dayIndexOf(s.program)) : null;
