@@ -1,0 +1,15 @@
+{
+  "name": "GLOW UP",
+  "short_name": "GLOW UP",
+  "description": "מאמן גלואו אפ אישי: טיפוח, שיער, כושר, תזונה, סטייל ושגרה.",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07060b",
+  "theme_color": "#07060b",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
