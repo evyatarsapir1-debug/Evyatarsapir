@@ -1,6 +1,6 @@
 // Home: the user's control center.
-import { h, ic, ring, storedImg } from '../ui.js';
-import { getState, todayKey, addDays } from '../store.js';
+import { h, ic, ring } from '../ui.js';
+import { getState, todayKey, addDays, storedImg } from '../store.js';
 import { tasksFor, completion, streak, phaseOf, dayIndexOf, PROGRAMS } from '../plan.js';
 import { TIPS } from '../data/tips.js';
 import { taskItem, section, say, fmtDate } from './common.js';
@@ -43,8 +43,10 @@ export default function home(ctx) {
   const heroRingSlot = h('div');
   const weekSlot = h('div');
 
+  const streakEl = h('span', { class: 'streak', title: 'רצף התמדה', 'data-tour': 'streak' });
   const drawDynamic = () => {
     const c = completion(key);
+    streakEl.replaceChildren(ic('flame'), String(streak()));
     heroRingSlot.replaceChildren(ring(c.pct, `${Math.round(c.pct * 100)}%`, `${c.done}/${c.total}`));
     weekSlot.replaceChildren(weekChart());
   };
@@ -64,7 +66,7 @@ export default function home(ctx) {
       h('div', { class: 'grow' },
         h('h1', null, `${greeting()}, ${p.name}`),
         h('p', null, fmtDate(key, { weekday: 'long', day: 'numeric', month: 'long' }))),
-      h('span', { class: 'streak', title: 'רצף התמדה', 'data-tour': 'streak' }, ic('flame'), st),
+      streakEl,
       h('button', { class: 'icon-btn', 'aria-label': 'הגדרות', onclick: () => ctx.go('#/settings') }, ic('settings'))),
   );
 

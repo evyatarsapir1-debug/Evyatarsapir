@@ -13,6 +13,7 @@ export default function onboarding({ done }) {
     styles: [], fitnessLevel: null, careHabits: [], minutes: 20, program: 30, pace: 'normal',
   };
   let step = 0;
+  let lastStep = -1;
   const root = h('div', { class: 'onb' });
 
   const STEPS = [
@@ -34,12 +35,14 @@ export default function onboarding({ done }) {
   function draw() {
     const st = STEPS[step];
     const pct = step / (STEPS.length - 1);
-    root.replaceChildren(
+    const animate = step !== lastStep;
+    lastStep = step;
+    root.replaceChildren(...[
       step > 0 && st.id !== 'analyze' ? h('div', { class: 'onb-top' },
         h('button', { class: 'icon-btn flip', 'aria-label': 'חזרה', onclick: () => { step--; draw(); } }, ic('back')),
         h('div', { class: 'onb-progress', role: 'progressbar', 'aria-valuenow': Math.round(pct * 100), 'aria-valuemin': 0, 'aria-valuemax': 100 }, h('i', { style: { width: pct * 100 + '%' } })),
         h('span', { class: 'tiny muted' }, `${step}/${STEPS.length - 2}`)) : null,
-      h('div', { class: 'onb-body' }, st.render()),
+      h('div', { class: 'onb-body', style: animate ? null : { animation: 'none' } }, st.render()),
       st.foot === false ? null : h('div', { class: 'onb-foot' },
         h('button', {
           class: 'btn primary', 'data-next': '',
@@ -47,7 +50,7 @@ export default function onboarding({ done }) {
             if (st.valid && !st.valid()) return toast(st.id === 'name' ? 'איך לקרוא לך? (אפשר גם כינוי)' : 'צריך לבחור לפחות אפשרות אחת', 'info');
             step++; draw();
           },
-        }, step === STEPS.length - 2 ? 'לבנות את התוכנית שלי' : 'המשך', ic('back'))));
+        }, step === STEPS.length - 2 ? 'לבנות את התוכנית שלי' : 'המשך', ic('back')))].filter(Boolean));
     const inp = root.querySelector('input[type=text]');
     if (inp) setTimeout(() => inp.focus(), 50);
   }

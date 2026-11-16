@@ -44,16 +44,16 @@ await step('fill profile', async () => {
   await page.getByRole('button', { name: 'תזונה' }).click();
   await page.getByRole('button', { name: 'היגיינה ורעננות' }).click();
   await next(); // skin
-  await page.getByRole('button', { name: /שומני/ }).click();
+  await page.getByRole('button', { name: /^שומני/ }).click();
   await next(); // hair
   await page.getByRole('button', { name: /^גלי/ }).click();
   await next(); // style
   await page.getByRole('button', { name: 'סטריט' }).click();
   await page.getByRole('button', { name: 'יומיומי נוח' }).click();
   await next(); // fitness
-  await page.getByRole('button', { name: /מתחיל\/ה/ }).click();
+  await page.getByRole('button', { name: /^מתחיל\/ה/ }).click();
   await next(); // habits
-  await page.getByRole('button', { name: /קרם לחות/ }).click();
+  await page.getByRole('button', { name: /^משתמש\/ת בקרם לחות/ }).click();
   await next(); // time
   await page.getByRole('button', { name: /^30/ }).click();
   await next(); // program
@@ -61,6 +61,7 @@ await step('fill profile', async () => {
   await next(); // analyze
 });
 
+if (errors.length) { console.log('onboarding failed – stopping'); console.log(errors.join('\n')); await browser.close(); process.exit(1); }
 console.log('Stage 2 – home + tour');
 await step('tour starts after onboarding', async () => { await page.locator('.tour-tip').waitFor({ timeout: 6000 }); await expectText('1. מסך הבית'); await shot('03-tour-1'); });
 await step('tour walks all 8 steps across screens', async () => {
@@ -111,7 +112,7 @@ await step('plans: switch program day, add custom task, pace', async () => {
   await page.locator('.chip', { hasText: 'רגוע' }).click();
   await expectText('הקצב עודכן');
   await page.locator('.chip', { hasText: 'מאוזן' }).click();
-  await page.getByRole('tab', { name: 'יום 3' }).click();
+  await page.getByRole('tab', { name: 'יום 3', exact: true }).click();
   await expectText('אפשר לסמן משימות רק ביום עצמו');
   await shot('07-plans');
 });
@@ -211,7 +212,7 @@ await step('guided workout + history', async () => {
 });
 await step('free workout log', async () => {
   await page.goto(BASE + '#/log?ex=squat');
-  await expectText('סקוואט');
+  await page.locator('.card b', { hasText: 'סקוואט' }).waitFor();
   await page.getByRole('button', { name: 'שמירה' }).click();
   await page.waitForURL(/tab=history/);
 });

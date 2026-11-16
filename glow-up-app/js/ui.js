@@ -60,6 +60,7 @@ export function toast(msg, iconName = 'sparkles') {
     document.body.appendChild(toastWrap);
   }
   const t = h('div', { class: 'toast' }, ic(iconName), h('span', null, msg));
+  while (toastWrap.children.length >= 2) toastWrap.firstChild.remove();
   toastWrap.appendChild(t);
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320); }, 2400);
 }

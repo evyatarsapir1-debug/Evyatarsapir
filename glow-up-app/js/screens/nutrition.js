@@ -28,7 +28,7 @@ function waterCard() {
           h('button', { class: 'icon-btn', 'aria-label': 'פחות כוס', onclick: () => set(Math.max(0, n - 1)) }, ic('minus')),
           h('button', { class: 'icon-btn', 'aria-label': 'עוד כוס', 'data-water-add': '', onclick: () => set(n + 1) }, ic('plus')))),
       h('div', { class: 'water mt' }, Array.from({ length: Math.max(goal, n) }, (_, i) => h('button', { class: i < n ? 'on' : '', 'aria-label': `${i + 1} כוסות`, onclick: () => set(i + 1 === n ? i : i + 1) }))),
-      n >= goal ? h('p', { class: 'small mt', style: { color: 'var(--cyan)' } }, 'הגעת ליעד היום! 💧') : null);
+      n >= goal ? h('p', { class: 'small mt', style: { color: 'var(--cyan)' } }, 'הגעת ליעד היום! 💧') : '');
     function set(v) {
       update((st) => {
         const d = day(key); d.water = v;
