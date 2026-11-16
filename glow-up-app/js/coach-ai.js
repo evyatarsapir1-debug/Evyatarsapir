@@ -5,6 +5,7 @@ import { getState, todayKey } from './store.js';
 import { tasksFor, dayIndexOf, streak, completion, PROGRAMS } from './plan.js';
 import { labelOf, SKIN_TYPES, HAIR_TYPES, STYLES, FITNESS_LEVELS, AREAS, GOALS } from './data/profile.js';
 import { COLOR, CATEGORIES } from './data/style.js';
+import { computeTargets, currentWeight } from './transform.js';
 
 export const MODEL = 'claude-opus-5-5';
 let clientPromise = null;
@@ -36,6 +37,7 @@ const SYSTEM = `את/ה "המאמן של GLOW UP" – מאמן גלואו אפ �
 - להתבסס רק על מידע אמין ומקובל. אם לא בטוח – לומר זאת. לא להמציא עובדות, מחקרים או מוצרים.
 
 כללי בטיחות (חובה):
+- מבוגרים (18+): מותר ורצוי לתת תוכנית שינוי אמיתית – חיטוב בגירעון מתון (עד ~20%, ירידה של 0.5-1% ממשקל הגוף בשבוע), בניית מסה בעודף קטן, חלבון 1.6-2.2 ג׳ לק״ג, עומס הדרגתי באימונים, צעדים. לא לרדת מתחת ל-1500 (גברים) / 1200 (נשים) קלוריות, לא צומות קיצוניים ולא תוספי "שריפת שומן". אם יש במסלול יעדים – להשתמש בהם.
 - להתאים המלצות לגיל. מתחת לגיל 18: אין ספירת קלוריות, אין דיאטות, צומות, "חיטוב" או ירידה במשקל כמטרה; אין תוספי תזונה או אבקות בלי רופא; אימוני כוח עם משקל גוף/משקל קל ודגש על טכניקה.
 - לא לעודד אימון יתר: לפחות יום מנוחה מלא בשבוע, להפסיק בכאב חד.
 - לא להבטיח שינוי מבנה עצמות (לסת, פנים, גובה) בעזרת תרגילים, מיואינג או מכשירים – אין לכך הוכחה.
@@ -74,6 +76,10 @@ function profileContext() {
       `רצף התמדה: ${streak()} ימים. היום הושלמו ${comp.done}/${comp.total} משימות.`,
       `משימות היום: ${tasks}`,
     ]);
+    if (s.transform?.active) {
+      const tg = computeTargets();
+      lines.push(`מסלול שינוי פעיל: מטרה ${s.transform.goal}, גובה ${s.transform.heightCm}, משקל ממוצע ${currentWeight()} ק"ג, יעד יומי: ${tg.kcal ? tg.kcal + ' קלוריות, ' : 'ללא יעד קלוריות (מתחת לגיל 18), '}${tg.protein} ג' חלבון, ${tg.steps} צעדים, ${s.transform.daysPerWeek} אימוני כוח בשבוע (${s.transform.equipment}).`);
+    }
     if (s.wardrobe.length) {
       const items = s.wardrobe.slice(0, 60).map((w) => `${w.name} (${CATEGORIES.find((c) => c.id === w.category)?.label}, ${COLOR[w.color]?.label})`).join('; ');
       lines.push(`פריטים בארון הדיגיטלי: ${items}`);

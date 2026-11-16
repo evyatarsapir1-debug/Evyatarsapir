@@ -245,7 +245,7 @@ await step('coach (built-in guide) answers and is labeled honestly', async () =>
   await page.locator('.msg.bot', { hasText: 'לוק לבית ספר' }).waitFor({ timeout: 4000 });
   await page.locator('.composer textarea').fill('אני רוצה לעשות דיאטה ולרזות');
   await page.locator('.composer .btn').click();
-  await page.locator('.msg.bot', { hasText: 'לא בונה דיאטות' }).waitFor({ timeout: 4000 });
+  await page.locator('.msg.bot', { hasText: 'בלי דיאטה' }).waitFor({ timeout: 4000 });
   await page.locator('.composer textarea').fill('איך אני מתקדם?');
   await page.locator('.composer .btn').click();
   await page.locator('.msg.bot', { hasText: 'סיכום 7 הימים' }).waitFor({ timeout: 4000 });
@@ -317,6 +317,107 @@ await step('no horizontal overflow on phone width', async () => {
     const w = await page.evaluate(() => document.documentElement.scrollWidth);
     if (w > 392) throw new Error(`${r} scrollWidth ${w}`);
   }
+});
+console.log('Stage 8 – transformation program');
+await step('teen: setup without calorie deficit', async () => {
+  await page.goto(BASE + '#/home');
+  await page.locator('[data-tf-cta]').click();
+  await expectText('גרסת נוער');
+  await page.locator('input[type=number]').nth(0).fill('170');
+  await page.locator('input[type=number]').nth(1).fill('60');
+  await expectText('לפי רעב');
+  await page.locator('[data-tf-start]').click();
+  await expectText('היעדים היומיים שלך');
+  await expectText('אין יעד קלוריות');
+  await shot('18-tf-teen');
+});
+await step('transformation tasks appear on home', async () => {
+  await page.goto(BASE + '#/home');
+  await page.locator('.check[data-task="tf-food"]').waitFor();
+  await page.locator('.check[data-task="tf-face"]').waitFor();
+  await expectText('השינוי שלי – היום');
+});
+await step('training session: targets, logging, records', async () => {
+  await page.goto(BASE + '#/transform?tab=train');
+  await expectText('האימון הבא');
+  for (const inp of await page.locator('input[aria-label^="משקל סט"]:not([disabled])').all()) await inp.fill('10');
+  await page.locator('[data-tf-finish]').click();
+  await expectText('השיאים וההתקדמות שלך');
+  await shot('19-tf-train');
+});
+await step('face protocol checklist', async () => {
+  await page.goto(BASE + '#/transform?tab=face');
+  await expectText('מה לא עובד');
+  for (const id of ['bloat', 'skin', 'posture', 'teeth']) await page.locator(`[data-face="${id}"]`).click();
+  await expectText('4/9');
+  await shot('20-tf-face');
+});
+await step('adult: real calorie targets with safety floor', async () => {
+  await page.goto(BASE + '#/settings');
+  await page.locator('.list-row', { hasText: 'גיל' }).first().click();
+  await page.locator('.sheet input[type=range]').fill('28');
+  await page.locator('.sheet').getByRole('button', { name: 'שמירה' }).click();
+  await page.goto(BASE + '#/transform?setup=1');
+  await page.locator('.opt', { hasText: 'חיטוב והורדת שומן' }).click();
+  await page.locator('.input[type=number]').nth(1).fill('85');
+  await page.locator('.chip', { hasText: 'זכר' }).first().click();
+  await page.locator('.input[placeholder="לחישוב לוח זמנים"]').fill('78');
+  await page.locator('[data-tf-start]').click();
+  await expectText('לוח זמנים משוער');
+  const tg = await page.evaluate(async () => (await import('./js/transform.js')).computeTargets());
+  if (!(tg.kcal >= 1500 && tg.kcal <= 3200) || tg.mode !== 'deficit' || tg.protein < 120) throw new Error(JSON.stringify(tg));
+  const floor = await page.evaluate(async () => { const m = await import('./js/transform.js'); return m.computeTargets({ goal: 'cut', sex: 'f', heightCm: 150, startWeight: 45, activity: 'low', weights: [] }, { age: 60 }); });
+  if (floor.kcal < 1200) throw new Error('floor broken ' + floor.kcal);
+  await shot('21-tf-adult');
+});
+await step('progressive overload raises the weight when all sets hit max', async () => {
+  const r = await page.evaluate(async () => {
+    const m = await import('./js/transform.js'); const st = await import('./js/store.js');
+    st.update((s) => { s.transform.lifts['goblet-squat'] = [{ date: '2026-01-01', sets: [{ w: 16, r: 12 }, { w: 16, r: 12 }, { w: 16, r: 12 }] }]; });
+    const up = m.targetFor({ ex: 'goblet-squat', sets: 3, min: 8, max: 12, inc: 2 });
+    st.update((s) => { s.transform.lifts['goblet-squat'].push({ date: '2026-01-03', sets: [{ w: 18, r: 9 }, { w: 18, r: 8 }, { w: 18, r: 8 }] }); });
+    const same = m.targetFor({ ex: 'goblet-squat', sets: 3, min: 8, max: 12, inc: 2 });
+    return { up, same };
+  });
+  if (r.up.weight !== 18 || !r.up.up) throw new Error('no increase ' + JSON.stringify(r.up));
+  if (r.same.weight !== 18 || r.same.reps !== 9) throw new Error('wrong hold ' + JSON.stringify(r.same));
+});
+await step('weekly review auto-adjusts when progress stalls', async () => {
+  const rev = await page.evaluate(async () => {
+    const m = await import('./js/transform.js'); const st = await import('./js/store.js');
+    st.update((s) => { s.transform.adjustments = []; s.transform.weights = Array.from({ length: 14 }, (_, i) => ({ date: st.addDays(st.todayKey(), -i), kg: 85 })); });
+    return m.weeklyReview();
+  });
+  if (!rev || rev.delta !== -150) throw new Error(JSON.stringify(rev));
+  await page.goto(BASE + '#/home');
+  await page.goto(BASE + '#/transform');
+  await page.getByRole('button', { name: /לעדכן \(/ }).click();
+  await expectText('היעדים עודכנו');
+});
+await step('food log + example day reach targets', async () => {
+  await page.goto(BASE + '#/transform?tab=food');
+  const ex = await page.evaluate(async () => { const m = await import('./js/transform.js'); const tg = m.computeTargets(); return { tg, ex: m.exampleDay(0, tg) }; });
+  if (Math.abs(ex.ex.totals.kcal - ex.tg.kcal) > ex.tg.kcal * 0.15) throw new Error('example day off ' + ex.ex.totals.kcal + ' vs ' + ex.tg.kcal);
+  await page.locator('[data-food-add]').click();
+  await page.locator('.sheet .list-row', { hasText: 'חזה עוף' }).getByRole('button', { name: 'הוספה' }).click();
+  await expectText('חזה עוף');
+  await page.getByRole('button', { name: 'ליומן' }).first().click();
+  await expectText('נוספה ליומן');
+  await shot('22-tf-food');
+});
+await step('body metrics: weight, steps, chart', async () => {
+  await page.goto(BASE + '#/transform?tab=body');
+  await page.locator('[data-tf-weight]').fill('84.6');
+  await page.locator('[data-tf-save]').click();
+  await expectText('ממוצע 7 ימים');
+  await page.locator('svg[aria-label="גרף משקל"]').waitFor();
+  await shot('23-tf-body');
+});
+await step('coach knows the transformation plan', async () => {
+  await page.goto(BASE + '#/coach');
+  await page.locator('.composer textarea').fill('איך אני משתנה באמת?');
+  await page.locator('.composer .btn').click();
+  await page.locator('.msg.bot', { hasText: 'המסלול שלך' }).waitFor({ timeout: 4000 });
 });
 await step('delete all data resets to onboarding', async () => {
   await page.goto(BASE + '#/settings');

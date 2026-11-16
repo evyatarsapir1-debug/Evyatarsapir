@@ -1,6 +1,7 @@
 // Personal plan engine: builds today's tasks from the profile + chosen program.
 import { getState, todayKey, addDays, daysBetween, day } from './store.js';
 import { WORKOUTS, levelNum } from './data/fitness.js';
+import { computeTargets, isTrainingDay, nextSession } from './transform.js';
 
 export const PROGRAMS = [
   { length: 7, name: 'תוכנית 7 ימים', sub: 'התנעה: בונים בסיס והרגלים ראשונים', icon: 'zap' },
@@ -149,7 +150,9 @@ export function tasksFor(key = todayKey()) {
     if (idx % washEvery(profile) === 0) push('hair-wash', { why: 'חפיפה בתדירות שמתאימה לסוג השיער שלך שומרת על קרקפת בריאה בלי לייבש.', steps: ['להרטיב היטב במים פושרים.', 'שמפו רק על הקרקפת – לעסות עם קצות האצבעות (לא ציפורניים).', 'לשטוף ולמרוח מרכך על האורכים והקצוות בלבד.', 'לשטוף ולייבש בעדינות עם מגבת – בלי לשפשף חזק.'] });
     if ((program.length >= 30 && (idx === 9 || idx % 35 === 9)) || (program.length === 7 && idx === 4)) push('hair-cut');
   }
-  if (areas.has('fitness')) {
+  const tfOn = !!s.transform?.active;
+  if (tfOn) transformTasks(s, key, idx, out);
+  if (areas.has('fitness') && !tfOn) {
     const w = workoutFor(profile, program, idx);
     if (w) {
       const minutes = Math.min(w.minutes, Math.max(12, Math.round(budget * 0.6)));
@@ -196,12 +199,39 @@ export function tasksFor(key = todayKey()) {
   const sorted = [...list].sort((a, b) => b.prio - a.prio);
   for (const t of sorted) {
     if (total() <= budget * 1.15) break;
-    if (t.area === 'core' && t.prio <= 2) continue;
+    if ((t.area === 'core' && t.prio <= 2) || t.area === 'transform') continue;
     if (t.custom) continue;
     if (t.id === 'workout' && budget >= 15) continue;
     list = list.filter((x) => x !== t);
   }
   return list;
+}
+
+function transformTasks(s, key, idx, out) {
+  const tg = computeTargets();
+  const adult = s.profile.age >= 18;
+  const t = s.transform;
+  const base = { area: 'transform', prio: 0 };
+  out.push({ ...base, id: 'tf-food', icon: 'apple', minutes: 5,
+    title: tg.kcal ? `אוכל: ${tg.kcal.toLocaleString('he-IL')} קק״ל · ${tg.protein}ג׳ חלבון` : `חלבון בכל ארוחה (~${tg.protein}ג׳ ביום)`,
+    why: tg.kcal ? 'היעד הזה מחושב לגוף שלך. לעמוד בו רוב הימים = השינוי קורה. יום אחד חריג לא משנה כלום.' : 'בגילך אוכלים לפי רעב – הדגש הוא על חלבון שבונה שריר ועל אוכל אמיתי.',
+    steps: tg.kcal ? ['לרשום את מה שאוכלים בלשונית "אוכל" (בערך זה מספיק).', 'לבנות כל ארוחה סביב מקור חלבון.', 'אפשר להוסיף ארוחה שלמה מהתפריט לדוגמה בלחיצה.', 'המשימה מסומנת אוטומטית כשמגיעים ליעד.'] : ['חלבון בכל ארוחה: ביצים, יוגורט, עוף, טונה, קטניות, טופו.', '3 ארוחות + 1-2 נשנושים, בלי לדלג.', 'להחליף משקאות ממותקים במים.'],
+    link: '#/transform?tab=food' });
+  if (isTrainingDay(key)) {
+    const ns = nextSession();
+    out.push({ ...base, id: 'tf-train', icon: 'dumbbell', minutes: 45, title: `אימון כוח: ${ns.name}`,
+      why: 'אימון עם עומס הדרגתי הוא מה שבונה שריר ומשנה את מבנה הגוף. המערכת נותנת לכל תרגיל משקל וחזרות מדויקים לפי האימון הקודם.',
+      steps: ['חימום 5 דקות.', 'לבצע כל תרגיל לפי היעד שמופיע (משקל × חזרות).', 'לרשום מה בפועל עשית – ככה מחושב היעד הבא.', 'מנוחה 2-3 דקות בתרגילים הכבדים.'], link: '#/transform?tab=train' });
+  }
+  out.push({ ...base, id: 'tf-steps', icon: 'zap', minutes: 0, title: `${tg.steps.toLocaleString('he-IL')} צעדים`,
+    why: 'צעדים הם הדרך הכי פשוטה להגדיל הוצאה קלורית בלי לפגוע בהתאוששות מאימונים.', steps: ['הליכה של 20-30 דקות אחרי ארוחה.', 'מדרגות במקום מעלית.', 'לעדכן את מספר הצעדים מהטלפון בלשונית "מדדים".'], link: '#/transform?tab=body' });
+  if (t.weighIns) out.push({ ...base, id: 'tf-weigh', icon: 'chart', minutes: 1, title: 'שקילת בוקר',
+    why: 'שקילה יומית נותנת ממוצע שבועי אמין – וכך המערכת יודעת מתי לשנות את היעדים.', steps: ['בבוקר, אחרי שירותים, לפני אוכל ושתייה.', 'לרשום בלשונית "מדדים".', 'לא להתרגש מקפיצות יומיות – מים, מלח ופחמימות משנים את המשקל.'], link: '#/transform?tab=body' });
+  out.push({ ...base, id: 'tf-face', icon: 'face', minutes: 8, title: 'פרוטוקול פנים יומי',
+    why: 'נפיחות, עור, שיער ויציבה – אלה הדברים שמשנים את מראה הפנים מיום ליום.', steps: ['בוקר: מים קרים, ניקוי, לחות, SPF.', '2.5-3 ליטר מים, מלח במידה.', 'הכנסת סנטר 3×10.', 'ערב: ניקוי + טיפוח, שינה בזמן.', 'לסמן לפחות 4 פעולות בלשונית "פנים".'], link: '#/transform?tab=face' });
+  const dsStart = ((Math.round((Date.parse(key) - Date.parse(t.startDate)) / 86400000) % 7) + 7) % 7;
+  if (dsStart === 6) out.push({ ...base, id: 'tf-checkin', icon: 'camera', minutes: 5, title: 'צ׳ק-אין שבועי: מותניים + תמונה',
+    why: 'מדידה ותמונה פעם בשבוע מראות את השינוי האמיתי, גם כשהמשקל לא זז.', steps: ['למדוד היקף מותניים בגובה הטבור.', 'תמונה מלפנים ומהצד – אותה תאורה ותנוחה.', 'לבדוק את "הבדיקה השבועית" בלשונית "מסלול".'], link: '#/transform?tab=body' });
 }
 
 export function taskLibrary() {

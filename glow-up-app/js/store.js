@@ -40,6 +40,7 @@ export function defaultState() {
     coach: { messages: [], provider: 'local', apiKey: '', shareProfile: true, model: 'claude-opus-5-5' },
     settings: { theme: 'dark', motion: 'auto', notifications: false, units: 'metric' },
     achievementsSeen: [],
+    transform: null,          // transformation program (see transform.js)
   };
 }
 

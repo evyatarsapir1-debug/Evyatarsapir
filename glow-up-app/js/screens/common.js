@@ -20,7 +20,7 @@ export function section(title, linkText, onLink) {
   return h('div', { class: 'section' }, h('h2', null, title), linkText ? h('button', { class: 'link', onclick: onLink }, linkText) : null);
 }
 
-const AREA_TAG = { skin: ['טיפוח', 'purple'], hair: ['שיער', 'cyan'], fitness: ['כושר', 'lime'], posture: ['יציבה', 'lime'], nutrition: ['תזונה', 'amber'], style: ['סטייל', 'pink'], sleep: ['שינה', 'cyan'], hygiene: ['רעננות', 'cyan'], core: ['בסיס', ''], custom: ['אישי', 'pink'] };
+const AREA_TAG = { skin: ['טיפוח', 'purple'], hair: ['שיער', 'cyan'], fitness: ['כושר', 'lime'], posture: ['יציבה', 'lime'], nutrition: ['תזונה', 'amber'], style: ['סטייל', 'pink'], sleep: ['שינה', 'cyan'], hygiene: ['רעננות', 'cyan'], core: ['בסיס', ''], custom: ['אישי', 'pink'], transform: ['שינוי', 'pink'] };
 
 /** A checkable task row. onChange(newValue) is called after state update. */
 export function taskItem(task, { key = todayKey(), onChange } = {}) {
@@ -81,7 +81,7 @@ export function openTask(task, { key = todayKey(), onChange } = {}) {
 }
 
 export function areaColor(area) {
-  return { skin: '#c084fc', hair: '#22d3ee', fitness: '#a3e635', nutrition: '#fbbf24', style: '#f472b6', sleep: '#60a5fa', posture: '#34d399', hygiene: '#67e8f9', core: '#a78bfa' }[area] || '#a78bfa';
+  return { skin: '#c084fc', hair: '#22d3ee', fitness: '#a3e635', nutrition: '#fbbf24', style: '#f472b6', sleep: '#60a5fa', posture: '#34d399', hygiene: '#67e8f9', core: '#a78bfa', transform: '#f472b6' }[area] || '#a78bfa';
 }
 
 export function fmtDate(key, opts = { weekday: 'short', day: 'numeric', month: 'numeric' }) {

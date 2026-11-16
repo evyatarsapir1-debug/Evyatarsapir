@@ -18,6 +18,7 @@ import plans from './screens/plans.js';
 import products from './screens/products.js';
 import settings from './screens/settings.js';
 import guide, { learn } from './screens/guide.js';
+import transform from './screens/transform.js';
 
 const ROUTES = {
   home: { render: home, tab: 'home' },
@@ -38,6 +39,7 @@ const ROUTES = {
   plans: { render: plans, tab: 'home' },
   products: { render: products, tab: 'home' },
   settings: { render: settings, tab: null },
+  transform: { render: transform, tab: 'home' },
 };
 
 const TABS = [

@@ -3,9 +3,12 @@ import { h, ic, ring } from '../ui.js';
 import { getState, todayKey, addDays, storedImg } from '../store.js';
 import { tasksFor, completion, streak, phaseOf, dayIndexOf, PROGRAMS } from '../plan.js';
 import { TIPS } from '../data/tips.js';
+import { computeTargets, foodTotals, currentWeight, isTrainingDay, nextSession } from '../transform.js';
+import { diffText } from './transform.js';
 import { taskItem, section, say, fmtDate } from './common.js';
 
 const SHORTCUTS = [
+  { label: 'השינוי שלי', icon: 'flame', hash: '#/transform', color: '#fb7185' },
   { label: 'טיפוח פנים', icon: 'sparkles', hash: '#/care', color: '#c084fc' },
   { label: 'שיער', icon: 'scissors', hash: '#/hair', color: '#22d3ee' },
   { label: 'כושר', icon: 'dumbbell', hash: '#/fitness', color: '#a3e635' },
@@ -89,6 +92,8 @@ export default function home(ctx) {
         heroRingSlot)));
   }
 
+  root.append(transformCard(ctx));
+
   // tasks
   root.append(section('המשימות להיום', 'כל התוכנית', () => ctx.go('#/plans')));
   if (tasks.length) root.append(listWrap);
@@ -141,4 +146,31 @@ export function weekChart() {
   return h('div', null,
     h('div', { class: 'row between mb' }, h('b', null, `${done} משימות הושלמו השבוע`), h('span', { class: 'tag' }, total ? Math.round((done / total) * 100) + '%' : '0%')),
     h('div', { class: 'week' }, cols));
+}
+
+function transformCard(ctx) {
+  const s = getState();
+  const t = s.transform;
+  if (!t?.active) {
+    return h('button', { class: 'card tap glow', style: { marginTop: '12px' }, 'data-tf-cta': '', onclick: () => ctx.go('#/transform') },
+      h('div', { class: 'row' }, h('span', { class: 'ibox', style: { color: '#fb7185', background: 'rgba(251,113,133,.14)' } }, ic('flame')),
+        h('div', { class: 'grow' }, h('b', null, 'מסלול שינוי אמיתי'),
+          h('div', { class: 'small muted' }, s.profile.age >= 18 ? 'חיטוב, בניית שריר ושדרוג פנים – יעדים מחושבים, אימון שמתקדם מעצמו ובדיקה שבועית' : 'בניית שריר, כוח ושדרוג מראה – תוכנית אימון שמתקדמת מעצמה ופרוטוקול פנים')),
+        ic('back')));
+  }
+  const tg = computeTargets();
+  const ft = foodTotals();
+  const steps = s.days[todayKey()]?.steps || 0;
+  const cw = currentWeight();
+  const diff = cw && t.startWeight ? Math.round((cw - t.startWeight) * 10) / 10 : null;
+  const mini = (label, v, target, color) => h('div', { class: 'stat', style: { padding: '10px' } },
+    h('div', { class: 'tiny muted' }, label), h('div', { style: { fontWeight: 800, fontSize: '16px' } }, v),
+    h('div', { class: 'bar', style: { height: '5px', marginTop: '6px' } }, h('i', { style: { width: Math.min(100, Math.round((target ? parseFloat(String(v).replace(/[^\d.]/g, '')) / target : 0) * 100)) + '%', background: color } })));
+  return h('div', { class: 'card', style: { marginTop: '12px' } },
+    h('div', { class: 'row between mb' }, h('b', null, 'השינוי שלי – היום'), diff != null ? h('span', { class: 'tag ' + (diff < 0 ? 'lime' : diff > 0 ? 'amber' : '') }, diffText(diff, 'ק״ג')) : null),
+    h('div', { class: 'grid3' },
+      tg.kcal ? mini('קלוריות', Math.round(ft.kcal), tg.kcal, '#c084fc') : mini('חלבון', Math.round(ft.p), tg.protein, '#f472b6'),
+      tg.kcal ? mini('חלבון', Math.round(ft.p), tg.protein, '#f472b6') : mini('צעדים', steps, tg.steps, '#22d3ee'),
+      tg.kcal ? mini('צעדים', steps, tg.steps, '#22d3ee') : h('div', { class: 'stat', style: { padding: '10px' } }, h('div', { class: 'tiny muted' }, 'אימון'), h('div', { style: { fontWeight: 700, fontSize: '13px' } }, isTrainingDay() ? nextSession().name : 'מנוחה'))),
+    h('button', { class: 'btn sm block mt', onclick: () => ctx.go('#/transform') }, ic('flame'), 'למסלול המלא'));
 }
