@@ -5,6 +5,7 @@ import { analyzeHaircut, CRITERIA } from './analysis.js';
 import { targetLength, haircutSteps } from '../data/haircuts.js';
 import { planDemo } from './demo.js';
 import { resolveConstraints, clientFeedback } from '../data/clients.js';
+import { openClientChat } from './clientChat.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -66,6 +67,7 @@ export const session = {
     $('btnHygiene').textContent = '🧴 חיטוי כלים';
     $('btnFinish').classList.toggle('hidden', !c.spec);
     $('btnRequest').classList.toggle('hidden', !c.client);
+    this._chat = [];
     $('btnCheck').classList.toggle('hidden', !c.task?.check);
     $('stepsList').classList.add('hidden');
     $('btnDemo').textContent = '▶ הדגמה';
@@ -239,7 +241,7 @@ export const session = {
     $('btnSteps').addEventListener('click', () => $('stepsList').classList.toggle('hidden'));
     $('taskSub').addEventListener('click', () => $('taskSub').classList.toggle('expanded'));
     $('btnHygiene').addEventListener('click', () => this.disinfect());
-    $('btnRequest').addEventListener('click', () => ctx.showRequest?.(this.cfg.client, true));
+    $('btnRequest').addEventListener('click', () => openClientChat(this.cfg.client));
     document.querySelectorAll('[data-cmp]').forEach((b) => b.addEventListener('click', () => this._setCompare(b.dataset.cmp)));
     $('btnContinue').addEventListener('click', () => { $('resultModal').classList.add('hidden'); ctx.toast('המשך לתקן. כשתסיים לחץ שוב "סיום ובדיקה".'); });
     $('btnCompare').addEventListener('click', () => { $('resultModal').classList.add('hidden'); this._setCompare('diff'); ctx.cam.setView('back'); ctx.toast('ירוק = אורך נכון, אדום = ארוך מדי, כחול = קצר מדי. לחץ "מקצועי" לראות את התוצאה הרצויה.', 4500); });

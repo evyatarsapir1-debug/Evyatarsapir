@@ -375,6 +375,7 @@ function padSet(on) {
   document.body.classList.toggle('pad-on', on);
   $('padWrap').classList.toggle('hidden', !on);
   $('aimCursor').classList.toggle('hidden', !on);
+  $('aimJoy').classList.toggle('hidden', !on);
   padStop();
   if (on) padCenter(); else state.hover = null;
   const s = progress.data.settings ||= {}; s.pad = on; progress.save();
@@ -431,9 +432,81 @@ function bindPad() {
   });
   const endDrag = (e) => { if (pad.drag?.id === e.pointerId) { pad.drag = null; tp.classList.remove('active'); padStop(); } }; // thumb up = machine off
   tp.addEventListener('pointerup', endDrag); tp.addEventListener('pointercancel', endDrag);
+  // small joystick on the other side: moves the sight WITHOUT cutting (the machine stays off)
+  const aj = $('aimJoy'), ak = $('aimJoyKnob');
+  const setAj = (e) => {
+    const r = aj.getBoundingClientRect();
+    let x = (e.clientX - (r.left + r.width / 2)) / (r.width / 2), y = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+    const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; }
+    pad.jx = x; pad.jy = y; ak.style.transform = `translate(${x * 26}px, ${y * 26}px)`;
+  };
+  aj.addEventListener('pointerdown', (e) => { e.preventDefault(); aj.setPointerCapture(e.pointerId); pad.jid = e.pointerId; aj.classList.add('active'); setAj(e); });
+  aj.addEventListener('pointermove', (e) => { if (pad.jid === e.pointerId) setAj(e); });
+  const endAj = (e) => { if (pad.jid !== e.pointerId) return; pad.jid = null; pad.jx = pad.jy = 0; ak.style.transform = ''; aj.classList.remove('active'); };
+  aj.addEventListener('pointerup', endAj); aj.addEventListener('pointercancel', endAj);
   $('btnPad').addEventListener('click', () => { padSet(!pad.on); toast(pad.on ? '🎯 משטח כיוון: שים אצבע על המשטח — המכונה עובדת בכוונת. הרם — היא נעצרת.' : 'מצב רגיל: גוררים ישר על הראש.', 4000); });
 }
-function padFrame() {
+// 3D blade marker on the head (exact width of the cutting edge) + line-up guide for the trimmer
+const _mk = { ax: new THREE.Vector3(), n: new THREE.Vector3(), y: new THREE.Vector3(), m: new THREE.Matrix4(), up: new THREE.Vector3(0, 1, 0) };
+let bladeMark = null, lineGuide = null;
+function buildMarkers() {
+  const g = new THREE.Group();
+  const fill = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: '#ffd36a', transparent: true, opacity: 0.22, depthWrite: false, depthTest: false }));
+  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(1, 1)), new THREE.LineBasicMaterial({ color: '#ffd36a', transparent: true, opacity: 0.95, depthTest: false }));
+  fill.renderOrder = edge.renderOrder = 7;
+  g.add(fill, edge); g.userData = { fill, edge }; g.visible = false; g.renderOrder = 5;
+  scene.add(g);
+  bladeMark = g;
+}
+/** Dashed gold line where a clean line-up (מסגרת) goes: forehead, temples, sideburns, around the ears, nape. */
+function buildLineGuide() {
+  if (lineGuide) { lineGuide.parent?.remove(lineGuide); lineGuide.geometry.dispose(); }
+  const pts = [];
+  for (let k = 0; k <= 180; k++) {
+    const az = -Math.PI + (k / 180) * Math.PI * 2;
+    const y = hairlineY(Math.abs(az)) + 0.02, r = Math.sqrt(Math.max(0, 1 - y * y));
+    const d = new THREE.Vector3(r * Math.sin(az), y, r * Math.cos(az));
+    const kk = 1 / Math.hypot(d.x / RADII.x, d.y / RADII.y, d.z / RADII.z);
+    pts.push(d.multiplyScalar(kk * 1.015));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  lineGuide = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: '#ffd36a', dashSize: 0.006, gapSize: 0.004, transparent: true, opacity: 0.95 }));
+  lineGuide.computeLineDistances();
+  // a faint copy drawn through the hair, so the line shows even under long strands
+  const ghost = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: '#ffd36a', dashSize: 0.006, gapSize: 0.004, transparent: true, opacity: 0.4, depthTest: false }));
+  ghost.computeLineDistances(); ghost.renderOrder = 6;
+  lineGuide.add(ghost);
+  lineGuide.visible = false;
+  client.head.add(lineGuide);
+}
+function markersFrame(dt) {
+  if (!bladeMark) buildMarkers();
+  if (!lineGuide || lineGuide.parent !== client.head) buildLineGuide();
+  // line-up guide: with the trimmer in hand (the tool for frames)
+  const showLine = playing() && tools.active === 'trimmer' && hair.display !== 'pro' && !demo.active;
+  if (showLine && !lineGuide.visible && !progress.data.seenLineGuide) { progress.data.seenLineGuide = true; progress.save(); toast('✏️ הקו המקווקו הזהב = קו המסגרת. העבר את הטרימר לאורך הקו (עורף, מסביב לאוזניים ופאות) — מה שמתחת לקו יוצא נקי.', 5200); }
+  lineGuide.visible = showLine;
+  // blade marker at the sight (touchpad) or under the mouse
+  const h = state.hover;
+  const show = playing() && h && !h.body && h.normalWorld && tools.active !== 'duster' && (pad.on || !isMobile);
+  bladeMark.visible = !!show;
+  if (!show) return;
+  const t = TOOLS[tools.active];
+  _mk.n.copy(h.normalWorld);
+  _mk.ax.crossVectors(_mk.up, _mk.n); if (_mk.ax.lengthSq() < 1e-4) _mk.ax.set(1, 0, 0); _mk.ax.normalize();
+  _mk.y.crossVectors(_mk.n, _mk.ax);
+  _mk.m.makeBasis(_mk.ax, _mk.y, _mk.n);
+  bladeMark.quaternion.setFromRotationMatrix(_mk.m);
+  bladeMark.position.copy(h.world).addScaledVector(_mk.n, 0.003);
+  bladeMark.scale.set(t.radius * 2, Math.max(0.004, (t.depth || t.radius) * 2), 1);
+  const cutting = !!state.stroke;
+  bladeMark.userData.fill.material.color.set(cutting ? '#ff6b5a' : '#ffd36a');
+  bladeMark.userData.edge.material.color.set(cutting ? '#ff6b5a' : '#ffd36a');
+  bladeMark.userData.fill.material.opacity = cutting ? 0.32 : 0.2;
+}
+
+function padFrame(dt = 1 / 60) {
+  if (pad.on && pad.jid != null && playing()) padMoveAim((pad.jx || 0) * 340 * dt / pad.sens, (pad.jy || 0) * 340 * dt / pad.sens);
   if (!pad.on || !playing()) { if (pad.on) $('aimCursor').classList.add('hidden'); return; }
   const el = $('aimCursor');
   el.classList.remove('hidden');
@@ -663,7 +736,8 @@ function frame(dt, render = true) {
     client.head.rotation.x = m.baseX - Math.sin(u * Math.PI) * 0.08;
     if (u >= 1) { client.head.rotation.y = m.base; client.head.rotation.x = m.baseX; state.mirror = null; m.cb(); }
   }
-  padFrame();
+  padFrame(dt);
+  markersFrame(dt);
   let h = state.hover;
   if (demo.active) {
     const local = demo.update(dt);
@@ -674,6 +748,7 @@ function frame(dt, render = true) {
     }
     session.onDemoProgress?.(demo.progress);
   }
+  tools.setGhost(pad.on && !!h && playing() && !demo.active);
   if (h && playing()) tools.placeOnHead(h.world, h.normalWorld, dt);
   else tools.rest(shop.toolRest, dt);
   tools.running = !!state.stroke || !!h || !!state.dusting;

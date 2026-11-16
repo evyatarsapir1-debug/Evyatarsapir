@@ -142,11 +142,10 @@ export class ToolRig {
     // thumb along the side, pointing toward the blade
     const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.0095, 0.05, 4, 8), glove);
     thumb.position.set(-r - 0.006, y - 0.045, 0.008); thumb.rotation.z = 0.25; h.add(thumb);
-    // wrist and forearm leaving the frame
-    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.03, 0.07, 16), glove);
-    wrist.position.set(0, y + 0.07, r + 0.03); wrist.rotation.x = 0.35; h.add(wrist);
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.04, 0.32, 16), sleeve);
-    arm.position.set(0, y + 0.25, r + 0.1); arm.rotation.x = 0.35; h.add(arm);
+    // short wrist cuff only (no forearm: it would hide the head from the camera)
+    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.027, 0.04, 16), glove);
+    wrist.position.set(0, y + 0.055, r + 0.024); wrist.rotation.x = 0.35; h.add(wrist);
+    void sleeve;
     h.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     return h;
   }
@@ -337,6 +336,21 @@ export class ToolRig {
     _q.setFromRotationMatrix(_m);
     _p.copy(point).addScaledVector(normal, this.standoff);
     this._approach(_p, _q, dt, 22);
+  }
+
+  /** Semi-transparent tool + hand (touchpad mode): you see the hair under the blade. */
+  setGhost(on) {
+    if (this._ghost === on) return;
+    this._ghost = on;
+    this.root.traverse((o) => {
+      if (!o.isMesh) return;
+      const m = o.material;
+      if (m.userData.baseOpacity == null) m.userData.baseOpacity = m.opacity, m.userData.baseTransparent = m.transparent;
+      m.transparent = on || m.userData.baseTransparent;
+      m.opacity = on ? Math.min(m.userData.baseOpacity, 0.45) : m.userData.baseOpacity;
+      m.depthWrite = !on;
+      m.needsUpdate = true;
+    });
   }
 
   rest(pos, dt) {
