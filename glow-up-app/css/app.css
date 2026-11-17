@@ -627,3 +627,11 @@ table.tbl th { color: var(--text-3); font-weight: 500; font-size: 12.5px; }
 .match-chip { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 12px; background: var(--bg-2); border: 1px solid var(--border); min-width: 0; }
 .match-chip > span { flex-shrink: 0; display: grid; }
 .photo-slot img { display: block; }
+
+/* outfit on a mannequin + exact color list */
+.look-grid { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 12px; align-items: center; }
+.studio { border-radius: 16px; display: grid; place-items: center; padding: 8px 0 2px; background: radial-gradient(120% 80% at 50% 30%, #f7f6f9 0%, #e4e2e8 60%, #d3d0d8 100%); box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+.studio svg { display: block; max-width: 100%; height: auto; }
+.look-lines { min-width: 0; }
+.look-line { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.look-line:last-child { border-bottom: 0; }

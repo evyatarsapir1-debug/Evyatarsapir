@@ -3,7 +3,8 @@
 import { h, ic, toast, note, emptyState, pickImage, toggle, rich } from '../ui.js';
 import { getState, update, uid, images } from '../store.js';
 import { COLOR, COLORS, colorsWork } from '../data/style.js';
-import { GARMENTS, G, buildOutfits, matchFor, parseRequest, garmentSVG, OCC_LABEL, SLOT_LABEL, short, garmentOfItem, pairProblem } from '../data/stylist.js';
+import { GARMENTS, G, buildOutfits, matchFor, parseRequest, garmentSVG, OCC_LABEL, SLOT_LABEL, short, garmentOfItem, pairProblem, pieceName, colorName, fabricHex } from '../data/stylist.js';
+import { outfitFigureSVG } from '../outfit-figure.js';
 import { aiOn, visionOn, aiErrorText, hasSample } from '../ai.js';
 import { aiStylist, aiStylistPhotos } from '../stylist-ai.js';
 import { section } from './common.js';
@@ -116,7 +117,7 @@ function dressMode(ctx) {
     ctl.querySelectorAll('.chips')[1]?.querySelectorAll('.chip').forEach((b, i) => b.classList.toggle('on', STYLE_OPTS[i][0] === req.style));
     const outfits = buildOutfits({ occasion: req.occasion, style: req.style, plain: req.plain, anchor: req.anchor || null, anchorColor: req.anchorColor || null, fem: fem(), prefer: prefer(), owned: ownedGarments(), count: 3, seed: req.seed * 7919 });
     results.replaceChildren();
-    const head = [OCC_LABEL[req.occasion], req.style && STYLE_OPTS.find((x) => x[0] === req.style)?.[1], req.plain && 'חולצות חלקות', req.anchor && `עם ${short(G[req.anchor].label)}${req.anchorColor ? ' ' + COLOR[req.anchorColor].label : ''}`].filter(Boolean).join(' · ');
+    const head = [OCC_LABEL[req.occasion], req.style && STYLE_OPTS.find((x) => x[0] === req.style)?.[1], req.plain && 'חולצות חלקות', req.anchor && `עם ${short(G[req.anchor].label)}${req.anchorColor ? ' ' + colorName(req.anchor, req.anchorColor) : ''}`].filter(Boolean).join(' · ');
     results.append(section(`הלוקים שלך · ${head}`));
     if (!outfits.length) results.append(h('div', { class: 'card' }, emptyState('shirt', 'לא מצאתי לוק שעומד בכל הדרישות. נסו להסיר את הפריט שבחרתם או לבחור אירוע אחר.')));
     outfits.forEach((o, i) => results.append(outfitCard(o, ctx, i)));
@@ -160,7 +161,7 @@ function matchMode(ctx) {
   const card = matchCard(m, ctx);
   wrap.append(card);
   const outfits = buildOutfits({ occasion: g.f[0] >= 3 ? 'event' : g.f[1] <= 1 ? 'daily' : 'out', anchor: g.id, anchorColor: col, fem: fem(), prefer: prefer(), count: 3, seed: (req.seed++) * 31 + g.id.length });
-  wrap.append(section(`3 לוקים עם ${short(g.label)} ${COLOR[col]?.label || ''}`));
+  wrap.append(section(`3 לוקים עם ${short(g.label)} ${colorName(g.id, col)}`));
   outfits.forEach((o, i) => wrap.append(outfitCard(o, ctx, i)));
   wrap.append(h('button', { class: 'btn block mt', onclick: () => ctx.refresh() }, ic('refresh'), 'לוקים אחרים'));
   wrap.append(picker);
@@ -170,7 +171,7 @@ function matchMode(ctx) {
 
 function matchCard(m, ctx, compact = false) {
   if (!m) return h('div');
-  const name = `${short(m.anchor.label)}${m.color ? ' ' + COLOR[m.color].label : ''}`;
+  const name = `${short(m.anchor.label)}${m.color ? ' ' + colorName(m.anchor.id, m.color) : ''}`;
   const card = h('div', { class: 'card', style: { marginTop: '12px' }, 'data-match': m.anchor.id },
     h('div', { class: 'row' }, h('span', { html: garmentSVG(m.anchor.id, m.color, 54) }), h('div', { class: 'grow' }, h('b', null, `מה הולך עם ${name}?`), m.tip ? h('div', { class: 'small muted' }, m.tip) : null)));
   card.append(h('h3', { style: { margin: '14px 0 6px', color: 'var(--lime)' } }, '✓ כן יתאים'));
@@ -179,7 +180,8 @@ function matchCard(m, ctx, compact = false) {
     if (!list.length) continue;
     card.append(h('div', { class: 'tiny muted', style: { marginTop: '8px' } }, SLOT_LABEL[slot]),
       h('div', { class: 'match-list' }, list.map((x) => h('div', { class: 'match-chip' }, h('span', { html: garmentSVG(x.id, x.colors[0], 30) }), h('div', null, h('div', { class: 'small' }, short(x.label)),
-        h('div', { class: 'row', style: { gap: '3px', marginTop: '3px' } }, x.colors.map((c) => h('span', { class: 'swatch', title: COLOR[c]?.label, style: { background: COLOR[c]?.hex, width: '11px', height: '11px' } }))))))));
+        h('div', { class: 'row', style: { gap: '3px', marginTop: '3px' } }, x.colors.map((c) => h('span', { class: 'swatch', title: colorName(x.id, c), style: { background: fabricHex(x.id, c), width: '11px', height: '11px' } }))),
+        h('div', { class: 'tiny muted', style: { marginTop: '2px' } }, x.colors.slice(0, 3).map((c) => colorName(x.id, c).replace(/ \(.*\)/, '')).join(' / ')))))));
   }
   if (m.bad.length) {
     card.append(h('h3', { style: { margin: '16px 0 6px', color: 'var(--pink)' } }, '✗ לא יתאים'));
@@ -201,16 +203,33 @@ function pieceTile(p) {
 }
 function guessShape(p) { return { top: 'tee', layer: 'hoodie', bottom: 'slim-jeans', shoes: 'white-sneakers', acc: 'watch' }[p.slot] || 'tee'; }
 
+/** Display name with the exact color ("ג׳ינס סלים בצבע כחול כהה (שטיפה כהה)"). */
+function nameOf(p) {
+  if (!p.id) { const cn = colorName('', p.color); return p.label.includes(cn.split(' ')[0].slice(0, 3)) ? p.label : `${p.label} בצבע ${cn}`; }
+  return pieceName(p);
+}
+const figId = (p) => p.id || guessShape(p);
+
+/** Mannequin figure + the exact list of pieces. Used for outfits and saved looks. */
+export function lookVisual(pieces, { width = 128 } = {}) {
+  const fig = outfitFigureSVG(pieces.map((p) => ({ ...p, id: figId(p) })), { width });
+  return h('div', { class: 'look-grid' },
+    h('div', { class: 'studio', html: fig }),
+    h('div', { class: 'look-lines' }, pieces.map((p) => h('div', { class: 'look-line' },
+      h('span', { class: 'swatch', title: colorName(p.id, p.color), style: { background: p.color === 'multi' ? COLOR.multi.hex : fabricHex(figId(p), p.color), width: '16px', height: '16px', flexShrink: 0, marginTop: '2px' } }),
+      h('div', { class: 'grow', style: { minWidth: 0 } }, h('div', { class: 'tiny muted' }, SLOT_LABEL[p.slot] || ''), h('div', { class: 'small', style: { fontWeight: 600 } }, nameOf(p)),
+        p.fromPhoto ? h('span', { class: 'tag cyan', style: { marginTop: '3px' } }, `מתמונה ${p.fromPhoto}`) : null)))));
+}
+
 function outfitCard(o, ctx, i) {
   const missing = () => {
     const owned = new Set(ownedGarments());
     return o.pieces.filter((p) => p.slot !== 'acc' && !(p.id && owned.has(p.id)) && !p.fromPhoto);
   };
   return h('div', { class: 'card outfit-card', style: { marginTop: '12px' } },
-    h('div', { class: 'row between mb' }, h('b', null, o.name || `לוק ${i + 1}`), o.score ? h('span', { class: 'tag ' + (o.score >= 75 ? 'lime' : 'purple') }, 'שילוב צבעים טוב') : null),
-    h('div', { class: 'pieces' }, o.pieces.map(pieceTile)),
-    h('div', { class: 'small mt', style: { lineHeight: 1.6 } }, o.pieces.map((p) => `${short(p.label)} ${COLOR[p.color]?.label || ''}`).join(' + ')),
-    o.why?.length ? h('ul', { class: 'dots small' }, o.why.map((r) => h('li', null, r))) : null,
+    h('div', { class: 'row between mb' }, h('b', null, o.name || `לוק ${i + 1}`), o.curated ? h('span', { class: 'tag lime' }, 'לוק מוכח') : o.score ? h('span', { class: 'tag purple' }, 'צבעים מתואמים') : null),
+    lookVisual(o.pieces),
+    o.why?.length ? h('ul', { class: 'dots small', style: { marginTop: '10px' } }, o.why.map((r) => h('li', null, r))) : null,
     h('div', { class: 'row mt', style: { flexWrap: 'wrap' } },
       h('button', { class: 'btn sm', 'data-save-look': '', onclick: () => {
         update((s) => { s.looks.unshift({ id: uid(), name: o.name || `לוק ${OCC_LABEL[req.occasion] || ''}`, itemIds: [], pieces: o.pieces.map(({ id, label, slot, color }) => ({ id, label, slot, color })), occasion: req.occasion, created: new Date().toISOString().slice(0, 10) }); });
@@ -219,7 +238,7 @@ function outfitCard(o, ctx, i) {
       h('button', { class: 'btn sm', onclick: () => {
         const need = missing();
         if (!need.length) return toast('יש לך כבר הכל בארון 🔥', 'check');
-        update((s) => { s.styleShop = s.styleShop || []; need.forEach((p) => { if (!s.styleShop.some((x) => x.name === `${short(p.label)} ${COLOR[p.color]?.label || ''}`.trim() && !x.bought)) s.styleShop.push({ id: uid(), name: `${short(p.label)} ${COLOR[p.color]?.label || ''}`.trim(), category: p.slot === 'acc' ? 'acc' : p.slot, color: p.color, why: 'מהלוק שהסטייליסט הציע', price: '', bought: false }); }); });
+        update((s) => { s.styleShop = s.styleShop || []; need.forEach((p) => { const nm = nameOf(p); if (!s.styleShop.some((x) => x.name === nm && !x.bought)) s.styleShop.push({ id: uid(), name: nm, category: p.slot === 'acc' ? 'acc' : p.slot, color: p.color, why: 'מהלוק שהסטייליסט הציע', price: '', bought: false }); }); });
         toast(`${need.length} פריטים נוספו לרשימת הקניות`, 'bag');
       } }, ic('bag'), 'מה חסר לי → לקניות')));
 }

@@ -28,7 +28,7 @@ export const COLORS = [
   { id: 'navy', label: 'נייבי', hex: '#1e2a4a', neutral: true, family: 'blue' },
   { id: 'beige', label: 'בז׳', hex: '#d8c3a5', neutral: true, family: 'earth' },
   { id: 'brown', label: 'חום', hex: '#6b4a2f', neutral: true, family: 'earth' },
-  { id: 'denim', label: 'ג׳ינס', hex: '#4a6d99', neutral: true, family: 'blue' },
+  { id: 'denim', label: 'כחול ג׳ינס', hex: '#4a6d99', neutral: true, family: 'blue' },
   { id: 'olive', label: 'ירוק זית', hex: '#6b7040', neutral: false, family: 'green' },
   { id: 'khaki', label: 'חאקי', hex: '#b5a77a', neutral: true, family: 'earth' },
   { id: 'blue', label: 'כחול', hex: '#2f6fe0', neutral: false, family: 'blue' },

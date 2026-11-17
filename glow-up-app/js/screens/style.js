@@ -6,8 +6,7 @@ import { STYLES, labelOf } from '../data/profile.js';
 import { guidesByArea } from '../data/guides.js';
 import { topbar, section } from './common.js';
 import { capsuleFor } from '../scan.js';
-import { stylistTab } from './stylist.js';
-import { garmentSVG, short as shortLabel } from '../data/stylist.js';
+import { stylistTab, lookVisual } from './stylist.js';
 
 const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[0];
 
@@ -190,8 +189,7 @@ function looksTab(ctx) {
     h('div', { class: 'row between mb' }, h('div', null, h('b', null, l.name), h('div', { class: 'tiny muted' }, OCCASIONS.find((o) => o.id === l.occasion)?.label || '')),
       h('button', { class: 'icon-btn', 'aria-label': 'מחיקת לוק', onclick: async () => { if (await confirmDialog('למחוק את הלוק?', l.name, { ok: 'מחיקה', danger: true })) { update((st) => { st.looks = st.looks.filter((x) => x.id !== l.id); }); ctx.refresh(); } } }, ic('trash'))),
     l.pieces?.length
-      ? h('div', null, h('div', { class: 'pieces' }, l.pieces.map((p) => h('div', { class: 'piece' }, h('div', { class: 'pic', html: garmentSVG(p.id || 'tee', p.color, 48) }), h('div', { class: 'small pn' }, shortLabel(p.label)), h('div', { class: 'tiny' }, COLOR[p.color]?.label || '')))),
-        h('div', { class: 'small mt' }, l.pieces.map((p) => `${shortLabel(p.label)} ${COLOR[p.color]?.label || ''}`).join(' + ')))
+      ? lookVisual(l.pieces)
       : h('div', { class: 'outfit' }, (l.itemIds || []).map((id) => byId[id]).filter(Boolean).map((it) => itemTile(it))))));
 }
 

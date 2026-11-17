@@ -2,6 +2,8 @@
 // from a catalog of garment TYPES – works without any wardrobe and without photos.
 // Rules: formality ranges must overlap, explicit "don't pair" rules, color harmony (colorsWork/scoreOutfit).
 import { COLOR, COLORS, colorsWork, scoreOutfit } from './style.js';
+import { LOOKS, colorName, harmonyColor, fabricHex } from './looks.js';
+export { colorName, fabricHex };
 
 // f = formality range [min,max] (1 = very casual, 4 = formal). plain = can be a plain/solid piece.
 // colors = typical colors for this garment (first ones are the safest).
@@ -22,21 +24,21 @@ export const GARMENTS = [
   { id: 'crewneck', label: 'סווטשירט (פוטר בלי כובע)', slot: 'layer', shape: 'sweat', f: [1, 2], plain: true, colors: ['grey', 'navy', 'black', 'beige', 'olive', 'white'], tags: ['casual', 'street', 'minimal'] },
   { id: 'zip-hoodie', label: 'קפוצ׳ון רוכסן', slot: 'layer', shape: 'hoodie', f: [1, 1], plain: true, colors: ['grey', 'black', 'navy'], tags: ['sport', 'street', 'casual'] },
   { id: 'overshirt', label: 'אוברשירט', slot: 'layer', shape: 'shirt', f: [1, 2], plain: true, colors: ['olive', 'beige', 'brown', 'navy', 'black', 'khaki'], tags: ['casual', 'minimal', 'vintage', 'classic'] },
-  { id: 'denim-jacket', label: 'ג׳קט ג׳ינס', slot: 'layer', shape: 'jacket', f: [1, 2], plain: true, colors: ['denim', 'black'], tags: ['casual', 'vintage', 'street'] },
+  { id: 'denim-jacket', label: 'ג׳קט ג׳ינס', slot: 'layer', shape: 'jacket', f: [1, 2], plain: true, colors: ['blue', 'denim', 'lightblue', 'black'], tags: ['casual', 'vintage', 'street'] },
   { id: 'bomber', label: 'ג׳קט בומבר', slot: 'layer', shape: 'jacket', f: [1, 2], plain: true, colors: ['black', 'olive', 'navy'], tags: ['street', 'casual'] },
   { id: 'cardigan', label: 'קרדיגן', slot: 'layer', shape: 'jacket', f: [2, 3], plain: true, colors: ['beige', 'grey', 'navy', 'brown'], tags: ['classic', 'vintage', 'minimal'] },
   { id: 'blazer', label: 'בלייזר', slot: 'layer', shape: 'blazer', f: [3, 4], plain: true, colors: ['navy', 'black', 'grey', 'beige'], tags: ['elegant', 'classic'] },
   // bottoms
-  { id: 'slim-jeans', label: 'ג׳ינס סלים כהה', slot: 'bottom', shape: 'pants', f: [1, 3], plain: true, colors: ['denim', 'black'], tags: ['casual', 'classic', 'minimal'] },
-  { id: 'straight-jeans', label: 'ג׳ינס ישר', slot: 'bottom', shape: 'pants', f: [1, 2], plain: true, colors: ['denim', 'lightblue', 'black', 'grey'], tags: ['casual', 'vintage', 'minimal'] },
-  { id: 'baggy-jeans', label: 'ג׳ינס רחב (באגי)', slot: 'bottom', shape: 'wide', f: [1, 1], plain: true, colors: ['denim', 'lightblue', 'black'], tags: ['street'] },
+  { id: 'slim-jeans', label: 'ג׳ינס סלים', slot: 'bottom', shape: 'pants', f: [1, 3], plain: true, colors: ['denim', 'black', 'blue', 'grey'], tags: ['casual', 'classic', 'minimal'] },
+  { id: 'straight-jeans', label: 'ג׳ינס ישר', slot: 'bottom', shape: 'pants', f: [1, 2], plain: true, colors: ['blue', 'denim', 'lightblue', 'black', 'grey'], tags: ['casual', 'vintage', 'minimal'] },
+  { id: 'baggy-jeans', label: 'ג׳ינס רחב (באגי)', slot: 'bottom', shape: 'wide', f: [1, 1], plain: true, colors: ['lightblue', 'blue', 'denim', 'black'], tags: ['street'] },
   { id: 'chinos', label: 'צ׳ינו', slot: 'bottom', shape: 'pants', f: [2, 3], plain: true, colors: ['beige', 'khaki', 'navy', 'olive', 'black', 'white'], tags: ['classic', 'minimal', 'casual'] },
   { id: 'cargo', label: 'מכנסי קרגו', slot: 'bottom', shape: 'wide', f: [1, 1], plain: true, colors: ['olive', 'black', 'beige', 'khaki'], tags: ['street'] },
   { id: 'joggers', label: 'ג׳וגר מחויט', slot: 'bottom', shape: 'joggers', f: [1, 1], plain: true, colors: ['black', 'grey', 'navy', 'olive'], tags: ['sport', 'street', 'casual'] },
   { id: 'sweatpants', label: 'מכנסי טרנינג', slot: 'bottom', shape: 'joggers', f: [1, 1], plain: true, colors: ['grey', 'black', 'navy'], tags: ['sport'], sportOnly: true },
   { id: 'trousers', label: 'מכנסיים מחויטים', slot: 'bottom', shape: 'pants', f: [3, 4], plain: true, colors: ['black', 'navy', 'grey', 'beige'], tags: ['elegant', 'classic'] },
   { id: 'shorts', label: 'שורט צ׳ינו', slot: 'bottom', shape: 'shorts', f: [1, 2], plain: true, colors: ['beige', 'navy', 'olive', 'black', 'khaki'], tags: ['casual', 'minimal'] },
-  { id: 'denim-shorts', label: 'שורט ג׳ינס', slot: 'bottom', shape: 'shorts', f: [1, 1], plain: true, colors: ['denim', 'lightblue', 'black'], tags: ['casual', 'street', 'vintage'] },
+  { id: 'denim-shorts', label: 'שורט ג׳ינס', slot: 'bottom', shape: 'shorts', f: [1, 1], plain: true, colors: ['blue', 'lightblue', 'denim', 'black'], tags: ['casual', 'street', 'vintage'] },
   { id: 'skirt', label: 'חצאית מידי', slot: 'bottom', shape: 'skirt', f: [2, 4], plain: true, colors: ['black', 'beige', 'navy', 'olive', 'denim', 'burgundy'], tags: ['classic', 'elegant', 'minimal', 'vintage'], fem: true },
   { id: 'wide-trousers', label: 'מכנסיים רחבים מחויטים', slot: 'bottom', shape: 'wide', f: [2, 4], plain: true, colors: ['black', 'beige', 'grey', 'navy', 'white'], tags: ['elegant', 'minimal', 'classic'] },
   // shoes
@@ -48,13 +50,13 @@ export const GARMENTS = [
   { id: 'running', label: 'נעלי ספורט', slot: 'shoes', shape: 'chunky', f: [1, 1], plain: true, colors: ['black', 'white', 'grey'], tags: ['sport'] },
   { id: 'loafers', label: 'מוקסינים (לואפרס)', slot: 'shoes', shape: 'loafer', f: [2, 4], plain: true, colors: ['brown', 'black'], tags: ['classic', 'elegant', 'vintage'] },
   { id: 'chelsea', label: 'מגפי צ׳לסי', slot: 'shoes', shape: 'boot', f: [2, 4], plain: true, colors: ['brown', 'black', 'beige'], tags: ['classic', 'elegant', 'minimal'] },
-  { id: 'derby', label: 'נעלי עור (דרבי)', slot: 'shoes', shape: 'loafer', f: [3, 4], plain: true, colors: ['black', 'brown'], tags: ['elegant', 'classic'] },
+  { id: 'derby', label: 'נעלי דרבי', slot: 'shoes', shape: 'loafer', f: [3, 4], plain: true, colors: ['black', 'brown'], tags: ['elegant', 'classic'] },
   { id: 'slides', label: 'כפכפי סלייד', slot: 'shoes', shape: 'slide', f: [1, 1], plain: true, colors: ['black', 'white', 'beige'], tags: ['sport', 'street'] },
   // accessories
   { id: 'watch', label: 'שעון פשוט', slot: 'acc', shape: 'watch', f: [1, 4], plain: true, colors: ['silver', 'black', 'gold'], tags: ['classic', 'minimal', 'elegant', 'casual'] },
   { id: 'cap', label: 'כובע מצחייה', slot: 'acc', shape: 'cap', f: [1, 1], plain: true, colors: ['black', 'navy', 'beige', 'white'], tags: ['street', 'sport', 'casual'] },
   { id: 'chain', label: 'שרשרת דקה', slot: 'acc', shape: 'chain', f: [1, 3], plain: true, colors: ['silver', 'gold'], tags: ['street', 'casual'] },
-  { id: 'belt', label: 'חגורת עור', slot: 'acc', shape: 'belt', f: [2, 4], plain: true, colors: ['brown', 'black'], tags: ['classic', 'elegant'] },
+  { id: 'belt', label: 'חגורה', slot: 'acc', shape: 'belt', f: [2, 4], plain: true, colors: ['brown', 'black'], tags: ['classic', 'elegant'] },
   { id: 'beanie', label: 'כובע גרב', slot: 'acc', shape: 'cap', f: [1, 1], plain: true, colors: ['black', 'grey', 'beige', 'olive'], tags: ['street', 'casual'] },
 ];
 export const G = Object.fromEntries(GARMENTS.map((g) => [g.id, g]));
@@ -175,7 +177,7 @@ function rng(seed) { let r = (Math.abs(seed) % 2147483647) || 7; return () => (r
  * Build outfits from garment types.
  * opts: { occasion, style, plain, anchor, anchorColor, fem, prefer:[colorIds], count, seed, owned:[garmentIds] }
  */
-export function buildOutfits(opts = {}) {
+function generateOutfits(opts = {}) {
   const occ = opts.occasion || 'daily';
   const occF = OCC_F[occ] || [1, 2];
   const rand = rng(opts.seed || 1);
@@ -227,6 +229,14 @@ export function buildOutfits(opts = {}) {
     if (needLayer && !has('layer') && (occ === 'event' ? true : rand() < 0.45)) add(weighted(pool('layer')));
     if (!has('acc') && rand() < 0.55) add(weighted(pool('acc')));
     if (!has('top') || !has('bottom') || !has('shoes')) continue;
+    // under a closed hoodie/sweatshirt: a plain white/black/grey tee
+    const lay = has('layer'), tp = has('top');
+    if (lay && ['hoodie', 'crewneck', 'zip-hoodie'].includes(lay.g.id) && tp) tp.color = ['white', 'black', 'grey'].find((c) => c !== lay.color && colorsWork(c, lay.color)) || 'white';
+    // belt: same leather as the shoes, or no belt
+    const belt = has('acc')?.g.id === 'belt' ? has('acc') : null;
+    const sh = has('shoes');
+    if (belt) { if (LEATHER_SHOES.has(sh.g.id)) belt.color = sh.color; else pieces.splice(pieces.indexOf(belt), 1); }
+    if (!strictOk(pieces)) continue;
     const key = pieces.map((p) => p.g.id + ':' + p.color).sort().join(',');
     if (seen.has(key)) continue;
     seen.add(key);
@@ -240,11 +250,89 @@ export function buildOutfits(opts = {}) {
   return results.sort((a, b) => b.score - a.score);
 }
 
+const LEATHER_SHOES = new Set(['loafers', 'derby', 'chelsea']);
+const CLOSED = new Set(['hoodie', 'crewneck']);
+
+/** Strict "does this really go together" check (pieces: [{g, color}]). */
+export function strictOk(pieces) {
+  const main = pieces.filter((p) => p.g.slot !== 'acc');
+  const hc = main.map((p) => harmonyColor(p.g.id, p.color));
+  const accents = new Set(hc.filter((c) => c === 'multi' || (COLOR[c] && !COLOR[c].neutral)));
+  if (accents.size > 1) return false;
+  for (let i = 0; i < hc.length; i++) for (let j = i + 1; j < hc.length; j++) if (!colorsWork(hc[i], hc[j])) return false;
+  const by = (slot) => pieces.find((p) => p.g.slot === slot);
+  const top = by('top'), layer = by('layer'), bottom = by('bottom'), shoes = by('shoes'), belt = pieces.find((p) => p.g.id === 'belt');
+  if (layer && top && layer.color === top.color) return false; // layering needs contrast
+  const visible = layer && CLOSED.has(layer.g.id) ? layer : top;
+  if (visible && bottom && visible.color === bottom.color && visible.color !== 'black') return false;
+  if (belt && shoes && LEATHER_SHOES.has(shoes.g.id) && belt.color !== shoes.color) return false;
+  if (shoes && bottom && LEATHER_SHOES.has(shoes.g.id) && shoes.color === 'brown' && bottom.color === 'black') return false;
+  if (shoes?.g.id === 'chelsea' && shoes.color === 'beige' && bottom?.color === 'beige') return false;
+  const multi = pieces.filter((p) => p.color === 'multi').length;
+  return multi <= 1;
+}
+
+/** "ג׳ינס סלים בצבע כחול כהה (שטיפה כהה)" */
+export const pieceName = (p) => {
+  const cn = colorName(p.id, p.color);
+  return /^(עור|זמש) /.test(cn) ? `${short(p.label)} מ${cn}` : `${short(p.label)} בצבע ${cn}`;
+};
+
+function curatedOutfits(opts, rand) {
+  const occ = opts.occasion || 'daily';
+  const anchor = opts.anchor ? G[opts.anchor] : null;
+  const toP = (ps) => ps.map(([g, color]) => ({ g: G[g], color }));
+  let list = LOOKS.filter((l) => l.occ.includes(occ) && (!l.fem || opts.fem) && l.pieces.every(([g]) => G[g] && (!G[g].fem || opts.fem)));
+  if (opts.plain) list = list.filter((l) => l.pieces.every(([g, c]) => !['top', 'layer'].includes(G[g].slot) || (G[g].plain && c !== 'multi')));
+  if (anchor) {
+    list = list.filter((l) => l.pieces.some(([g]) => g === anchor.id))
+      .map((l) => ({ ...l, recolored: !!(opts.anchorColor && l.pieces.some(([g, c]) => g === anchor.id && c !== opts.anchorColor)), pieces: l.pieces.map(([g, c]) => [g, g === anchor.id && opts.anchorColor ? opts.anchorColor : c]) }))
+      .filter((l) => strictOk(toP(l.pieces)));
+  }
+  const pref = opts.prefer || [];
+  const scored = list.map((l) => ({ l, sc: (opts.style && l.st.includes(opts.style) ? 3 : 0) + l.pieces.filter(([g]) => opts.owned?.includes(g)).length * 0.6 + l.pieces.filter(([, c]) => pref.includes(c)).length + rand() * 2.5 }));
+  scored.sort((a, b) => b.sc - a.sc);
+  const order = { layer: 0, top: 1, bottom: 2, shoes: 3, acc: 4 };
+  return scored.map(({ l }) => {
+    const pieces = l.pieces.map(([g, color]) => ({ id: g, label: G[g].label, slot: G[g].slot, color })).sort((a, b) => order[a.slot] - order[b.slot]);
+    if (!l.recolored) return { name: l.name, curated: true, score: 92, pieces, why: [l.why, `מתאים ל${OCC_LABEL[occ] || 'יומיום'}`] };
+    // the proven formula with the user's color – new name and reasons (the original text names other colors)
+    const other = pieces.find((p) => p.slot === (anchor.slot === 'bottom' ? 'top' : 'bottom'));
+    const gp = l.pieces.map(([g, color]) => ({ g: G[g], color }));
+    return { name: `${short(anchor.label)} ${colorName(anchor.id, opts.anchorColor)} עם ${other ? short(other.label) : ''}`.trim(), curated: true, score: 90, pieces, why: whyOf(gp, occ, scoreOutfit(gp.map((p) => ({ color: p.color, slot: p.g.slot, category: p.g.slot })))) };
+  });
+}
+
+/**
+ * Outfits: proven looks first (exact colors), then generated ones that pass the strict check.
+ * opts: { occasion, style, plain, anchor, anchorColor, fem, prefer:[colorIds], count, seed, owned:[garmentIds] }
+ */
+export function buildOutfits(opts = {}) {
+  const count = opts.count || 3;
+  const rand = rng((opts.seed || 1) * 13 + 5);
+  const cur = curatedOutfits(opts, rand);
+  // rotate through the proven looks as the seed changes ("עוד לוקים")
+  const start = cur.length ? ((opts.seed || 1) * 3) % cur.length : 0;
+  const rotated = cur.slice(start).concat(cur.slice(0, start));
+  const out = rotated.slice(0, Math.min(count, cur.length >= count ? count : cur.length));
+  const keys = new Set(out.map((o) => o.pieces.map((p) => p.id + ':' + p.color).sort().join(',')));
+  if (out.length < count) {
+    for (const o of generateOutfits({ ...opts, count: count * 3 })) {
+      const key = o.pieces.map((p) => p.id + ':' + p.color).sort().join(',');
+      if (keys.has(key)) continue;
+      keys.add(key);
+      out.push({ ...o, name: '' });
+      if (out.length >= count) break;
+    }
+  }
+  return out;
+}
+
 function whyOf(pieces, occ, sc) {
   const out = [];
-  const nonNeutral = pieces.filter((p) => COLOR[p.color] && !COLOR[p.color].neutral);
+  const nonNeutral = pieces.filter((p) => p.g.slot !== 'acc' && COLOR[harmonyColor(p.g.id, p.color)] && !COLOR[harmonyColor(p.g.id, p.color)].neutral);
   if (!nonNeutral.length) out.push('כל הצבעים ניטרליים – נקי ותמיד עובד');
-  else if (nonNeutral.length === 1) out.push(`צבע אחד בולט (${COLOR[nonNeutral[0].color].label}) והשאר ניטרלי – ככה עושים את זה נכון`);
+  else if (nonNeutral.length === 1) out.push(`צבע אחד בולט (${colorName(nonNeutral[0].g.id, nonNeutral[0].color)}) והשאר ניטרלי – ככה עושים את זה נכון`);
   const top = pieces.find((p) => p.g.slot === 'layer') || pieces.find((p) => p.g.slot === 'top');
   const bottom = pieces.find((p) => p.g.slot === 'bottom');
   if (top && bottom && top.color !== bottom.color && sc.reasons.some((r) => r.includes('ניגודיות'))) out.push('ניגודיות בין למעלה ולמטה – הגוף נראה מאוזן');
@@ -333,8 +421,7 @@ const SHAPE_OF = Object.fromEntries(GARMENTS.map((g) => [g.id, g.shape]));
 /** SVG markup for a garment type in a color. */
 export function garmentSVG(id, colorId, size = 64) {
   const shape = SHAPES[SHAPE_OF[id] || id] || SHAPES.tee;
-  const c = COLOR[colorId];
-  const fill = c?.hex?.startsWith('#') ? c.hex : 'url(#gmulti)';
+  const fill = colorId === 'multi' || !COLOR[colorId] ? 'url(#gmulti)' : fabricHex(id, colorId);
   const isLine = SHAPE_OF[id] === 'chain';
   return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" aria-hidden="true"><defs><linearGradient id="gmulti" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f472b6"/><stop offset=".5" stop-color="#fbbf24"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><path d="${shape}" fill="${isLine ? 'none' : fill}" stroke="${isLine ? fill : 'rgba(127,127,140,.85)'}" stroke-width="${isLine ? 4 : 2}" stroke-linejoin="round" fill-rule="evenodd"/></svg>`;
 }

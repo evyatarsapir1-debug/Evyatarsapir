@@ -192,6 +192,10 @@ await step('stylist: "plain shirts only" builds full outfits (top + pants + shoe
   if (txt.some((t) => t.includes('הדפס'))) throw new Error('printed shirt in plain-only results');
   for (const t of txt) for (const need of ['חולצה', 'מכנסיים', 'נעליים']) if (!t.includes(need) && !(need === 'חולצה' && t.includes('שכבה'))) throw new Error('outfit missing ' + need + ': ' + t.slice(0, 80));
   if (!(await page.locator('[data-plain]').isChecked())) throw new Error('plain toggle not set');
+  if ((await page.locator('.outfit-card .studio svg').count()) < 2) throw new Error('outfit figure missing');
+  const lines = await page.locator('.outfit-card .look-line').allInnerTexts();
+  for (const l of lines) if (!/בצבע|מעור|מזמש/.test(l)) throw new Error('piece without a color: ' + l);
+  for (const l of lines.filter((x) => x.includes('ג׳ינס'))) if (!/כחול|שחור|אפור|לבן/.test(l)) throw new Error('jeans without a shade: ' + l);
   await shot('27-stylist');
   await page.locator('[data-save-look]').first().click();
   await expectText('הלוק נשמר');
@@ -211,7 +215,7 @@ await step('stylist: from my wardrobe + generic look saved + photos need AI', as
   await page.locator('[data-my-pick] .ward-item').first().click();
   await page.locator('[data-my-match]').waitFor();
   await page.goto(BASE + '#/style?tab=looks');
-  await page.locator('.pieces').first().waitFor();
+  await page.locator('.look-grid .studio svg').first().waitFor();
   await page.goto(BASE + '#/style?tab=stylist&mode=photos');
   await expectText('התייעצות עם תמונות צריכה AI');
 });
