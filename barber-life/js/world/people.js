@@ -7,7 +7,16 @@ const G = {
   torso: new THREE.CapsuleGeometry(0.2, 0.42, 4, 10),
   hips: new THREE.CapsuleGeometry(0.17, 0.08, 4, 10),
   head: new THREE.SphereGeometry(0.15, 16, 12),
-  hair: new THREE.SphereGeometry(0.158, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
+  // hairstyle pieces: a cap on top and a band around the sides/back (the face stays clear), scaled by real lengths
+  hairTop: new THREE.SphereGeometry(0.156, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.36),
+  hairBand: new THREE.SphereGeometry(0.153, 20, 10, Math.PI / 2 + 0.75, Math.PI * 2 - 1.5, Math.PI * 0.2, Math.PI * 0.42),
+  fringe: new THREE.SphereGeometry(0.16, 14, 6, Math.PI / 2 - 0.75, 1.5, Math.PI * 0.12, Math.PI * 0.2),
+  ear: new THREE.SphereGeometry(0.035, 8, 6),
+  neck: new THREE.CylinderGeometry(0.062, 0.07, 0.12, 12),
+  brow: new THREE.BoxGeometry(0.045, 0.01, 0.012),
+  mouth: new THREE.BoxGeometry(0.05, 0.008, 0.01),
+  collar: new THREE.TorusGeometry(0.085, 0.022, 6, 16),
+  belt: new THREE.CylinderGeometry(0.178, 0.178, 0.04, 16, 1, true),
   nose: new THREE.ConeGeometry(0.022, 0.05, 6),
   upperArm: new THREE.CapsuleGeometry(0.062, 0.22, 4, 8),
   foreArm: new THREE.CapsuleGeometry(0.055, 0.2, 4, 8),
@@ -61,11 +70,21 @@ export function buildPerson(look = {}) {
   parts.torso = new THREE.Mesh(G.torso, shirt); parts.torso.position.y = 0.27; chest.add(parts.torso);
   parts.hips = new THREE.Mesh(G.hips, pants); parts.hips.position.y = 0.0; body.add(parts.hips);
   const headG = new THREE.Group(); headG.position.y = 0.81; chest.add(headG);
-  parts.head = new THREE.Mesh(G.head, skin); headG.add(parts.head);
-  parts.hair = new THREE.Mesh(G.hair, mat(look.hair || HAIRS[0], 0.9));
-  parts.hair.position.y = 0.02; parts.hair.rotation.x = -0.25; headG.add(parts.hair);
+  parts.head = new THREE.Mesh(G.head, skin); parts.head.scale.set(0.9, 1.06, 0.98); headG.add(parts.head);
+  const neck = new THREE.Mesh(G.neck, skin); neck.position.y = -0.17; headG.add(neck); parts.neck = neck;
+  for (const sx of [-1, 1]) { const ear = new THREE.Mesh(G.ear, skin); ear.scale.set(0.45, 1, 0.75); ear.position.set(sx * 0.138, 0, -0.005); headG.add(ear); (parts.ears ||= []).push(ear); }
+  const hairM = mat(look.hair || HAIRS[0], 0.85);
+  parts.hair = new THREE.Group(); headG.add(parts.hair);
+  parts.hairTop = new THREE.Mesh(G.hairTop, hairM); parts.hairTop.rotation.x = -0.18;
+  parts.hairBand = new THREE.Mesh(G.hairBand, hairM);
+  parts.fringe = new THREE.Mesh(G.fringe, hairM);
+  parts.hair.add(parts.hairTop, parts.hairBand, parts.fringe);
+  for (const sx of [-1, 1]) { const b = new THREE.Mesh(G.brow, hairM); b.position.set(sx * 0.05, 0.062, 0.132); b.rotation.z = sx * -0.12; headG.add(b); (parts.brows ||= []).push(b); }
+  parts.mouth = new THREE.Mesh(G.mouth, mat('#7a3a34', 0.6)); parts.mouth.position.set(0, -0.07, 0.132); headG.add(parts.mouth);
   parts.nose = new THREE.Mesh(G.nose, skin); parts.nose.position.set(0, -0.01, 0.15); headG.add(parts.nose);
-  for (const sx of [-1, 1]) { const e = new THREE.Mesh(G.eye, mat('#111', 0.3)); e.position.set(sx * 0.05, 0.03, 0.135); headG.add(e); }
+  for (const sx of [-1, 1]) { const e = new THREE.Mesh(G.eye, mat('#111', 0.3)); e.position.set(sx * 0.05, 0.028, 0.128); headG.add(e); }
+  parts.collar = new THREE.Mesh(G.collar, shirt); parts.collar.rotation.x = Math.PI / 2; parts.collar.position.y = 0.62; chest.add(parts.collar);
+  parts.belt = new THREE.Mesh(G.belt, mat('#1a1410', 0.5)); parts.belt.position.y = 0.06; body.add(parts.belt);
   // arms: shoulder → elbow → hand
   for (const [key, sx] of [['armL', 1], ['armR', -1]]) {
     const a = limb(G.upperArm, G.foreArm, shirt, skin, -0.3);
@@ -92,7 +111,32 @@ export function buildPerson(look = {}) {
   chest.add(parts.apron);
   p.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   p.userData = { parts, body, headG, phase: Math.random() * 6, look: { ...look }, pose: {}, t: Math.random() * 10 };
+  setHairStyle(p, look.hairTop ?? 30, look.hairSide ?? 15);
   return p;
+}
+
+/**
+ * Hairstyle from real lengths (mm): top cap volume, side/back band thickness, a fringe when the top is long.
+ * Very short sides (fades) fade into the skin; a buzz cut is a thin dark shadow.
+ */
+export function setHairStyle(p, topMM, sideMM) {
+  const { parts } = p.userData;
+  const L = p.userData.look;
+  L.hairTop = topMM; L.hairSide = sideMM;
+  const hair = new THREE.Color(L.hair || HAIRS[0]), skin = new THREE.Color(L.skin || SKINS[0]);
+  const tone = (mm) => '#' + skin.clone().lerp(hair, Math.round(THREE.MathUtils.clamp(0.25 + mm / 6, 0.25, 1) * 20) / 20).getHexString();
+  const t = THREE.MathUtils.clamp(topMM, 0, 80), sd = THREE.MathUtils.clamp(sideMM, 0, 60);
+  parts.hairTop.material = mat(tone(t), 0.85);
+  parts.hairBand.material = mat(tone(sd), 0.85);
+  parts.fringe.material = parts.hairTop.material;
+  const ts = 1 + t * 0.0013, ty = 1 + t * 0.0034;
+  parts.hairTop.scale.set(0.92 * ts, ty, ts);
+  parts.hairTop.position.y = 0.012 + t * 0.0003;
+  const bs = 1 + sd * 0.0013;
+  parts.hairBand.scale.set(0.91 * bs, 1.03 + sd * 0.0012, 0.98 * bs);
+  parts.hairBand.position.y = -0.004 - sd * 0.0005; // long hair hangs lower
+  parts.fringe.visible = t > 32;
+  parts.fringe.scale.setScalar(1 + (t - 32) * 0.002);
 }
 
 /** Recolour a person (clothes shop). */
@@ -105,8 +149,11 @@ export function dressPerson(p, look) {
   for (const a of [parts.armL, parts.armR]) { a.userData.upper.material = shirt; a.userData.lower.material = skin; a.userData.hand.material = skin; }
   parts.hips.material = pants;
   for (const l of [parts.legL, parts.legR]) { l.userData.upper.material = l.userData.lower.material = pants; l.userData.shoe.material = mat(L.shoes, 0.4); }
-  parts.hair.material = mat(L.hair, 0.9);
-  parts.head.material = parts.nose.material = skin;
+  parts.head.material = parts.nose.material = parts.neck.material = skin;
+  for (const e of parts.ears) e.material = skin;
+  for (const b of parts.brows) b.material = mat(L.hair, 0.85);
+  parts.collar.material = shirt;
+  setHairStyle(p, L.hairTop ?? 30, L.hairSide ?? 15);
   parts.apron.visible = !!L.apron;
   if (L.apron) parts.apron.material = mat(L.apron);
 }
@@ -167,5 +214,6 @@ export function animatePerson(p, dt, speed, sitting = false, pose = null, air = 
 
 export function randomLook(rng = Math.random) {
   const pick = (a) => a[Math.floor(rng() * a.length)];
-  return { skin: pick(SKINS), hair: pick(HAIRS), shirt: pick(CLOTHES), pants: pick(['#2b2f38', '#3a2a20', '#141414', '#4a4f5a', '#6b5a44']), shoes: pick(['#3a2216', '#141414', '#e9e5dc']) };
+  const style = pick([[45, 25], [30, 12], [25, 2], [12, 6], [4, 4], [55, 40], [35, 1.5], [18, 9]]);
+  return { hairTop: style[0], hairSide: style[1], skin: pick(SKINS), hair: pick(HAIRS), shirt: pick(CLOTHES), pants: pick(['#2b2f38', '#3a2a20', '#141414', '#4a4f5a', '#6b5a44']), shoes: pick(['#3a2216', '#141414', '#e9e5dc']) };
 }

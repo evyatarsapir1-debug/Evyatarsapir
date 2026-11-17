@@ -44,7 +44,10 @@ export const world = {
     this.bindInput();
     this.buildGps();
     this.people.onPay = (p) => {
-      if (Math.hypot(p.mesh.position.x - this.player.position.x, p.mesh.position.z - this.player.position.z) < 14) { sfx.play('coin'); this.popIcon('🪙', p.mesh.position); }
+      if (Math.hypot(p.mesh.position.x - this.player.position.x, p.mesh.position.z - this.player.position.z) < 14) {
+        sfx.play('coin'); this.popIcon('🪙', p.mesh.position);
+        if (p.stars) { this.popIcon('★'.repeat(p.stars) + '☆'.repeat(5 - p.stars), p.mesh.position, p.stars >= 4 ? '#ffd36a' : p.stars >= 3 ? '#e9e2d4' : '#ff8a7a'); p.stars = 0; }
+      }
     };
     this.ready = true;
     ctx.world = this;
@@ -342,18 +345,21 @@ export const world = {
   },
 
   /** A small icon that floats up from a point in the world (coin when a client pays). */
-  popIcon(icon, pos) {
-    const cv = document.createElement('canvas'); cv.width = cv.height = 64;
-    const g = cv.getContext('2d'); g.font = '48px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(icon, 32, 34);
+  popIcon(icon, pos, color = null) {
+    const wide = icon.length > 2;
+    const cv = document.createElement('canvas'); cv.width = wide ? 256 : 64; cv.height = 64;
+    const g = cv.getContext('2d'); g.font = `${wide ? 44 : 48}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (color) { g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(0, 6, cv.width, 52); g.fillStyle = color; }
+    g.fillText(icon, cv.width / 2, 34);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false }));
-    sp.scale.setScalar(0.45); sp.position.set(pos.x, 2.0, pos.z);
+    sp.scale.set(0.45 * cv.width / 64, 0.45, 1); sp.position.set(pos.x, wide ? 2.35 : 2.0, pos.z);
     this.scene.add(sp);
     (this.pops ||= []).push({ sp, t: 0 });
   },
   updatePops(dt) {
     for (const o of (this.pops || []).slice()) {
-      o.t += dt; o.sp.position.y += dt * 0.8; o.sp.material.opacity = Math.max(0, 1 - o.t / 1.4);
-      if (o.t > 1.4) { this.scene.remove(o.sp); o.sp.material.map.dispose(); o.sp.material.dispose(); this.pops = this.pops.filter((x) => x !== o); }
+      o.t += dt; o.sp.position.y += dt * (o.sp.scale.x > 0.5 ? 0.25 : 0.8); const ttl = o.sp.scale.x > 0.5 ? 3 : 1.4; o.sp.material.opacity = Math.max(0, 1 - o.t / ttl);
+      if (o.t > ttl) { this.scene.remove(o.sp); o.sp.material.map.dispose(); o.sp.material.dispose(); this.pops = this.pops.filter((x) => x !== o); }
     }
   },
 

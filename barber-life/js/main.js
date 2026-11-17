@@ -368,14 +368,14 @@ canvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.zoom(Math.exp(
 // One pad at the side of the screen, nothing else: the sight (crosshair) shows where the machine is on the head.
 // Put your thumb on the pad → the machine runs and cuts at the sight; drag → it moves along the head like a laptop
 // touchpad; lift your thumb → it stops. Double-tap the pad to bring the sight back to the middle of the head.
-const pad = { on: false, x: 0, y: 0, drag: null, sens: 1.6, lastTap: 0 };
+const pad = { on: false, x: 0, y: 0, drag: null, sens: 2.0, lastTap: 0 };
 function padSet(on) {
   pad.on = on;
   $('btnPad').classList.toggle('on', on);
   document.body.classList.toggle('pad-on', on);
   $('padWrap').classList.toggle('hidden', !on);
   $('aimCursor').classList.toggle('hidden', !on);
-  $('aimJoy').classList.toggle('hidden', !on);
+  $('aimZone').classList.toggle('hidden', !on);
   padStop();
   if (on) padCenter(); else state.hover = null;
   const s = progress.data.settings ||= {}; s.pad = on; progress.save();
@@ -432,18 +432,16 @@ function bindPad() {
   });
   const endDrag = (e) => { if (pad.drag?.id === e.pointerId) { pad.drag = null; tp.classList.remove('active'); padStop(); } }; // thumb up = machine off
   tp.addEventListener('pointerup', endDrag); tp.addEventListener('pointercancel', endDrag);
-  // small joystick on the other side: moves the sight WITHOUT cutting (the machine stays off)
-  const aj = $('aimJoy'), ak = $('aimJoyKnob');
-  const setAj = (e) => {
-    const r = aj.getBoundingClientRect();
-    let x = (e.clientX - (r.left + r.width / 2)) / (r.width / 2), y = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
-    const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; }
-    pad.jx = x; pad.jy = y; ak.style.transform = `translate(${x * 26}px, ${y * 26}px)`;
-  };
-  aj.addEventListener('pointerdown', (e) => { e.preventDefault(); aj.setPointerCapture(e.pointerId); pad.jid = e.pointerId; aj.classList.add('active'); setAj(e); });
-  aj.addEventListener('pointermove', (e) => { if (pad.jid === e.pointerId) setAj(e); });
-  const endAj = (e) => { if (pad.jid !== e.pointerId) return; pad.jid = null; pad.jx = pad.jy = 0; ak.style.transform = ''; aj.classList.remove('active'); };
-  aj.addEventListener('pointerup', endAj); aj.addEventListener('pointercancel', endAj);
+  // invisible strip at the very left edge: drag there to move the sight WITHOUT cutting (machine stays off)
+  const az = $('aimZone');
+  az.addEventListener('pointerdown', (e) => { e.preventDefault(); az.setPointerCapture(e.pointerId); pad.zone = { id: e.pointerId, x: e.clientX, y: e.clientY }; az.classList.add('active', 'used'); });
+  az.addEventListener('pointermove', (e) => {
+    if (pad.zone?.id !== e.pointerId) return;
+    padMoveAim(e.clientX - pad.zone.x, e.clientY - pad.zone.y);
+    pad.zone.x = e.clientX; pad.zone.y = e.clientY;
+  });
+  const endZone = (e) => { if (pad.zone?.id === e.pointerId) { pad.zone = null; az.classList.remove('active'); } };
+  az.addEventListener('pointerup', endZone); az.addEventListener('pointercancel', endZone);
   $('btnPad').addEventListener('click', () => { padSet(!pad.on); toast(pad.on ? '🎯 משטח כיוון: שים אצבע על המשטח — המכונה עובדת בכוונת. הרם — היא נעצרת.' : 'מצב רגיל: גוררים ישר על הראש.', 4000); });
 }
 // 3D blade marker on the head (exact width of the cutting edge) + line-up guide for the trimmer
@@ -506,7 +504,6 @@ function markersFrame(dt) {
 }
 
 function padFrame(dt = 1 / 60) {
-  if (pad.on && pad.jid != null && playing()) padMoveAim((pad.jx || 0) * 340 * dt / pad.sens, (pad.jy || 0) * 340 * dt / pad.sens);
   if (!pad.on || !playing()) { if (pad.on) $('aimCursor').classList.add('hidden'); return; }
   const el = $('aimCursor');
   el.classList.remove('hidden');

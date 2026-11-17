@@ -10,6 +10,7 @@ import { TOOLS } from '../tools/tools.js';
 import { TIPS } from './npcs.js';
 import { LESSONS } from '../data/lessons.js';
 import { business } from './business.js';
+import { setHairStyle } from './people.js';
 
 const D = progress.data;
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -450,6 +451,9 @@ export const life = {
     const tier = isBranch ? 3 : rt.ref.tier;
     const c = generateClient({ seed: npc.seed, maxDifficulty: Math.min(5, progress.rank.id + 1, tier + 2) });
     c.name = npc.name;
+    // the person in the chair is the same person who walked in: same skin and hair colour, same hair length
+    c.skin = npc.look.skin; c.preset.color = npc.look.hair;
+    setHairStyle(npc.mesh, c.preset.lengths.top, c.preset.lengths.side);
     if (npc.customer) c.speech = `שוב אני! ${c.speech}`;
     // the station looks like the shop you are in
     if (isBranch) applyDecor(ctx.shop, { owned: true, ...rt.ref, rating: business.rating(rt.ref) }, ctx.tools, TOOLS);
@@ -465,6 +469,10 @@ export const life = {
         this.world.people.release(npc, true);
         this.advance(HAIRCUT_MINUTES);
         const out = isBranch ? business.playerServed(rt.ref, npc, c, res) : this.jobServed(rt.ref, c, res);
+        // he walks out with the haircut you really gave him, and shows how many stars he gave you
+        const H = ctx.hair;
+        if (H) setHairStyle(npc.mesh, H.zoneMedian('top') ?? c.preset.lengths.top, H.zoneMedian('side') ?? H.zoneMedian('sideL') ?? c.preset.lengths.side);
+        npc.stars = res.feedback?.stars;
         applyDecor(ctx.shop, null, ctx.tools, TOOLS);
         this.checkCareer();
         this.save();
