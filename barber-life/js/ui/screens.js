@@ -288,6 +288,7 @@ function showRequest(c, reopen) {
     <div class="req-head"><span class="req-avatar">🧔</span><div><b>${esc(c.name)}</b>, ${c.age}<div class="muted small">שיער ${esc(c.preset.hairType)} · לקוח ${pers.name}</div></div></div>
     <div class="bubble">“${esc(c.speech)}”</div>
     ${photos}
+    ${reopen ? '' : `<details class="howto" open><summary>📋 ההוראות לפני שמתחילים</summary><ol>${haircutSteps(c.spec).map((t) => `<li>${esc(t)}</li>`).join('')}</ol></details>`}
     ${reopen ? '<div class="row"><button class="btn primary" id="reqGo">סגור</button></div>' : `
     <div class="row req-start">
       <button class="btn primary" id="reqDemo">▶ קודם הדגמה, ואז אני</button>

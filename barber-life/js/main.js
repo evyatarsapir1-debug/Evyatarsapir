@@ -368,7 +368,7 @@ canvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.zoom(Math.exp(
 // One pad at the side of the screen, nothing else: the sight (crosshair) shows where the machine is on the head.
 // Put your thumb on the pad → the machine runs and cuts at the sight; drag → it moves along the head like a laptop
 // touchpad; lift your thumb → it stops. Double-tap the pad to bring the sight back to the middle of the head.
-const pad = { on: false, x: 0, y: 0, drag: null, sens: 2.0, lastTap: 0 };
+const pad = { on: false, x: 0, y: 0, tx: 0, ty: 0, drag: null, sens: 0.9, maxSpeed: 230, lastTap: 0 };
 function padSet(on) {
   pad.on = on;
   $('btnPad').classList.toggle('on', on);
@@ -383,7 +383,7 @@ function padSet(on) {
 /** sight on the middle of the head (the side the camera looks at) */
 function padCenter() {
   const v = client.head.localToWorld(new THREE.Vector3(0, 0.02, 0)).project(camera);
-  pad.x = (v.x + 1) / 2 * innerWidth; pad.y = (1 - v.y) / 2 * innerHeight;
+  pad.x = pad.tx = (v.x + 1) / 2 * innerWidth; pad.y = pad.ty = (1 - v.y) / 2 * innerHeight;
 }
 function padHit() {
   if (tools.active === 'duster') return pickBody(pad.x, pad.y) || pickHead(pad.x, pad.y);
@@ -404,9 +404,16 @@ function padStop() {
   if (state.stroke?.id === 'pad') endStroke();
   if (state.dusting?.id === 'pad') state.dusting = null;
 }
+/** Finger movement only moves a target; the machine glides toward it slowly (padFrame), so it never races over the head. */
 function padMoveAim(dx, dy) {
-  pad.x = THREE.MathUtils.clamp(pad.x + dx * pad.sens, 0, innerWidth);
-  pad.y = THREE.MathUtils.clamp(pad.y + dy * pad.sens, 0, innerHeight);
+  pad.tx = THREE.MathUtils.clamp(pad.tx + dx * pad.sens, 0, innerWidth);
+  pad.ty = THREE.MathUtils.clamp(pad.ty + dy * pad.sens, 0, innerHeight);
+}
+function padStep(dt) {
+  const dx = pad.tx - pad.x, dy = pad.ty - pad.y, d = Math.hypot(dx, dy);
+  if (d < 0.3) return;
+  const k = Math.min(1, (pad.maxSpeed * dt) / d);
+  pad.x += dx * k; pad.y += dy * k;
   const hit = padHit();
   if (state.stroke?.id === 'pad') { if (hit && !hit.body) strokeTo(hit); else state.stroke.lastLocal = null; }
   else if (state.dusting?.id === 'pad' && hit) dustAt(hit);
@@ -505,6 +512,7 @@ function markersFrame(dt) {
 
 function padFrame(dt = 1 / 60) {
   if (!pad.on || !playing()) { if (pad.on) $('aimCursor').classList.add('hidden'); return; }
+  padStep(dt);
   const el = $('aimCursor');
   el.classList.remove('hidden');
   el.style.transform = `translate(${pad.x}px, ${pad.y}px)`;

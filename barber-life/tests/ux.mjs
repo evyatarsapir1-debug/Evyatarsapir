@@ -294,15 +294,15 @@ const hc0 = await ev(() => __barber.state.stats.hairsCut);
 await t2('touchStart', [{ x: pr.x, y: pr.y, id: 5 }]);
 await wait(60);
 check('thumb on the pad = machine on (cutting at the sight)', await ev(() => __barber.state.stroke?.id === 'pad' && __barber.ctx.tools.running !== undefined));
-for (let k = 1; k <= 12; k++) { await t2('touchMove', [{ x: pr.x, y: pr.y + k * 3, id: 5 }]); await ev(() => __barber.frame(1 / 30, false)); }
+for (let k = 1; k <= 12; k++) { await t2('touchMove', [{ x: pr.x, y: pr.y + k * 5, id: 5 }]); await ev(() => __barber.frame(1 / 30, false)); }
 const a1 = await ev(() => ({ ...__barber.ctx.pad }));
-check('dragging moves the sight along the head', Math.abs(a1.y - a0.y) > 30, `${(a1.y - a0.y).toFixed(0)} px`);
+check('dragging moves the sight along the head (slowly)', Math.abs(a1.y - a0.y) > 30 && Math.abs(a1.y - a0.y) < 120, `${(a1.y - a0.y).toFixed(0)} px`);
 check('the machine really removes hair along the path', (await ev(() => __barber.state.stats.hairsCut)) - hc0 > 30, `${(await ev(() => __barber.state.stats.hairsCut)) - hc0} strands`);
 check('cut hair falls (clippings)', await ev(() => __barber.ctx.clippings.used > 0));
 await shot('u09-touchpad-cutting');
 await t2('touchEnd', []);
 check('thumb up = machine stops', await ev(() => !__barber.state.stroke));
-await ev(() => { __barber.ctx.pad.x = 5; __barber.ctx.pad.y = 5; });
+await ev(() => { const P = __barber.ctx.pad; P.x = P.tx = 5; P.y = P.ty = 5; });
 await t2('touchStart', [{ x: pr.x, y: pr.y, id: 9 }]); await t2('touchEnd', []);
 await t2('touchStart', [{ x: pr.x, y: pr.y, id: 10 }]); await t2('touchEnd', []);
 check('double tap brings the sight back to the head', await ev(() => { __barber.frame(1 / 30, false); return document.getElementById('aimCursor').classList.contains('on-head'); }));
@@ -310,8 +310,9 @@ const aj = await ev(() => { const r = document.getElementById('aimZone').getBoun
 check('aim strip at the very left edge (no circle)', aj.edge && await ev(() => !document.getElementById('aimJoy')));
 const s0 = await ev(() => ({ x: __barber.ctx.pad.x, y: __barber.ctx.pad.y, cut: __barber.state.stats.hairsCut }));
 await t2('touchStart', [{ x: aj.x, y: aj.y, id: 11 }]);
-for (let k = 1; k <= 5; k++) await t2('touchMove', [{ x: aj.x + k * 6, y: aj.y, id: 11 }]);
+for (let k = 1; k <= 8; k++) await t2('touchMove', [{ x: aj.x + k * 6, y: aj.y, id: 11 }]);
 await t2('touchEnd', []);
+await ev(() => { for (let i = 0; i < 30; i++) __barber.frame(1 / 30, false); });
 const s1 = await ev(() => ({ x: __barber.ctx.pad.x, y: __barber.ctx.pad.y, cut: __barber.state.stats.hairsCut, stroke: !!__barber.state.stroke }));
 check('left-edge drag moves the sight WITHOUT cutting', Math.abs(s1.x - s0.x) > 30 && s1.cut === s0.cut && !s1.stroke, `${(s1.x - s0.x).toFixed(0)} px, cut ${s1.cut - s0.cut}`);
 check('cutting pad is small', await ev(() => { const r = document.getElementById('touchPad').getBoundingClientRect(); return r.width <= 150 && r.height <= 112; }));

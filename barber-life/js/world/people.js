@@ -4,7 +4,11 @@
 import * as THREE from 'three';
 
 const G = {
-  torso: new THREE.CapsuleGeometry(0.2, 0.42, 4, 10),
+  // shaped torso: narrow waist, chest, shoulders (lathe profile, flattened front-to-back)
+  torso: new THREE.LatheGeometry([[0.001, -0.27], [0.15, -0.26], [0.16, -0.12], [0.175, 0.02], [0.2, 0.15], [0.205, 0.24], [0.17, 0.3], [0.08, 0.34], [0.001, 0.345]].map(([r, y]) => new THREE.Vector2(r, y)), 18),
+  shoulder: new THREE.SphereGeometry(0.075, 12, 8),
+  sclera: new THREE.SphereGeometry(0.022, 10, 8),
+  beard: new THREE.SphereGeometry(0.152, 16, 8, Math.PI / 2 - 1.2, 2.4, Math.PI * 0.55, Math.PI * 0.3),
   hips: new THREE.CapsuleGeometry(0.17, 0.08, 4, 10),
   head: new THREE.SphereGeometry(0.15, 16, 12),
   // hairstyle pieces: a cap on top and a band around the sides/back (the face stays clear), scaled by real lengths
@@ -67,7 +71,8 @@ export function buildPerson(look = {}) {
   // upper body pivots at the waist so it can lean when running
   const chest = new THREE.Group(); chest.position.y = 0.05; body.add(chest);
   parts.chest = chest;
-  parts.torso = new THREE.Mesh(G.torso, shirt); parts.torso.position.y = 0.27; chest.add(parts.torso);
+  parts.torso = new THREE.Mesh(G.torso, shirt); parts.torso.position.y = 0.27; parts.torso.scale.z = 0.72; chest.add(parts.torso);
+  for (const sx of [-1, 1]) { const sh = new THREE.Mesh(G.shoulder, shirt); sh.position.set(sx * 0.22, 0.56, 0); sh.scale.set(1, 0.8, 0.9); chest.add(sh); (parts.shoulders ||= []).push(sh); }
   parts.hips = new THREE.Mesh(G.hips, pants); parts.hips.position.y = 0.0; body.add(parts.hips);
   const headG = new THREE.Group(); headG.position.y = 0.81; chest.add(headG);
   parts.head = new THREE.Mesh(G.head, skin); parts.head.scale.set(0.9, 1.06, 0.98); headG.add(parts.head);
@@ -82,7 +87,11 @@ export function buildPerson(look = {}) {
   for (const sx of [-1, 1]) { const b = new THREE.Mesh(G.brow, hairM); b.position.set(sx * 0.05, 0.062, 0.132); b.rotation.z = sx * -0.12; headG.add(b); (parts.brows ||= []).push(b); }
   parts.mouth = new THREE.Mesh(G.mouth, mat('#7a3a34', 0.6)); parts.mouth.position.set(0, -0.07, 0.132); headG.add(parts.mouth);
   parts.nose = new THREE.Mesh(G.nose, skin); parts.nose.position.set(0, -0.01, 0.15); headG.add(parts.nose);
-  for (const sx of [-1, 1]) { const e = new THREE.Mesh(G.eye, mat('#111', 0.3)); e.position.set(sx * 0.05, 0.028, 0.128); headG.add(e); }
+  for (const sx of [-1, 1]) {
+    const w = new THREE.Mesh(G.sclera, mat('#f2eee8', 0.4)); w.position.set(sx * 0.05, 0.028, 0.118); w.scale.set(1, 0.7, 0.6); headG.add(w);
+    const e = new THREE.Mesh(G.eye, mat('#2a1c14', 0.25)); e.position.set(sx * 0.05, 0.028, 0.131); e.scale.setScalar(0.75); headG.add(e);
+  }
+  parts.beard = new THREE.Mesh(G.beard, mat(look.hair || HAIRS[0], 0.9)); parts.beard.visible = !!look.beard; headG.add(parts.beard);
   parts.collar = new THREE.Mesh(G.collar, shirt); parts.collar.rotation.x = Math.PI / 2; parts.collar.position.y = 0.62; chest.add(parts.collar);
   parts.belt = new THREE.Mesh(G.belt, mat('#1a1410', 0.5)); parts.belt.position.y = 0.06; body.add(parts.belt);
   // arms: shoulder → elbow → hand
@@ -153,6 +162,8 @@ export function dressPerson(p, look) {
   for (const e of parts.ears) e.material = skin;
   for (const b of parts.brows) b.material = mat(L.hair, 0.85);
   parts.collar.material = shirt;
+  for (const sh of parts.shoulders) sh.material = shirt;
+  parts.beard.material = mat(L.hair, 0.9); parts.beard.visible = !!L.beard;
   setHairStyle(p, L.hairTop ?? 30, L.hairSide ?? 15);
   parts.apron.visible = !!L.apron;
   if (L.apron) parts.apron.material = mat(L.apron);
@@ -215,5 +226,5 @@ export function animatePerson(p, dt, speed, sitting = false, pose = null, air = 
 export function randomLook(rng = Math.random) {
   const pick = (a) => a[Math.floor(rng() * a.length)];
   const style = pick([[45, 25], [30, 12], [25, 2], [12, 6], [4, 4], [55, 40], [35, 1.5], [18, 9]]);
-  return { hairTop: style[0], hairSide: style[1], skin: pick(SKINS), hair: pick(HAIRS), shirt: pick(CLOTHES), pants: pick(['#2b2f38', '#3a2a20', '#141414', '#4a4f5a', '#6b5a44']), shoes: pick(['#3a2216', '#141414', '#e9e5dc']) };
+  return { beard: rng() < 0.3, hairTop: style[0], hairSide: style[1], skin: pick(SKINS), hair: pick(HAIRS), shirt: pick(CLOTHES), pants: pick(['#2b2f38', '#3a2a20', '#141414', '#4a4f5a', '#6b5a44']), shoes: pick(['#3a2216', '#141414', '#e9e5dc']) };
 }

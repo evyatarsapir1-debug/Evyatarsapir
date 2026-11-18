@@ -67,6 +67,7 @@ export const session = {
     $('btnHygiene').textContent = '🧴 חיטוי כלים';
     $('btnFinish').classList.toggle('hidden', !c.spec);
     $('btnFinish').textContent = c.client ? '✓ סיימתי' : '✓ סיום ובדיקה';
+    $('btnSteps').textContent = c.client ? '📋 הוראות' : '📋 שלבים';
     $('btnRequest').classList.toggle('hidden', !c.client);
     this._chat = [];
     $('btnCheck').classList.toggle('hidden', !c.task?.check);
