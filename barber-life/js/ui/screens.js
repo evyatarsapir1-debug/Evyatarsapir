@@ -282,26 +282,21 @@ function clientPhotos(c) {
 function showRequest(c, reopen) {
   const pers = PERSONALITIES[c.personality];
   const photos = c.showsPhoto ? `<div class="pics small-pics">${clientPhotos(c).map((u) => `<img src="${u}" alt="">`).join('')}</div><div class="muted small">הלקוח מראה לך תמונה של מה שהוא רוצה</div>` : '';
-  const ask = !reopen && c.understoodAsked !== true;
-  const choices = ask ? requestChoices(c, mulberry32(c.seed)) : [];
+  // no quiz and no ✓/✗ here: you listen, watch a demo if you want, and cut. You are graded only when you press ✓.
+  session.cfg.understood = true;
   $('requestBody').innerHTML = `
     <div class="req-head"><span class="req-avatar">🧔</span><div><b>${esc(c.name)}</b>, ${c.age}<div class="muted small">שיער ${esc(c.preset.hairType)} · לקוח ${pers.name}</div></div></div>
     <div class="bubble">“${esc(c.speech)}”</div>
     ${photos}
-    ${ask ? `<h3 class="grp">מה הלקוח ביקש?</h3><div class="choices">${choices.map((h) => `<button class="choice" data-id="${h.id}">${esc(h.he)}</button>`).join('')}</div><div id="reqFeedback"></div>` : ''}
-    <div class="row"><button class="btn primary ${ask ? 'hidden' : ''}" id="reqGo">${reopen ? 'סגור' : '✂️ התחל לעבוד'}</button></div>
-    ${ask ? '' : `<p class="muted small">זכור: חיטוי כלים לפני שמתחילים, ומברשת צוואר בסוף.</p>`}`;
+    ${reopen ? '<div class="row"><button class="btn primary" id="reqGo">סגור</button></div>' : `
+    <div class="row req-start">
+      <button class="btn primary" id="reqDemo">▶ קודם הדגמה, ואז אני</button>
+      <button class="btn ghost" id="reqGo">✂️ להתחיל לבד</button>
+    </div>
+    <p class="muted small">אין כאן מבחן ואין זמן לחוץ: מספרים בקצב שלך, ושואלים את הלקוח (💬) מתי שרוצים. כשאתה חושב שסיימת — לוחצים <b>✓ סיימתי</b> ומקבלים ציון. זכור: חיטוי כלים לפני, מברשת צוואר בסוף.</p>`}`;
   $('requestModal').classList.remove('hidden');
   $('reqGo').addEventListener('click', () => $('requestModal').classList.add('hidden'));
-  $('requestBody').querySelectorAll('.choice').forEach((b) => b.addEventListener('click', () => {
-    const ok = b.dataset.id === c.base.id;
-    c.understoodAsked = true;
-    session.cfg.understood = ok;
-    $('requestBody').querySelectorAll('.choice').forEach((x) => { x.disabled = true; x.classList.toggle('right', x.dataset.id === c.base.id); x.classList.toggle('wrong', x === b && !ok); });
-    $('reqFeedback').innerHTML = ok ? '<p class="ok-text">✅ נכון! הבנת את הבקשה.</p>'
-      : `<p class="bad-text">❌ הלקוח ביקש <b>${esc(c.base.he)}</b>. ${esc(c.base.desc)}</p>`;
-    $('reqGo').classList.remove('hidden');
-  }));
+  $('reqDemo')?.addEventListener('click', () => { $('requestModal').classList.add('hidden'); session.introDemo(); });
 }
 ctx.showRequest = showRequest;
 

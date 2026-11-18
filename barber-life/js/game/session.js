@@ -21,7 +21,7 @@ export const session = {
    */
   start(cfg) {
     this.cfg = cfg;
-    this.elapsed = 0; this.hygiene = false; this.demoSnap = null; this.lastResult = null; this.cutStarted = false;
+    this.elapsed = 0; this.hygiene = false; this.demoSnap = null; this.lastResult = null; this.cutStarted = false; this._intro = false;
     const h = cfg.head;
     ctx.setupHead(h.preset, { mannequin: h.mannequin, skin: h.skin, cape: h.cape, seed: h.seed });
     if (cfg.spec) ctx.hair.setTarget((d) => targetLength(cfg.spec, d));
@@ -66,6 +66,7 @@ export const session = {
     $('btnHygiene').classList.remove('done');
     $('btnHygiene').textContent = '🧴 חיטוי כלים';
     $('btnFinish').classList.toggle('hidden', !c.spec);
+    $('btnFinish').textContent = c.client ? '✓ סיימתי' : '✓ סיום ובדיקה';
     $('btnRequest').classList.toggle('hidden', !c.client);
     this._chat = [];
     $('btnCheck').classList.toggle('hidden', !c.task?.check);
@@ -114,10 +115,48 @@ export const session = {
   },
 
   onDemoProgress(p) {
-    if (ctx.demo.active) $('btnDemo').textContent = `⏸ עצור הדגמה (${Math.round(p * 100)}%)`;
+    if (ctx.demo.active) $('btnDemo').textContent = this._intro ? `⏭ דלג להתחיל (${Math.round(p * 100)}%)` : `⏸ עצור הדגמה (${Math.round(p * 100)}%)`;
+  },
+
+  /**
+   * Client haircut: a professional demo on this very head first, then the hair goes back to how it was and
+   * it's your turn. Nothing is graded until you press ✓.
+   */
+  introDemo() {
+    if (!this.cfg?.spec) return;
+    const d = ctx.demo, H = ctx.hair;
+    const snap = H.snapshot();
+    const prev = { tool: ctx.tools.active, guard: ctx.tools.guard.id, lever: ctx.tools.lever, len: ctx.tools.scissorLen };
+    this._intro = true;
+    const back = () => {
+      if (!this._intro) return;
+      this._intro = false;
+      d.stop();
+      H.restore(snap); H.updateScalp(); ctx.clippings.clear();
+      this._restoreTools(prev);
+      this.elapsed = 0; this.cutStarted = false; ctx.state.undo.length = 0;
+      $('btnDemo').classList.add('hidden');
+      $('taskSub').textContent = this.cfg?.subtitle || '';
+      ctx.cam.setView?.('front');
+      ctx.toast('✂️ עכשיו תורך! תספר בקצב שלך. כשאתה חושב שסיימת — לחץ "✓ סיימתי".', 4500);
+    };
+    this._introBack = back;
+    $('btnDemo').classList.remove('hidden');
+    $('btnDemo').textContent = '⏭ דלג להתחיל';
+    ctx.toast('👀 הדגמה: תסתכל איך עושים את זה. אחר כך השיער יחזור — ואתה תעשה לבד.', 3500);
+    d.start(planDemo(this.cfg.spec), {
+      speed: 2.2,
+      onStep: (s) => { ctx.refreshToolUI(); $('taskSub').textContent = `הדגמה: ${s.label}`; $('taskSub').classList.remove('hidden'); },
+      onDone: () => {
+        $('taskSub').textContent = 'ככה זה צריך להיראות. עוד רגע — תורך.';
+        ctx.cam.setView?.('back');
+        setTimeout(back, ctx.MANUAL ? 0 : 2600);
+      },
+    });
   },
 
   toggleDemo() {
+    if (this._intro) { this._introBack?.(); return; } // "skip" during the intro demo
     const d = ctx.demo;
     if (d.active) { d.stop(); this._restoreTools(this._prevTools); $('btnDemo').textContent = '↺ חזור לפני ההדגמה'; return; }
     if (this.demoSnap) {
@@ -176,6 +215,7 @@ export const session = {
 
   finish() {
     if (!this.cfg) return;
+    if (this._intro) { ctx.toast('עדיין בהדגמה — חכה שתסתיים או לחץ "דלג להתחיל".'); return; }
     if (ctx.demo.active) { ctx.toast('עצור קודם את ההדגמה'); return; }
     const res = this.analyze();
     if (this.cfg.client && ctx.lookInMirror && !this._looking) {
