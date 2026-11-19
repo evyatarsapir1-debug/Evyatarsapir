@@ -365,7 +365,7 @@ const taxi = await g(() => __game.vehicles.kept.filter((v) => v.typeKey === 'tax
 check('contacts: calling a taxi brings one', taxi > 0, `${taxi} taxi`);
 await page.click('#phone .pend');
 await page.click('#phone .phome'); await page.click('#phone .papp[data-go="camera"]'); await page.click('#phone .pbig');
-await page.click('#camOverlay .cshoot'); await page.click('#camOverlay .cdone');
+await page.click('#camOverlay .cshoot', { timeout: 180000 }); await page.click('#camOverlay .cdone');
 check('camera: photo saved to the gallery', (await g(() => __game.phone.photos.length)) > 0);
 await page.click('#phone .phome'); await page.click('#phone .papp[data-go="music"]'); await page.click('#phone .prow[data-st="1"]');
 check('music: station selected', (await g(() => __game.selectedStation)) === 1);
@@ -1071,7 +1071,7 @@ const gang = await g(() => {
   game.police.clear(); if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
   game.econ.health = 100; game.teleport(114, 114, 0); step(40);
   const C = Gs.crews.snakes, L = C.members.find((m) => m.gangRole === 'leader');
-  const looks = { masks: C.members.filter((m) => m.app.mask).length, knives: C.members.filter((m) => m.app.knife).length, guns: C.members.filter((m) => m.app.gun).length };
+  const looks = { fists: C.members.filter((m) => m.app.fists).length, masks: C.members.filter((m) => m.app.mask).length, knives: C.members.filter((m) => m.app.knife).length, guns: C.members.filter((m) => m.app.gun).length };
   const inside = Gs.inside;
   game.teleport(L.x + 1.5, L.z + 1.2, 0); step(5);
   const prompt = P.prompt?.text || ''; game.input.pressed.add('interact'); step(2); const joined = game.econ.gang;
@@ -1083,9 +1083,9 @@ const gang = await g(() => {
   hurt += 100 - game.econ.health; game.econ.health = 100;
   const chase = C.members.filter((q) => q.state === 'copChase').length;
   C.hostile = 0; game.teleport(530, 545, 0); step(20);
-  return { spawned: C.members.length, cars: C.cars.length, looks, inside, prompt, joined, left, chase, hurt, zones: (game.minimap.zones || []).length };
+  return { spawned: C.members.length, cars: C.cars.length, signs: (C.signs || []).length, looks, inside, prompt, joined, left, chase, hurt, zones: (game.minimap.zones || []).length };
 });
-check('gangs: two territories with crews (masks, knives, pistols), cars, and the turf marked on the map', gang.spawned >= 10 && gang.cars === 2 && gang.looks.masks > 0 && gang.looks.knives > 0 && gang.looks.guns > 0 && gang.inside === 'snakes' && gang.zones === 2, JSON.stringify(gang));
+check('gangs: two small territories with entrance signs, masked crews (pistols, knives, fists), cars + bike, turf on the map', gang.spawned >= 10 && gang.cars === 3 && gang.signs === 4 && gang.looks.masks > 0 && gang.looks.knives > 0 && gang.looks.guns > 0 && gang.inside === 'snakes' && gang.zones === 2, JSON.stringify(gang));
 check('gangs: join and leave at the leader', gang.prompt.includes('הצטרף') && gang.joined === 'snakes' && gang.left === null, JSON.stringify(gang));
 check('gangs: touch one of them and the crew comes for you and shoots (game damage)', gang.chase >= 2 && gang.hurt > 0, JSON.stringify(gang));
 

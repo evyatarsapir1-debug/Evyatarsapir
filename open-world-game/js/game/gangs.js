@@ -1,19 +1,18 @@
-// Gang territories: two neighbourhoods run by fictional street gangs. Members hang out in groups on the corners
-// (green clothes, some masked, some with knives or pistols, a leader with bodyguards, their cars parked nearby).
-// Leave them alone and they only stare and warn you; touch one of them, their cars, or pull a weapon on their turf,
-// and the whole crew comes for you - the armed ones shoot, the others charge with knives (game damage only, no
-// blood). You can also walk up to the leader and join the gang - then the crew greets you and the rival gang wants
-// you gone - and leave it again the same way.
+// Gang territories: two small neighbourhoods at the edge of the city (one crossroads each), run by fictional street
+// gangs. Yellow warning signs stand on every road into them. Members hang out on the corners in green, faces covered
+// with balaclavas or bandanas, armed only with pistols, knives or their fists; a leader with bodyguards; their cars and
+// a motorbike parked nearby. Walk around freely - they only stare and talk. They come for you only if you hurt one of
+// them, shoot on their turf (at them or their houses), or steal / damage their car or bike: the pistols stop and
+// shoot, the others charge (game damage only, no blood). Walk up to the leader to join the gang, and again to leave.
 import * as THREE from 'three';
 import { P, ROAD_HALF } from '../world/layout.js';
 import { heightAt } from '../world/terrain.js';
 import { Vehicle } from '../vehicles/vehicle.js';
 
 export const GANGS = [
-  { id: 'snakes', name: 'הנחשים הירוקים', short: 'הנחשים', color: 0x2f9e44, dark: 0x1d4d27, accent: 0x111111, car: 0x1f7a35, cx: 150, cz: 100, r: 125,
-    corners: [[1, 1], [2, 1], [1, 2], [2, 0]], leader: [1, 1] },
-  { id: 'harbor', name: 'חבורת הנמל', short: 'הנמל', color: 0x56702f, dark: 0x2e3b1a, accent: 0x1c1c1c, car: 0x3b4d22, cx: 150, cz: 850, r: 125,
-    corners: [[1, 8], [2, 8], [1, 9], [2, 9]], leader: [2, 8] },
+  // two small, out-of-the-way neighbourhoods at the edge of the city (one crossroads each), nowhere else
+  { id: 'snakes', name: 'הנחשים הירוקים', short: 'הנחשים', color: 0x2f9e44, dark: 0x1d4d27, accent: 0x111111, car: 0x1f7a35, mask: 0x1c3a22, cx: 100, cz: 100, r: 85, cross: [1, 1] },
+  { id: 'harbor', name: 'חבורת הנמל', short: 'הנמל', color: 0x56702f, dark: 0x2e3b1a, accent: 0x1c1c1c, car: 0x3b4d22, mask: 0x161616, cx: 100, cz: 900, r: 85, cross: [1, 9] },
 ];
 const BY_ID = Object.fromEntries(GANGS.map((g) => [g.id, g]));
 const WARN = ['אתה לא שייך לפה', 'תמשיך ללכת', 'מה אתה מסתכל?', 'זה השטח שלנו', 'אל תעשה שטויות', 'לך מפה'];
@@ -49,12 +48,12 @@ export class Gangs {
     const a = { skin: skins[(i * 3 + role.length) % skins.length], hair: 0x1b1410, long: false, bald: i % 3 === 0, h: 1.02 + (i % 5) * 0.025, w: 1.02 + (i % 4) * 0.04,
       shirt: i % 2 ? G.color : G.dark, pants: i % 3 === 1 ? 0xc8c8c8 : G.accent, shoes: i % 2 ? 0xf2f2f2 : 0x1d1d1f, gang: G.id };
     if (role === 'leader') Object.assign(a, { shirt: 0xd9d9d6, pants: 0xd9d9d6, shoes: 0xf2f2f2, vestColor: 0x161616, capColor: G.color, gun: true, h: 1.1, w: 1.12 });
-    else if (role === 'guard') Object.assign(a, { vestColor: 0x161616, gun: true, capColor: i % 2 ? G.color : null });
     else {
-      if (i % 3 === 0) a.mask = true;                 // balaclava
-      else if (i % 3 === 1) a.bandana = G.color;       // bandana over the face
-      if (i % 4 === 1) a.capColor = G.color;
-      if (i % 2) a.gun = true; else a.knife = true;
+      // street criminals: faces covered (balaclava in the crew colour or black, or a bandana), pistol / knife / fists only
+      if (i % 4 === 3) a.bandana = G.color; else { a.mask = true; a.maskColor = i % 2 ? G.mask : 0x141414; }
+      if (role === 'guard') { a.vestColor = 0x161616; a.gun = true; }
+      else { const w = i % 3; if (w === 0) a.gun = true; else if (w === 1) a.knife = true; else a.fists = true; }
+      if (i % 4 === 1 && !a.mask) a.capColor = G.color;
       if (i % 5 === 2) a.vestColor = 0x161616;
     }
     return a;
@@ -62,9 +61,9 @@ export class Gangs {
   _spawn(crew) {
     const G = crew.G, peds = this.game.peds;
     let i = 0;
-    G.corners.forEach((cn, ci) => {
-      const lead = cn[0] === G.leader[0] && cn[1] === G.leader[1];
-      const c = this._corner(G, cn, ci), n = lead ? 4 : 3;
+    [0, 1, 2, 3].forEach((ci) => {
+      const lead = ci === 0;
+      const c = this._corner(G, G.cross, ci), n = lead ? 4 : 3;
       for (let k = 0; k < n; k++, i++) {
         const role = lead ? (k === 0 ? 'leader' : 'guard') : 'member';
         const a = (k / n) * Math.PI * 2 + ci, x = c.x + Math.sin(a) * 1.3, z = c.z + Math.cos(a) * 1.3;
@@ -76,21 +75,51 @@ export class Gangs {
     });
     peds._colors();
     // their cars parked along the street by the leader's corner
-    const lc = this._corner(G, G.leader, G.corners.findIndex((c) => c[0] === G.leader[0] && c[1] === G.leader[1]));
-    for (let k = 0; k < 2; k++) {
-      const x = G.leader[0] * P + 5.4 * (lc.x > G.leader[0] * P ? 1 : -1), z = lc.z + (lc.z > G.leader[1] * P ? 1 : -1) * (8 + k * 6.5);
-      const v = new Vehicle(k ? 'muscle' : 'suv', G.car, x, z, 0, heightAt(x, z));
+    const lc = this._corner(G, G.cross, 0), [cx0, cz0] = [G.cross[0] * P, G.cross[1] * P];
+    for (let k = 0; k < 3; k++) {
+      const x = cx0 + 5.4 * (lc.x > cx0 ? 1 : -1), z = lc.z + (lc.z > cz0 ? 1 : -1) * (8 + k * 6.5);
+      const v = new Vehicle(['suv', 'muscle', 'moto'][k], k === 2 ? 0x111111 : G.car, x, z, 0, heightAt(x, z));
       v.gang = G.id; v.dmg0 = 0; this.game.scene.add(v.object); this.game.vehicles.adopt(v); v.sync();
       crew.cars.push(v);
     }
+    this._signs(crew);
     crew.spawned = true;
+  }
+  // warning signs on every road into the neighbourhood, facing the people coming in
+  _signTex(G) {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 256; const x = c.getContext('2d');
+    x.fillStyle = '#f2c230'; x.fillRect(0, 0, 512, 256);
+    x.fillStyle = '#111'; for (let i = -6; i < 30; i++) { x.save(); x.translate(i * 34, 0); x.rotate(0.6); x.fillRect(0, -20, 14, 60); x.restore(); x.save(); x.translate(i * 34, 236); x.rotate(0.6); x.fillRect(0, -20, 14, 60); x.restore(); }
+    x.fillStyle = '#f2c230'; x.fillRect(10, 26, 492, 204);
+    x.strokeStyle = '#111'; x.lineWidth = 8; x.strokeRect(14, 30, 484, 196);
+    x.fillStyle = '#111'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.direction = 'rtl';
+    x.font = 'bold 40px Arial, sans-serif'; x.fillText('⚠ נכנסים לשכונה של', 256, 78);
+    x.font = 'bold 58px Arial, sans-serif'; x.fillStyle = '#' + new THREE.Color(G.dark).getHexString(); x.fillText(G.name, 256, 142);
+    x.fillStyle = '#111'; x.font = 'bold 26px Arial, sans-serif'; x.fillText('שטח כנופיה — אל תיגע בכלום', 256, 196);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+  }
+  _signs(crew) {
+    const G = crew.G, g = this.game, cx = G.cross[0] * P, cz = G.cross[1] * P;
+    const face = new THREE.MeshStandardMaterial({ map: (this._tex ||= {})[G.id] ||= this._signTex(G), roughness: 0.6 });
+    const back = new THREE.MeshStandardMaterial({ color: 0x8a9096, metalness: 0.6, roughness: 0.4 }), post = new THREE.MeshStandardMaterial({ color: 0x6d7378, metalness: 0.7, roughness: 0.35 });
+    crew.signs = [];
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const D = G.r - 4, px = -dz, pz = dx;                       // right-hand side for someone driving in (towards the centre)
+      const x = cx + dx * D + px * (ROAD_HALF + 1.6), z = cz + dz * D + pz * (ROAD_HALF + 1.6), y = heightAt(x, z);
+      const s = new THREE.Group(); s.position.set(x, y, z); s.rotation.y = Math.atan2(dx, dz);
+      for (const sx of [-0.95, 0.95]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.9, 8), post); m.position.set(sx, 1.45, -0.03); m.castShadow = true; s.add(m); }
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.3), face); board.position.set(0, 2.25, 0.005); s.add(board);
+      const bk = new THREE.Mesh(new THREE.BoxGeometry(2.64, 1.34, 0.03), back); bk.position.set(0, 2.25, -0.012); bk.castShadow = true; s.add(bk);
+      g.scene.add(s); crew.signs.push(s);
+    }
   }
   _despawn(crew) {
     const peds = this.game.peds;
     for (const p of crew.members) { const i = peds.peds.indexOf(p); if (i >= 0) peds.peds.splice(i, 1); }
     peds._colors();
     for (const v of crew.cars) if (v.driver !== 'player') { const L = this.game.vehicles.kept, i = L.indexOf(v); if (i >= 0) this.game.vehicles._dispose(v, L); }
-    crew.members = []; crew.cars = []; crew.spawned = false;
+    for (const s of crew.signs || []) { this.game.scene.remove(s); s.traverse((o) => o.geometry?.dispose()); }
+    crew.members = []; crew.cars = []; crew.signs = []; crew.spawned = false;
   }
 
   // ------------------------------------------------------------------ provoking the crew
@@ -114,7 +143,7 @@ export class Gangs {
   onShot(x, z) {
     for (const crew of Object.values(this.crews)) {
       if (!crew.spawned || this.member === crew.G.id) continue;
-      if (crew.members.some((p) => p.state !== 'dead' && Math.hypot(p.x - x, p.z - z) < 45)) this.provoke(crew.G.id, 'shot');
+      if (Math.hypot(x - crew.G.cx, z - crew.G.cz) < crew.G.r) this.provoke(crew.G.id, 'shot');
     }
   }
 
@@ -167,17 +196,11 @@ export class Gangs {
       if (!crew.spawned && d < G.r + 140) this._spawn(crew);
       else if (crew.spawned && d > G.r + 260) this._despawn(crew);
       if (!crew.spawned) continue;
-      // rival gang member on their turf: they want you out
-      const rival = this.member && this.member !== G.id;
-      if (rival && t === G && crew.hostile <= 0 && crew.members.some((p) => p.state !== 'dead' && Math.hypot(p.x - pos.x, p.z - pos.z) < 22)) this.provoke(G.id, 'rival');
       // touching their cars (getting in, or damaging them)
       for (const v of crew.cars) {
         if (this.member === G.id) continue;
         if ((P.vehicle === v && (P.state === 'driving' || P.state === 'entering')) || v.damage > v.dmg0 + 4) { v.dmg0 = v.damage; this.provoke(G.id, 'car'); }
       }
-      // aiming a weapon at them on their turf
-      if (this.member !== G.id && g.econ.equipped && (g.aiming || g.input.mouseAim) && P.state === 'foot' && t === G
-        && crew.members.some((p) => p.state !== 'dead' && Math.hypot(p.x - pos.x, p.z - pos.z) < 18)) this.provoke(G.id, 'aim');
       crew.hostile = Math.max(0, crew.hostile - dt * (t === G ? 0.5 : 1.5));
       this._crew(crew, dt, pos, t === G);
     }
@@ -195,9 +218,9 @@ export class Gangs {
         if (!['copChase', 'fall', 'knocked', 'getup', 'thrown', 'down', 'dazed'].includes(p.state)) { peds._release(p); p.seat = null; p.state = 'copChase'; }
         p.copChase = true; p.chaseTo = null; p.gunOut = !!p.app.gun;
         // knives: close in and slash (game damage, no blood)
-        if (p.app.knife && d < 1.6 && P.state === 'foot' && p.state === 'copChase') {
+        if ((p.app.knife || p.app.fists) && d < 1.6 && P.state === 'foot' && p.state === 'copChase') {
           p.stabT = (p.stabT || 0) - dt;
-          if (p.stabT <= 0) { p.stabT = 0.9 + Math.random() * 0.4; g.hurt(7, crew.G.name); g.audio.impact?.(1.5); g.rig.shake = Math.max(g.rig.shake, 0.12); p.hitT = 0.25; }
+          if (p.stabT <= 0) { p.stabT = 0.9 + Math.random() * 0.4; g.hurt(p.app.knife ? 7 : 4, crew.G.name); g.audio.impact?.(p.app.knife ? 1.5 : 2.5); g.rig.shake = Math.max(g.rig.shake, 0.12); p.hitT = 0.25; }
         }
         // pistols: stop, aim and fire when they can see you
         if (p.app.gun && p.pose === 'aimGun' && crew.shootT <= 0 && d < 34 && (g.police._los?.(p.x, p.z, pos.x, pos.z) ?? true)) {
@@ -216,8 +239,6 @@ export class Gangs {
         if (p.state === 'guard' && d < 7 && P.state === 'foot') {
           p.homeSpot.yaw = Math.atan2(pos.x - p.x, pos.z - p.z);   // they turn and watch you
           if (!p.sayT || p.sayT <= 0) { p.toldT = (p.toldT || 0) - dt; if (p.toldT <= 0) { p.toldT = 9 + Math.random() * 6; peds.say(p, (mine ? HELLO : WARN)[Math.floor(Math.random() * 6) % (mine ? HELLO.length : WARN.length)], 2); } }
-          // walking right into one of them counts as touching him
-          if (!mine && d < 0.75) { crew.bump = (crew.bump || 0) + dt; if (crew.bump > 0.6) { crew.bump = 0; this.provoke(crew.G.id, 'bump'); } }
         }
       }
     }

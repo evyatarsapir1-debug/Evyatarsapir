@@ -292,6 +292,7 @@ export class Player {
   _entering(dt, world) {
     const v = this.vehicle, s = this.seq;
     s.t += dt;
+    if (v.jacking) v.sync(dt);   // a car taken from traffic is not updated by anyone else while you pull the driver out: animate its door here
     if (s.phase === 'walk') {
       const dp = v.doorPoint();
       const dx = dp.x - this.x, dz = dp.z - this.z, d = Math.hypot(dx, dz);

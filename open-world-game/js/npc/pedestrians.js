@@ -214,7 +214,7 @@ export class Pedestrians {
       set(this.M.neck, i, a.skin); set(this.M.nose, i, a.skin); set(this.M.eyes, i, 0x1a1a1a); set(this.M.shoulders, i, a.swim ? a.skin : a.shirt);
       set(this.M.helmet, i, a.cop ? 0x111d3a : 0x4b5320); set(this.M.vest, i, 0x3d4428); set(this.M.rifle, i, 0x1d1f1c);
       set(this.M.cap, i, a.capColor ?? 0x141c33); set(this.M.brim, i, a.capColor ?? 0x0b0f1a); set(this.M.badge, i, 0xd8b84a); set(this.M.cvest, i, a.vestColor ?? 0x1b1e26); set(this.M.stripe, i, 0xd9e8a0);
-      set(this.M.mask, i, 0x141414); set(this.M.mband, i, a.skin); set(this.M.meyes, i, 0x1a1a1a); set(this.M.bandana, i, a.bandana ?? 0x2f9e44); set(this.M.knife, i, 0xc9ced3);
+      set(this.M.mask, i, a.maskColor ?? 0x141414); set(this.M.mband, i, a.skin); set(this.M.meyes, i, 0x1a1a1a); set(this.M.bandana, i, a.bandana ?? 0x2f9e44); set(this.M.knife, i, 0xc9ced3);
       set(this.M.belt, i, 0x111111); set(this.M.holster, i, 0x111111); set(this.M.radio, i, 0x222222); set(this.M.pistol, i, 0x1a1c1f);
       if (a.swim) {
         // swimwear: trunks / swimsuit in a bright colour, bare arms and legs, barefoot
