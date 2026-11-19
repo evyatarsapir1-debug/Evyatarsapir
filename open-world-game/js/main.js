@@ -181,8 +181,7 @@ class Game {
     const unlock = () => this.audio.unlock();
     addEventListener('pointerdown', unlock); addEventListener('keydown', unlock);
     $('btnContinue').onclick = () => this.continueGame();
-    $('btnNew').onclick = () => { this.pendingNew = true; this.newGame(); };   // you start as Miguel (look can be changed later)
-    $('btnChar').onclick = () => { this.pendingNew = !hasSave(); this.toCreator(); };
+    $('btnNew').onclick = () => { this.pendingNew = true; $('btnNew').disabled = true; setTimeout(() => { $('btnNew').disabled = false; this.newGame(); }, 30); };   // you start as Miguel (look can be changed later)
     $('btnSettings').onclick = () => { this.settingsBack = 'menu'; showScreen('settings'); };
     $('btnExit').onclick = () => { this.save(); showScreen('exitScreen'); try { window.close(); } catch { /* ignore */ } };
     $('exitBack').onclick = () => this.toMenu();
@@ -203,7 +202,8 @@ class Game {
     $('hBack').onclick = () => this.pause();
     $('pSave').onclick = () => { this.save(); this.toast('המשחק נשמר'); this.resume(); };
     $('pMenu').onclick = () => { this.save(); this.toMenu(); };
-    $('mapClose').onclick = () => this.resume();
+    // leaving the map after marking a spot: a short hint, the route itself is only the purple line on the map
+    $('mapClose').onclick = () => { const marked = this.gps.dest && this.gps.dest !== this._markAtOpen; this.resume(); if (marked) this.toast('📍 תסתכל בסימון על המפה', 2); };
     $('bagClose').onclick = () => this.closeBag();
     this._bindFullMap();
     $('prompt').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); const k = $('prompt').dataset.key; if (k) this.input.pressed.add(k); });
@@ -618,7 +618,7 @@ class Game {
   pause() { if (this.state === 'menu') return; this.state = 'paused'; showScreen('pause'); this.audio.mute(true); }
   resume() { this.state = 'playing'; showScreen(null); this.audio.mute(false); this.input.endFrame(); this.clock.getDelta(); }
   openMap() {
-    this.state = 'map'; showScreen('mapScreen');
+    this.state = 'map'; showScreen('mapScreen'); this._markAtOpen = this.gps.dest;
     const p = this.playerPos();
     this.fullView = { x: p.x, z: p.z, r: 900 };
     requestAnimationFrame(() => this.drawFullMap());

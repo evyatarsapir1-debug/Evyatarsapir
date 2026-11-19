@@ -533,8 +533,9 @@ export function buildInterior(spec, b, B) {
   for (const r of spec.rooms) {
     faces(I, r.rect, r.y0, r.y1, 3, 3, r.wall, r.door, true, r.glassAll ? 'all' : r.glassBack ? OPP[b.face] : null);
     if (r.floor !== null) I.floor(r.rect[0], r.rect[1], r.rect[2], r.rect[3], r.y0 + 0.02, r.floor, 2);
-    const [x0, z0, x1, z1] = r.rect, y = r.y1 - 0.01;
-    I.quad([x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1], [0, 0, 1, 0, 1, 1, 0, 1], r.ceil);
+    // ceiling (rooms under an upper floor list only the slab parts, so the stairwell stays open)
+    const y = r.y1 - 0.01;
+    for (const [x0, z0, x1, z1] of r.ceilRects || [r.rect]) I.quad([x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1], [0, 0, 1, 0, 1, 1, 0, 1], r.ceil);
   }
   if (spec.door) {
     const [fx, fz] = faceVector(b.face);

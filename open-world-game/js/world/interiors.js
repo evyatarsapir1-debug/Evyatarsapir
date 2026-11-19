@@ -170,7 +170,9 @@ function villaSpec(b, F, spec, piece, lamp, furn, C, y0) {
   const startMin = axis === 'x' ? p0[0] < p1[0] : p0[1] < p1[1];
   spec.surfaces.push(makeSurface(sr[0], sr[1], sr[2], sr[3], startMin ? y0 : y1, startMin ? y1 : y0, axis));
   spec.stairs.push({ rect: sr, y0, y1, axis, startMin, color: 0xcfc6b6 });
-  for (const r of [F.rect(-hl, hl, 0, sd0), F.rect(sa1, hl, sd0, D)]) {
+  const upper = [F.rect(-hl, hl, 0, sd0), F.rect(sa1, hl, sd0, D)];
+  spec.rooms[spec.rooms.length - 1].ceilRects = upper;   // no ceiling over the stairwell
+  for (const r of upper) {
     spec.surfaces.push(makeSurface(r[0], r[1], r[2], r[3], y1));
     spec.slabs.push({ rect: r, y: y1, color: 0xcbb79c, under: 0xffffff });
     C.push(colFromRect(r, y1 - 0.25, y1 - 0.02, 'slab'));
@@ -510,6 +512,7 @@ export function interiorSpec(b) {
       spec.stairs.push({ rect: sr, y0, y1, axis, startMin, color: 0x9c7650 });
       // upper floor slab (minus the stair opening)
       const pieces = [F.rect(-hl, hl, 0, sd0), F.rect(sa1, hl, sd0, D)];
+      spec.rooms[spec.rooms.length - 1].ceilRects = pieces;   // stairwell open to the floor above
       for (const r of pieces) {
         spec.surfaces.push(makeSurface(r[0], r[1], r[2], r[3], y1));
         spec.slabs.push({ rect: r, y: y1, color: 0xb38a5c, under: 0xfafafa });

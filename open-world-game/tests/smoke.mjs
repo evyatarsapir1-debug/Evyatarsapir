@@ -1111,6 +1111,21 @@ const rob = await g(async () => {
 });
 check('shop robbery: aim at the shopkeeper — hands up, he throws cash bundles, you pick them up', rob.started && rob.hands === 'surrender' && rob.thrown > 0 && rob.got > 0, JSON.stringify(rob));
 
+// ---------------------------------------------------------------- UI: character dial, no nav strip, no character picker in the lobby; open stairwell
+const ui = await g(async () => {
+  const IN = await import('./js/world/interiors.js'), LY = await import('./js/world/layout.js'), WG = await import('./js/world/worldGen.js');
+  const dots = document.querySelectorAll('#charDial .cd-dot').length, on = document.querySelector('#charDial .cd-dot.on')?.dataset.char;
+  const r = document.getElementById('charDial').getBoundingClientRect();
+  const nav = getComputedStyle(document.getElementById('gpsHud')).display;
+  const lobbyChar = !!document.getElementById('btnChar');
+  const villa = WG.cellData(LY.VILLA.bx, LY.VILLA.bz).buildings.find((q) => q.villa || q.interior === 'villa');
+  const S = villa && IN.interiorSpec(villa), ground = S?.rooms[0];
+  return { dots, on, left: r.left < 40, bottom: innerHeight - r.bottom < 40, nav, lobbyChar, ceil: ground?.ceilRects?.length || 0 };
+});
+check('character dial: round selector bottom-left with the three characters (current one highlighted)', ui.dots === 3 && !!ui.on && ui.left && ui.bottom, JSON.stringify(ui));
+check('no navigation strip at the top (route only on the map); no character picker in the lobby', ui.nav === 'none' && !ui.lobbyChar, JSON.stringify(ui));
+check('villa: no ceiling over the stairwell (the stairs go up through an opening)', ui.ceil === 2, JSON.stringify(ui));
+
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);
 await g(() => __game.save());
