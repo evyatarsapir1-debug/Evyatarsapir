@@ -899,7 +899,9 @@ const ro = await g(() => {
   const game = __game, P = game.player, step = (n, f) => { for (let i = 0; i < n; i++) { if (game.police.level) game.police.clear(); f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
   if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
   const run = (kmh, first = 335, gap = 18, n = 4) => {
-    game.teleport(300, 590, 0, 0.3); step(5);
+    game.econ.health = 100; game.teleport(300, 590, 0, 0.3); step(5);
+    // clear the lane: a car left there by an earlier run would be crashed into at full speed
+    for (const o of [...game.vehicles.all(), ...game.traffic.cars]) if (o.x > 285 && o.x < 560 && Math.abs(o.z - 597.75) < 5) { o.z += 40; o.speed = 0; o.vx = o.vz = 0; o.sync(); }
     const v = game.spawnVehicleNear('sedan', 300, 600); v.x = 300; v.z = 597.75; v.heading = Math.PI / 2; v.sync();
     P.state = 'driving'; P.vehicle = v; v.driver = 'player'; P.ignoreVehicle = v; P._attach(v);
     const people = [];
