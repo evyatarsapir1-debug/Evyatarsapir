@@ -1,5 +1,5 @@
 // Menu screens: main menu, character creator, settings, pause, help.
-import { PRESETS, SKIN_TONES, HAIR_COLORS, HAIR_STYLES, HAIR_NAMES, TOP_STYLES, TOP_NAMES, BOTTOM_STYLES, BOTTOM_NAMES, CLOTH_COLORS } from '../character/characterModel.js';
+import { PRESETS, SKIN_TONES, HAIR_COLORS, HAIR_STYLES, HAIR_NAMES, TOP_STYLES, TOP_NAMES, BOTTOM_STYLES, BOTTOM_NAMES, CLOTH_COLORS, BEARD_STYLES, BEARD_NAMES, GLASSES_STYLES, GLASSES_NAMES, SHOE_STYLES, SHOE_NAMES } from '../character/characterModel.js';
 
 const $ = (id) => document.getElementById(id);
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
@@ -25,6 +25,9 @@ export class Creator {
     this._select('cHair', HAIR_STYLES, HAIR_NAMES, 'hairStyle');
     this._select('cTop', TOP_STYLES, TOP_NAMES, 'top');
     this._select('cBottom', BOTTOM_STYLES, BOTTOM_NAMES, 'bottom');
+    this._select('cBeard', BEARD_STYLES, BEARD_NAMES, 'beard');
+    this._select('cGlasses', GLASSES_STYLES, GLASSES_NAMES, 'glasses');
+    this._select('cShoeStyle', SHOE_STYLES, SHOE_NAMES, 'shoeStyle');
     $('cShoes').onchange = (e) => this._upd('shoes', +e.target.value);
     $('cHeight').oninput = (e) => this._upd('height', +e.target.value);
     $('cBuild').oninput = (e) => this._upd('build', +e.target.value);
@@ -59,6 +62,8 @@ export class Creator {
     }
     $('cHair').value = a.hairStyle; $('cTop').value = a.top; $('cBottom').value = a.bottom; $('cShoes').value = a.shoes;
     $('cHeight').value = a.height; $('cBuild').value = a.build;
+    $('cBeard').value = a.beard || 'none'; $('cGlasses').value = a.glasses || 'none'; $('cShoeStyle').value = a.shoeStyle || 'sneaker';
+    if (a.name) $('cTitle').textContent = `המראה של ${a.name}`;
     document.querySelectorAll('.preset').forEach((b, i) => b.classList.toggle('sel', PRESETS[i].name === a.name));
   }
 }

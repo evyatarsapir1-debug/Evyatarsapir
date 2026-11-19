@@ -21,7 +21,7 @@ check('loads to main menu', true);
 await page.screenshot({ path: `${OUT}/01-menu.png` });
 await page.click('#btnNew');
 await page.waitForTimeout(500);
-await page.click('#cStart');
+if (await page.isVisible('#cStart')) await page.click('#cStart');
 await page.waitForFunction(() => window.__game.state === 'playing');
 check('new game starts', true);
 
@@ -1009,6 +1009,37 @@ check('garage: driving onto the turntable inside the workshop offers the garage 
 check('garage: picking a part shows it on the car right away, before paying', gar.livePreview);
 check('garage: buying it — the mechanic works on the car, the money is paid, parts and performance change', gar.working && gar.kit > 0 && gar.paid > 0 && gar.faster, JSON.stringify(gar));
 check('garage: before / after view, and the mods are saved with your registered car', gar.beforeShowsOld && gar.back && gar.saved, JSON.stringify(gar));
+
+// ---------------------------------------------------------------- three playable characters (Miguel, Tavor, Jason)
+const ch = await g(() => {
+  const game = __game, C = game.chars, P = game.player;
+  const step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; if (game.state === 'switching') C.frame(1 / 30); else game._playFrame(1 / 30); } };
+  game.police.clear(); if (game.heist.active) game.heist.fail?.('test');
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  const startName = C.current.name, m0 = game.econ.money;
+  C.open(); const wheel = document.getElementById('charWheel').classList.contains('show') && document.querySelectorAll('.cw-card').length === 3;
+  const other = C.active === 'tavor' ? 'jason' : 'tavor';
+  C.pick(other); const switching = game.state === 'switching';
+  for (let i = 0; i < 150 && game.state === 'switching'; i++) step(1);
+  const now = C.active, look = P.model.app.name, otherMoney = game.econ.money, d = Math.hypot(P.x - C.data[startName === 'מיגל' ? 'miguel' : C.active].x, 0);
+  game.econ.money += 123;  // something only this character earns
+  C.switchTo('miguel'); for (let i = 0; i < 150 && game.state === 'switching'; i++) step(1);
+  const backMoney = game.econ.money;
+  game.police.setWanted?.(2); const blocked = !!C.why(); game.police.clear();
+  game.save(); const sv = JSON.parse(localStorage.getItem('azura_city_save_v1')).chars;
+  return { startName, wheel, switching, now, other, look, otherMoney, m0, backMoney, blocked, saved: sv && Object.keys(sv.data).length === 3 && sv.data[other].money === otherMoney + 123, d };
+});
+check('characters: wheel with Miguel, Tavor and Jason; switching flies the camera to the other one', ch.wheel && ch.switching && ch.now === ch.other && ['טבור', 'ג׳ייסון'].includes(ch.look), JSON.stringify(ch));
+check('characters: each has his own money, saved separately; switching is blocked while wanted', ch.backMoney === ch.m0 && ch.saved && ch.blocked, JSON.stringify(ch));
+
+// ---------------------------------------------------------------- gun store laid out like a real one
+const gs = await g(async () => {
+  const WG = await import('./js/world/worldGen.js'), IN = await import('./js/world/interiors.js');
+  const b = WG.cellData(8, 1).buildings.find((q) => q.sign === 'חנות נשקים'), S = IN.interiorSpec(b);
+  const glass = S.boxes.filter((x) => x.mat === 'glass').length, lamps = S.boxes.filter((x) => x.mat === 'lamp').length;
+  return { boxes: S.boxes.length, glass, lamps, signs: S.signs.map((x) => x.name), counter: !!S.counter, room: S.rooms[0].rect };
+});
+check('gun store: compact store with glass counter, wall displays, shelves, ceiling lights and brand signs', gs.boxes > 400 && gs.glass >= 4 && gs.lamps >= 4 && gs.counter && gs.signs.includes('נץ שטח'), JSON.stringify({ ...gs, room: undefined }));
 
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);

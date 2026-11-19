@@ -8,14 +8,18 @@ export const SKIN_TONES = [0xf6d7c3, 0xe9b98f, 0xc98e62, 0xa86f48, 0x7b4a2c, 0x4
 export const HAIR_COLORS = [0x1b1410, 0x3b2416, 0x6b4325, 0xa8743b, 0xd9b26a, 0xb5402a, 0x9a9a9a, 0x2a3f8f];
 export const HAIR_STYLES = ['short', 'buzz', 'long', 'ponytail', 'curly', 'mohawk', 'bun', 'bald'];
 export const HAIR_NAMES = { short: 'קצר', buzz: 'מגולח', long: 'ארוך', ponytail: 'קוקו', curly: 'מתולתל', mohawk: 'מוהיקן', bun: 'פקעת', bald: 'קרחת' };
-export const TOP_STYLES = ['tshirt', 'jacket', 'tank', 'hoodie', 'suit'];
-export const TOP_NAMES = { tshirt: 'חולצת טי', jacket: 'ז׳קט', tank: 'גופייה', hoodie: 'קפוצ׳ון', suit: 'חליפה' };
-export const BOTTOM_STYLES = ['jeans', 'shorts', 'skirt', 'pants'];
-export const BOTTOM_NAMES = { jeans: 'ג׳ינס', shorts: 'מכנס קצר', skirt: 'חצאית', pants: 'מכנס בד' };
+export const TOP_STYLES = ['tshirt', 'jacket', 'tank', 'hoodie', 'suit', 'shirt'];
+export const TOP_NAMES = { tshirt: 'חולצת טי', jacket: 'ז׳קט', tank: 'גופייה', hoodie: 'קפוצ׳ון', suit: 'חליפה', shirt: 'חולצה מכופתרת פתוחה' };
+export const BOTTOM_STYLES = ['jeans', 'shorts', 'skirt', 'pants', 'capri'];
+export const BOTTOM_NAMES = { jeans: 'ג׳ינס', shorts: 'מכנס קצר', skirt: 'חצאית', pants: 'מכנס בד', capri: 'מכנס מקופל' };
 export const HAT_STYLES = ['none', 'cap', 'beanie', 'fedora', 'bucket'];
 export const HAT_NAMES = { none: 'בלי כובע', cap: 'כובע מצחייה', beanie: 'כובע גרב', fedora: 'כובע לבד', bucket: 'כובע טמבל' };
-export const SHOE_STYLES = ['sneaker', 'boot', 'formal'];
-export const SHOE_NAMES = { sneaker: 'נעלי ספורט', boot: 'מגפונים', formal: 'נעלי עור' };
+export const SHOE_STYLES = ['sneaker', 'boot', 'formal', 'sandal'];
+export const SHOE_NAMES = { sneaker: 'נעלי ספורט', boot: 'מגפונים', formal: 'נעלי עור', sandal: 'כפכפים' };
+export const BEARD_STYLES = ['none', 'stubble', 'mustache', 'goatee', 'full'];
+export const BEARD_NAMES = { none: 'מגולח', stubble: 'זיפים', mustache: 'שפם', goatee: 'זקנקן', full: 'זקן מלא' };
+export const GLASSES_STYLES = ['none', 'sun', 'clear'];
+export const GLASSES_NAMES = { none: 'בלי משקפיים', sun: 'משקפי שמש', clear: 'משקפי ראייה' };
 export const SHOE_COLORS = [0xf2f2f2, 0x1d1d1f, 0xc0392b, 0x2e86c1, 0x6e4b3a, 0x95a5a6, 0xf1c40f, 0x27ae60, 0xd35480];
 export const CLOTH_COLORS = [0xffffff, 0x1d1d1f, 0xc0392b, 0x2e86c1, 0x27ae60, 0xf1c40f, 0x8e44ad, 0xe67e22, 0x34495e, 0x95a5a6, 0x2c3e50, 0x16a085, 0xd35480, 0x6e4b3a,
   0xc8b48a, 0x6d1a2a, 0x3d4148, 0x1f2d4d, 0xf3efe6]; // 14 beige, 15 bordeaux, 16 charcoal, 17 navy, 18 cream
@@ -29,12 +33,28 @@ export const PRESETS = [
 export function defaultAppearance() { return { ...PRESETS[0] }; }
 
 const cap = (r, len) => new THREE.CapsuleGeometry(r, len, 3, 8);
+// a tapered, rounded limb from y=y0 (radius r0) down to y=y1 (radius r1), with an optional bulge in the middle
+function limb(r0, r1, y0, y1, bulge = 0, at = 0.4) {
+  const pts = [], n = 10, L = y0 - y1;
+  pts.push(new THREE.Vector2(0.0001, y0 + r0 * 0.6));
+  for (let i = 0; i <= 3; i++) { const a = (i / 3) * Math.PI / 2; pts.push(new THREE.Vector2(Math.sin(a) * r0, y0 + Math.cos(a) * r0 * 0.6)); }
+  for (let i = 1; i < n; i++) { const t = i / n, r = r0 + (r1 - r0) * t + bulge * Math.exp(-((t - at) ** 2) / 0.04); pts.push(new THREE.Vector2(r, y0 - L * t)); }
+  for (let i = 0; i <= 3; i++) { const a = (i / 3) * Math.PI / 2; pts.push(new THREE.Vector2(Math.cos(a) * r1, y1 - Math.sin(a) * r1 * 0.6)); }
+  pts.push(new THREE.Vector2(0.0001, y1 - r1 * 0.6));
+  const g = new THREE.LatheGeometry(pts, 12); g.computeVertexNormals(); return g;
+}
+// reshape a geometry vertex by vertex
+function sculpt(geo, fn) {
+  const p = geo.attributes.position, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); fn(v); p.setXYZ(i, v.x, v.y, v.z); }
+  geo.computeVertexNormals(); return geo;
+}
 
 export class CharacterModel {
   constructor(appearance) {
     this.root = new THREE.Group();
     this.mats = {
-      skin: new THREE.MeshStandardMaterial({ roughness: 0.7 }),
+      skin: new THREE.MeshPhysicalMaterial({ roughness: 0.58, sheen: 0.4, sheenRoughness: 0.6, sheenColor: 0xffd9c2 }),
       hair: new THREE.MeshStandardMaterial({ roughness: 0.9 }),
       top: new THREE.MeshStandardMaterial({ roughness: 0.85 }),
       bottom: new THREE.MeshStandardMaterial({ roughness: 0.9 }),
@@ -42,7 +62,13 @@ export class CharacterModel {
       sole: new THREE.MeshStandardMaterial({ roughness: 0.8, color: 0xf4f4f4 }),
       hat: new THREE.MeshStandardMaterial({ roughness: 0.8 }),
       hatBand: new THREE.MeshStandardMaterial({ roughness: 0.6, color: 0x1d1d1f }),
-      eye: new THREE.MeshBasicMaterial({ color: 0x111111 }),
+      eye: new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 0.15 }),
+      sclera: new THREE.MeshStandardMaterial({ color: 0xf2eee8, roughness: 0.3 }),
+      lip: new THREE.MeshStandardMaterial({ roughness: 0.5 }),
+      beard: new THREE.MeshStandardMaterial({ roughness: 1, transparent: true }),
+      under: new THREE.MeshStandardMaterial({ roughness: 0.85, color: 0xf4f4f2 }),
+      lens: new THREE.MeshStandardMaterial({ color: 0x111418, metalness: 0.6, roughness: 0.08, transparent: true, opacity: 0.88 }),
+      frame: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.5, roughness: 0.35 }),
     };
     this._build();
     this.phase = 0;
@@ -64,17 +90,55 @@ export class CharacterModel {
     const hips = this.hips = this._pivot(body, 0, 0.95, 0);
     this.pelvis = this._mesh(new THREE.BoxGeometry(0.32, 0.18, 0.2), M.bottom, hips, 0, 0.02, 0);
     const spine = this.spine = this._pivot(hips, 0, 0.08, 0);
-    const torso = this.torso = this._mesh(cap(0.15, 0.26), M.top, spine, 0, 0.24, 0);
+    // torso: broad shoulders and chest, narrower waist, flatter back
+    const torsoGeo = sculpt(new THREE.CapsuleGeometry(0.15, 0.26, 6, 16), (v) => {
+      const t = (v.y + 0.28) / 0.56;
+      const w = 0.84 + 0.2 * Math.exp(-((t - 0.78) ** 2) / 0.03) - 0.04 * Math.exp(-((t - 0.32) ** 2) / 0.02);
+      v.x *= w;
+      if (v.z > 0) v.z *= 1 + 0.16 * Math.exp(-((t - 0.7) ** 2) / 0.02); else v.z *= 0.92;
+      if (t > 0.86) v.y -= Math.abs(v.x) * 0.25;      // sloping shoulders
+    });
+    const torso = this.torso = this._mesh(torsoGeo, M.top, spine, 0, 0.24, 0);
     torso.scale.set(1.18, 1, 0.75);
+    // open shirt: white undershirt showing down the front, collar and placket
+    this.shirtOpen = this._pivot(spine, 0, 0, 0);
+    const vee = this._mesh(sculpt(new THREE.PlaneGeometry(0.11, 0.4, 1, 6), (v) => { v.x *= 0.5 + (v.y + 0.2) * 1.6; v.z = 0.006; }), M.under, this.shirtOpen, 0, 0.25, 0.123);
+    vee.rotation.x = -0.05;
+    for (const sx of [-1, 1]) {
+      const col = this._mesh(new THREE.BoxGeometry(0.075, 0.03, 0.06), M.top, this.shirtOpen, sx * 0.065, 0.5, 0.06); col.rotation.set(0.5, sx * 0.4, sx * 0.5);
+      const edge = this._mesh(new THREE.BoxGeometry(0.014, 0.36, 0.012), M.top, this.shirtOpen, sx * 0.05, 0.27, 0.126); edge.rotation.z = -sx * 0.1;
+    }
+    this.shirtOpen.traverse((o) => { if (o.isMesh) o.castShadow = false; });
     this.chest = torso;
     const neck = this.neck = this._pivot(spine, 0, 0.5, 0);
     this._mesh(cap(0.05, 0.06), M.skin, neck, 0, 0.03, 0);
     const head = this.head = this._pivot(neck, 0, 0.14, 0.01);
-    const skull = this._mesh(new THREE.SphereGeometry(0.115, 16, 12), M.skin, head, 0, 0, 0);
-    skull.scale.set(0.92, 1.05, 1);
-    this._mesh(new THREE.SphereGeometry(0.035, 8, 6), M.skin, head, 0, -0.01, 0.11); // nose
+    // head: cranium, jaw and chin, cheekbones, ears, nose, lips, eyes with whites + iris, brows
+    const skull = this._mesh(sculpt(new THREE.SphereGeometry(0.115, 24, 18), (v) => {
+      if (v.y < 0) { const k = 1 + v.y * 2.2; v.x *= Math.max(0.62, k); if (v.z < 0) v.z *= Math.max(0.7, k); }   // jaw narrows, back of the skull rounds off
+      if (v.z > 0.07 && v.y > -0.02 && v.y < 0.04) v.z -= 0.006;                                                  // eye sockets
+      if (v.y < -0.07 && v.z > 0.02) v.z += 0.012;                                                                 // chin
+    }), M.skin, head, 0, 0, 0);
+    skull.scale.set(0.92, 1.08, 1);
+    const nose = this._mesh(sculpt(new THREE.ConeGeometry(0.022, 0.06, 8), (v) => { v.z *= 0.7; }), M.skin, head, 0, 0.0, 0.112); nose.rotation.x = -0.35;
+    this._mesh(new THREE.SphereGeometry(0.017, 10, 8), M.skin, head, 0, -0.025, 0.118);
+    for (const sx of [-1, 1]) {
+      const ear = this._mesh(new THREE.SphereGeometry(0.03, 10, 8), M.skin, head, sx * 0.104, 0.0, -0.005); ear.scale.set(0.35, 1, 0.7);
+      const cheek = this._mesh(new THREE.SphereGeometry(0.03, 10, 8), M.skin, head, sx * 0.055, -0.01, 0.083); cheek.scale.set(1, 0.7, 0.7);
+    }
+    const lips = this._mesh(new THREE.CapsuleGeometry(0.008, 0.035, 2, 8), M.lip, head, 0, -0.058, 0.1); lips.rotation.z = Math.PI / 2; lips.scale.set(1, 1, 0.6);
     this.eyes = [];
-    for (const s of [-1, 1]) this.eyes.push(this._mesh(new THREE.SphereGeometry(0.016, 8, 6), M.eye, head, s * 0.04, 0.025, 0.098));
+    this.brows = [];
+    for (const s of [-1, 1]) {
+      const e = this._pivot(head, s * 0.04, 0.022, 0.093);
+      this._mesh(new THREE.SphereGeometry(0.017, 12, 10), M.sclera, e, 0, 0, 0).scale.set(1, 0.75, 0.6);
+      this._mesh(new THREE.SphereGeometry(0.0085, 10, 8), M.eye, e, 0, 0, 0.009);
+      this.eyes.push(e);
+      const b = this._mesh(new THREE.BoxGeometry(0.036, 0.008, 0.01), M.hair, head, s * 0.041, 0.045, 0.1); b.rotation.z = -s * 0.12;
+      this.brows.push(b);
+    }
+    this.beardGroup = this._pivot(head, 0, 0, 0);
+    this.glassesGroup = this._pivot(head, 0, 0, 0);
     this.hairGroup = this._pivot(head, 0, 0, 0);
     this.hatGroup = this._pivot(head, 0, 0, 0);
     this.foodMat = new THREE.MeshStandardMaterial({ roughness: 0.7 });
@@ -82,11 +146,21 @@ export class CharacterModel {
     this.arms = [];
     for (const s of [-1, 1]) {
       const sh = this._pivot(spine, s * 0.21, 0.42, 0);
-      const upper = this._mesh(cap(0.055, 0.2), M.top, sh, 0, -0.14, 0);
+      const delt = this._mesh(new THREE.SphereGeometry(0.06, 14, 10), M.top, sh, -s * 0.006, -0.035, 0); delt.scale.set(0.95, 0.85, 0.88);
+      const upper = this._mesh(limb(0.058, 0.044, 0.0, -0.27, 0.008, 0.3), M.top, sh, 0, 0, 0);
+      const sleeve = this._mesh(new THREE.CylinderGeometry(0.066, 0.07, 0.15, 14, 1, true), M.top, sh, 0, -0.07, 0);   // short sleeve of the open shirt
       const elbow = this._pivot(sh, 0, -0.29, 0);
-      const lower = this._mesh(cap(0.048, 0.2), M.skin, elbow, 0, -0.13, 0);
-      const hand = this._mesh(new THREE.SphereGeometry(0.052, 8, 6), M.skin, elbow, 0, -0.28, 0.01);
-      this.arms.push({ sh, upper, elbow, lower, hand, s });
+      const lower = this._mesh(limb(0.047, 0.032, 0.02, -0.24, 0.007, 0.25), M.skin, elbow, 0, 0, 0);
+      // hand: palm + four fingers + thumb, relaxed and slightly curled
+      const hand = this._mesh(sculpt(new THREE.BoxGeometry(0.03, 0.085, 0.075, 1, 2, 2), (v) => { v.z *= 1 - (v.y + 0.04) * 1.2; }), M.skin, elbow, 0, -0.295, 0.008);
+      const fingers = this._pivot(elbow, 0, -0.335, 0.008);
+      for (let i = 0; i < 4; i++) {
+        const f = this._mesh(new THREE.CapsuleGeometry(0.0085, 0.05 - Math.abs(i - 1.4) * 0.008, 2, 6), M.skin, fingers, -s * 0.004, -0.028, -0.026 + i * 0.0175);
+        f.rotation.x = 0.12; f.rotation.z = s * 0.18;
+      }
+      const thumb = this._mesh(new THREE.CapsuleGeometry(0.01, 0.04, 2, 6), M.skin, elbow, -s * 0.012, -0.29, 0.05); thumb.rotation.set(0.6, 0, -s * 0.4);
+      fingers.add(thumb); thumb.position.set(-s * 0.012, 0.045, 0.042);
+      this.arms.push({ sh, upper, elbow, lower, hand, fingers, delt, sleeve, s });
       if (s === 1) {
         // food held while eating (shape changes with what you eat)
         this.food = this._pivot(elbow, 0, -0.3, 0.07);
@@ -101,14 +175,16 @@ export class CharacterModel {
     this.legs = [];
     for (const s of [-1, 1]) {
       const hip = this._pivot(hips, s * 0.09, -0.04, 0);
-      const upper = this._mesh(cap(0.08, 0.3), M.bottom, hip, 0, -0.21, 0);
+      const upper = this._mesh(sculpt(limb(0.088, 0.058, 0.02, -0.42, 0.01, 0.3), (v) => { if (v.z > 0) v.z *= 1.06; }), M.bottom, hip, 0, 0, 0);
       const knee = this._pivot(hip, 0, -0.43, 0);
-      const lower = this._mesh(cap(0.065, 0.3), M.bottom, knee, 0, -0.2, 0);
+      const lower = this._mesh(sculpt(limb(0.056, 0.038, 0.02, -0.4, 0.014, 0.3), (v) => { if (v.z < 0) v.z *= 1.18; }), M.bottom, knee, 0, 0, 0);
+      const cuff = this._mesh(new THREE.CylinderGeometry(0.068, 0.066, 0.07, 14), M.bottom, knee, 0, -0.06, 0);   // rolled-up trouser leg
+      const strap = this._mesh(new THREE.TorusGeometry(0.03, 0.009, 6, 12, Math.PI), M.shoes, knee, 0, -0.455, 0.09); strap.rotation.x = -0.3;
       const foot = this._mesh(new THREE.BoxGeometry(0.1, 0.07, 0.25), M.shoes, knee, 0, -0.44, 0.05);
       const sole = this._mesh(new THREE.BoxGeometry(0.106, 0.026, 0.262), M.sole, knee, 0, -0.482, 0.052);
       const shaft = this._mesh(new THREE.CylinderGeometry(0.074, 0.07, 0.2, 10), M.shoes, knee, 0, -0.34, 0);
       const lace = this._mesh(new THREE.BoxGeometry(0.06, 0.012, 0.1), M.sole, knee, 0, -0.402, 0.1);
-      this.legs.push({ hip, upper, knee, lower, foot, sole, shaft, lace, s });
+      this.legs.push({ hip, upper, knee, lower, foot, sole, shaft, lace, cuff, strap, s });
     }
     this.skirt = this._mesh(new THREE.CylinderGeometry(0.17, 0.27, 0.36, 12, 1, true), M.bottom, hips, 0, -0.15, 0);
     this.skirt.material = M.bottom;
@@ -161,6 +237,30 @@ export class CharacterModel {
     }
   }
 
+  _beard(style) {
+    const g = this.beardGroup, M = this.mats;
+    while (g.children.length) { const c = g.children.pop(); c.geometry.dispose(); }
+    if (!style || style === 'none') return;
+    const jaw = () => this._mesh(new THREE.SphereGeometry(0.119, 20, 12, Math.PI / 2 - 1.35, 2.7, Math.PI * 0.52, Math.PI * 0.34), M.beard, g, 0, 0.004, 0.004);
+    const stache = () => { const m = this._mesh(new THREE.CapsuleGeometry(0.011, 0.04, 2, 8), M.beard, g, 0, -0.043, 0.108); m.rotation.z = Math.PI / 2; return m; };
+    if (style === 'stubble') { const j = jaw(); j.scale.set(0.93, 1.1, 1.01); }
+    if (style === 'full') { const j = jaw(); j.scale.set(0.97, 1.16, 1.06); stache(); const c = this._mesh(new THREE.SphereGeometry(0.04, 12, 8), M.beard, g, 0, -0.1, 0.07); c.scale.set(1.2, 0.8, 0.9); }
+    if (style === 'mustache') stache();
+    if (style === 'goatee') { stache(); const c = this._mesh(new THREE.SphereGeometry(0.028, 10, 8), M.beard, g, 0, -0.09, 0.09); c.scale.set(1, 1.2, 0.7); }
+  }
+  _glasses(style) {
+    const g = this.glassesGroup, M = this.mats;
+    while (g.children.length) { const c = g.children.pop(); c.geometry.dispose(); }
+    if (!style || style === 'none') return;
+    M.lens.color.setHex(style === 'sun' ? 0x0e1114 : 0xdfe9ef); M.lens.opacity = style === 'sun' ? 0.92 : 0.25;
+    for (const sx of [-1, 1]) {
+      this._mesh(new THREE.BoxGeometry(0.044, 0.03, 0.004), M.lens, g, sx * 0.041, 0.022, 0.112);
+      this._mesh(new THREE.BoxGeometry(0.048, 0.005, 0.006), M.frame, g, sx * 0.041, 0.038, 0.112);
+      const arm = this._mesh(new THREE.BoxGeometry(0.004, 0.005, 0.11), M.frame, g, sx * 0.064, 0.034, 0.06); arm.rotation.y = sx * 0.12;
+    }
+    this._mesh(new THREE.BoxGeometry(0.02, 0.005, 0.005), M.frame, g, 0, 0.032, 0.113);
+  }
+
   _hat(style) {
     const g = this.hatGroup, M = this.mats;
     while (g.children.length) { const c = g.children.pop(); c.geometry.dispose(); }
@@ -197,6 +297,11 @@ export class CharacterModel {
     M.bottom.color.setHex(CLOTH_COLORS[app.bottomColor] ?? 0x34495e);
     M.shoes.color.setHex(SHOE_COLORS[app.shoes] ?? SHOE_COLORS[0]);
     this._hair(app.hairStyle);
+    M.lip.color.copy(M.skin.color).multiplyScalar(0.78).lerp(new THREE.Color(0xa8504a), 0.25);
+    M.beard.color.setHex(HAIR_COLORS[app.hairColor] ?? HAIR_COLORS[0]); M.beard.opacity = app.beard === 'stubble' ? 0.55 : 1;
+    if (this._beardKey !== app.beard) { this._beardKey = app.beard; this._beard(app.beard); }
+    if (this._glassKey !== app.glasses) { this._glassKey = app.glasses; this._glasses(app.glasses); }
+    M.under.color.setHex(CLOTH_COLORS[app.underColor ?? 0] ?? 0xf4f4f2);
     M.hat.color.setHex(CLOTH_COLORS[app.hatColor] ?? 0x1d1d1f);
     if (this._hatKey !== app.hat) { this._hatKey = app.hat; this._hat(app.hat); }
     this.hairGroup.visible = !(app.hat === 'beanie' || app.hat === 'bucket') || app.hairStyle === 'long' || app.hairStyle === 'ponytail';
@@ -207,17 +312,25 @@ export class CharacterModel {
     for (const a of this.arms) {
       a.upper.material = top === 'tank' ? M.skin : M.top;
       a.lower.material = top === 'jacket' || top === 'hoodie' || top === 'suit' ? M.top : M.skin;
+      a.delt.material = top === 'tank' ? M.skin : M.top;
+      a.sleeve.visible = top === 'shirt';
     }
+    this.shirtOpen.visible = top === 'shirt';
     this.hood.visible = top === 'hoodie';
     this.suit.visible = top === 'suit';
     this.tieMat.color.setHex(app.topColor === 2 || app.topColor === 15 ? 0x1d1d1f : app.topColor === 1 || app.topColor === 17 ? 0x7b1e2b : 0x2b4a7a);
     const b = app.bottom;
     for (const l of this.legs) {
       l.upper.material = b === 'skirt' ? M.skin : M.bottom;
-      l.lower.material = b === 'shorts' || b === 'skirt' ? M.skin : M.bottom;
+      l.lower.material = b === 'shorts' || b === 'skirt' || b === 'capri' ? M.skin : M.bottom;
+      l.cuff.visible = b === 'capri';
     }
     this.skirt.visible = b === 'skirt';
-    for (const l of this.legs) { l.shaft.visible = shoeStyle === 'boot'; l.lace.visible = shoeStyle === 'sneaker'; }
+    for (const l of this.legs) {
+      l.shaft.visible = shoeStyle === 'boot'; l.lace.visible = shoeStyle === 'sneaker'; l.strap.visible = shoeStyle === 'sandal';
+      l.foot.material = shoeStyle === 'sandal' ? M.skin : M.shoes; l.foot.scale.set(shoeStyle === 'sandal' ? 0.85 : 1, shoeStyle === 'sandal' ? 0.6 : 1, 1);
+    }
+    if (shoeStyle === 'sandal') M.sole.color.setHex(0x2a2522);
     const h = clamp(app.height || 1, 0.85, 1.15), w = clamp(app.build || 1, 0.8, 1.25);
     this.body.scale.set(w, h, w);
     this.torso.scale.set(1.18 * w, 1, 0.75 * (0.9 + w * 0.1));
@@ -406,6 +519,8 @@ export class CharacterModel {
     }
     this.arms[0].sh.rotation.z = -t.armSide; this.arms[1].sh.rotation.z = t.armSide;
     this.arms[0].elbow.rotation.x = t.elbowL; this.arms[1].elbow.rotation.x = t.elbowR;
+    const grip = mode === 'foot' && s.aim && s.hold;
+    this.arms[1].fingers.visible = !grip; this.arms[0].fingers.visible = !(grip && (s.hold === 'rifle' || s.hold === 'heavy' || (s.hold === 'pistol' && s.aim > 1)));
     this.head.rotation.x = -t.spine * 0.6;
     // blinking
     this.blink -= dt;

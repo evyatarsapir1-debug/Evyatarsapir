@@ -313,6 +313,106 @@ function gunWall(F, spec, y0, H, hl, D, cw) {
   spec.lamps.push(...[0.3, 0.7].map((k) => { const [x, z] = F.pt(a0 + (a1 - a0) * k, dw - 0.6); return { x, z, y: y0 + H - 0.03 }; }));
 }
 
+// Gun store laid out like a real one (all models and brands are made up): checker floor, drop ceiling with
+// fluorescent panels, slatwall on the back and side walls full of displayed pieces, an L-shaped glass counter with
+// the clerk behind it, aisle shelving with ammo boxes and cases, brand signs and posters.
+function gunStore(F, spec, C, y0, H, L, D, hl, furn) {
+  const box = (a0, a1, d0, d1, ya, yb, color, m = 'prop') => spec.boxes.push(boxFromRect(F.rect(Math.min(a0, a1), Math.max(a0, a1), Math.min(d0, d1), Math.max(d0, d1)), y0 + ya, y0 + yb, color, m));
+  const solid = (a0, a1, d0, d1, ya, yb) => C.push(colFromRect(F.rect(a0, a1, d0, d1), y0 + ya - 0.1, y0 + yb));
+  const sign = (a, d, y, w, name, nx, nz) => { const [x, z] = F.pt(a, d); spec.signs.push({ x, y: y0 + y, z, nx, nz, w, name }); };
+  const steel = 0x24272b, poly = 0x1b1d20, wood = 0x6b4a2f, tan = 0x9c8a6a, od = 0x4f5a32;
+  // floor: black & white checker tiles (the white is the floor itself)
+  const T = 0.5;
+  for (let a = -hl, i = 0; a < hl - 0.01; a += T, i++) for (let d = 0, j = 0; d < D - 0.01; d += T, j++) if ((i + j) % 2) box(a, Math.min(hl, a + T), d, Math.min(D, d + T), 0.021, 0.026, 0x2b2b2d);
+  // drop ceiling grid + long fluorescent panels + an AC vent
+  const yc = H - 0.02;
+  for (let a = -hl + 0.6; a < hl; a += 0.6) box(a - 0.015, a + 0.015, 0, D, yc - 0.03, yc, 0xc9c9c4, 'metal');
+  for (let d = 0.6; d < D; d += 0.6) box(-hl, hl, d - 0.015, d + 0.015, yc - 0.03, yc, 0xc9c9c4, 'metal');
+  for (let d = 1.5; d < D - 0.5; d += 2.4) for (const a of [-hl * 0.45, hl * 0.45]) box(a - 0.6, a + 0.6, d - 0.13, d + 0.13, yc - 0.06, yc - 0.03, 0xffffff, 'lamp');
+  box(-0.4, 0.4, D * 0.5 - 0.3, D * 0.5 + 0.3, yc - 0.05, yc - 0.03, 0xe8e8e4);
+  for (let k = -2; k <= 2; k++) box(-0.36, 0.36, D * 0.5 + k * 0.1 - 0.015, D * 0.5 + k * 0.1 + 0.015, yc - 0.06, yc - 0.05, 0x9a9a96);
+  // walls: tiled lower band + slatwall (horizontal grooves) on the back and right walls
+  const top = Math.min(H - 0.35, 2.9), dw = D - 0.02, aw = hl - 0.02;
+  box(-hl, hl, dw - 0.04, dw, 0.03, top, 0xcfc4b0);                                      // back slatwall panel
+  box(aw - 0.04, aw, 1.2, D, 0.03, top, 0xcfc4b0);                                        // right slatwall panel
+  for (let y = 0.25; y < top; y += 0.15) { box(-hl, hl, dw - 0.05, dw - 0.04, y, y + 0.012, 0x8e8372); box(aw - 0.05, aw - 0.04, 1.2, D, y, y + 0.012, 0x8e8372); }
+  // --- displayed pieces on the back wall (silhouettes only, no working parts)
+  const rifle = (a, y, z0, z1, kind) => {        // lying horizontally, barrel towards -a
+    const st = kind === 1 ? wood : poly;
+    box(a + 0.62, a + 0.95, z0, z1, y - 0.07, y + 0.03, st); box(a + 0.32, a + 0.62, z0, z1, y - 0.04, y + 0.045, steel);
+    box(a + 0.42, a + 0.5, z0, z1, y - 0.17, y - 0.04, kind === 2 ? 0x2b2b2b : poly); box(a + 0.56, a + 0.61, z0, z1, y - 0.13, y - 0.04, poly);
+    box(a + 0.08, a + 0.32, z0, z1, y - 0.035, y + 0.035, kind === 1 ? wood : poly); box(a - 0.1, a + 0.08, z0 + 0.008, z1 - 0.008, y - 0.012, y + 0.012, steel);
+    if (kind === 2) box(a + 0.3, a + 0.56, z0 + 0.004, z1 - 0.004, y + 0.05, y + 0.1, 0x111111);
+  };
+  const pistol = (a, y, z0, z1, c = steel) => { box(a, a + 0.2, z0, z1, y, y + 0.045, c); box(a + 0.13, a + 0.19, z0, z1, y - 0.11, y, poly); };
+  const smg = (a, y, z0, z1) => { box(a, a + 0.38, z0, z1, y - 0.04, y + 0.05, poly); box(a + 0.22, a + 0.28, z0, z1, y - 0.22, y - 0.04, 0x2b2b2b); box(a + 0.32, a + 0.37, z0, z1, y - 0.14, y - 0.04, poly); box(a - 0.08, a, z0 + 0.008, z1 - 0.008, y - 0.01, y + 0.015, steel); };
+  const bz0 = dw - 0.11, bz1 = dw - 0.065;
+  let n = 0;
+  for (const y of [2.35, 1.85]) { if (y > top - 0.2) continue; for (let a = -hl + 0.5; a + 1.05 < hl - 0.3; a += 1.25, n++) rifle(a, y, bz0, bz1, n % 3); }
+  for (let a = -hl + 0.45, k = 0; a + 0.45 < hl - 0.3; a += (k % 3 === 2 ? 0.55 : 0.42), k++) k % 3 === 2 ? smg(a, 1.4, bz0, bz1) : pistol(a, 1.38, bz0, bz1, k % 4 === 1 ? 0x8a8f94 : steel);
+  // red ammo-box shelf on the back wall under the pieces
+  box(-hl + 0.2, hl - 0.2, dw - 0.32, dw - 0.04, 1.08, 1.11, 0x8a9096, 'metal');
+  for (let a = -hl + 0.3, k = 0; a + 0.2 < hl - 0.3; a += 0.24, k++) box(a, a + 0.2, dw - 0.28, dw - 0.08, 1.11, 1.11 + (k % 2 ? 0.1 : 0.14), [0xb3261e, 0xb3261e, 0x1f4d8a, 0xd4a017][k % 4]);
+  // --- right wall: rows of shelves with ammo boxes, pistols on the slatwall between them
+  for (const y of [0.45, 0.95, 1.45]) {
+    box(aw - 0.36, aw - 0.04, 1.3, D - 0.2, y, y + 0.03, 0x8a9096, 'metal');
+    for (let d = 1.4, k = 0; d + 0.2 < D - 0.25; d += 0.26, k++) box(aw - 0.32, aw - 0.08, d, d + 0.2, y + 0.03, y + 0.03 + [0.12, 0.16, 0.1, 0.14][k % 4], [0xb3261e, 0x2e7d32, 0xd4a017, 0x6b7a3a, 0x1f4d8a][(k + Math.round(y * 3)) % 5]);
+  }
+  for (let d = 1.6, k = 0; d + 0.3 < D - 0.3; d += 0.55, k++) { const [z0, z1] = [aw - 0.1, aw - 0.06]; spec.boxes.push(boxFromRect(F.rect(z0, z1, d, d + 0.2), y0 + 2.05, y0 + 2.095, steel)); spec.boxes.push(boxFromRect(F.rect(z0, z1, d + 0.13, d + 0.19), y0 + 1.94, y0 + 2.05, poly)); }
+  solid(aw - 0.38, hl, 1.2, D, 0, 1.6);
+  // --- L-shaped glass display counter, clerk behind it (back corridor closed by a half door)
+  const cA0 = Math.max(-hl + 2.6, -0.6), cA1 = hl - 1.4, cd0 = D - 2.05, cd1 = cd0 + 0.6;   // part parallel to the back wall
+  const cb0 = Math.max(2.4, D * 0.35);                                                       // part along the right side
+  const counter = (a0, a1, d0, d1) => {
+    box(a0, a1, d0, d1, 0, 0.55, 0xd9d9d6); box(a0, a1, d0, d1, 0.55, 0.6, 0x9aa0a6, 'metal');
+    box(a0 + 0.03, a1 - 0.03, d0 + 0.03, d1 - 0.03, 0.6, 0.98, 0xbfe0ea, 'glass'); box(a0, a1, d0, d1, 0.98, 1.0, 0xcfe7ef, 'glass');
+    box(a0 + 0.05, a1 - 0.05, d0 + 0.05, d1 - 0.05, 0.6, 0.62, 0x1d1d1f);                     // black felt under the glass
+    solid(a0, a1, d0, d1, 0, 1.0);
+  };
+  counter(cA0, cA1, cd0, cd1);
+  counter(cA1 - 0.6, cA1, cb0, cd0);
+  box(cA1, aw - 0.38, cb0, cb0 + 0.06, 0, 0.95, 0xd9d9d6); solid(cA1, aw - 0.38, cb0, cb0 + 0.06, 0, 0.95);   // closes the corridor behind the side counter
+  // pieces lying in the display (under the glass)
+  for (let a = cA0 + 0.15; a + 0.25 < cA1 - 0.65; a += 0.38) { box(a, a + 0.2, cd0 + 0.25, cd0 + 0.32, 0.625, 0.65, steel); box(a + 0.14, a + 0.2, cd0 + 0.32, cd0 + 0.43, 0.625, 0.648, poly); }
+  for (let d = cb0 + 0.2; d + 0.3 < cd0; d += 0.45) box(cA1 - 0.4, cA1 - 0.2, d, d + 0.25, 0.625, 0.66, [0xb3261e, 0x6b7a3a, 0x1f4d8a][Math.round(d * 3) % 3]);
+  // on top: an open hard case, the till and a card reader
+  box(cA0 + 0.25, cA0 + 0.85, cd0 + 0.08, cd0 + 0.48, 1.0, 1.08, 0x1d1d1f); box(cA0 + 0.27, cA0 + 0.83, cd0 + 0.1, cd0 + 0.46, 1.08, 1.085, 0x5a5a5a);
+  box(cA0 + 0.25, cA0 + 0.85, cd0 + 0.44, cd0 + 0.5, 1.08, 1.45, 0x1d1d1f);
+  box(cA1 - 1.3, cA1 - 0.9, cd0 + 0.1, cd0 + 0.45, 1.0, 1.12, 0x2b2b2b); box(cA1 - 1.28, cA1 - 0.92, cd0 + 0.3, cd0 + 0.33, 1.12, 1.35, 0x111111);
+  box(cA1 - 1.25, cA1 - 0.95, cd0 + 0.28, cd0 + 0.3, 1.15, 1.32, 0x3fa7d6, 'lamp');
+  box(cA0 - 0.06, cA0, cd1, D - 0.05, 0, 0.95, 0xd9d9d6); solid(cA0 - 0.06, cA0, cd1, D - 0.05, 0, 0.95);   // half door
+  spec.counter = { pt: F.pt((cA0 + cA1) / 2 - 0.3, cd0 - 0.6), keeper: F.pt((cA0 + cA1) / 2 - 0.3, cd1 + 0.55), yaw: Math.atan2(F.fx, F.fz), y: y0 };
+  // --- left wall: tall open shelving with cases and boxes; aisle gondola in the middle
+  const shelfUnit = (a0, a1, d0, d1, hgt, faceSign) => {
+    box(a0, a1, d0, d1, 0, 0.12, 0x6f6a62);
+    for (let y = 0.12; y < hgt; y += 0.48) {
+      box(a0, a1, d0, d1, y, y + 0.025, 0xb9b2a6);
+      const along = Math.abs(d1 - d0) > Math.abs(a1 - a0);
+      const len = along ? d1 - d0 : a1 - a0;
+      for (let u = 0.05, k = 0; u + 0.18 < len; u += 0.24, k++) {
+        const hh = [0.16, 0.22, 0.12, 0.3, 0.18][(k + Math.round(y * 5)) % 5], c = [od, 0xb3261e, 0x1d1d1f, tan, 0x2e7d32, 0xd4a017][(k * 7 + Math.round(y * 9)) % 6];
+        if (along) box(a0 + 0.04, a1 - 0.04, d0 + u, d0 + u + 0.2, y + 0.025, y + 0.025 + hh, c); else box(a0 + u, a0 + u + 0.2, d0 + 0.04, d1 - 0.04, y + 0.025, y + 0.025 + hh, c);
+      }
+    }
+    box(a0, a1, d0, d1, hgt, hgt + 0.03, 0x6f6a62);
+    solid(a0, a1, d0, d1, 0, hgt);
+  };
+  shelfUnit(-hl + 0.02, -hl + 0.5, 1.0, D - 0.6, Math.min(2.1, top - 0.2), 1);
+  const gA = -hl + 1.9;
+  if (gA + 0.7 < cA0 - 0.9) shelfUnit(gA, gA + 0.7, 1.6, Math.min(D - 2.4, cd0 - 0.6), 1.4, 1);
+  // ammo cans + crates on the floor
+  for (let k = 0; k < 3; k++) box(aw - 0.9 - k * 0.38, aw - 0.58 - k * 0.38, 0.8, 1.1, 0, 0.22 + (k % 2) * 0.22, od);
+  box(-hl + 0.7, -hl + 1.3, D - 0.55, D - 0.05, 0, 0.45, 0x8a6a3e); box(-hl + 0.7, -hl + 1.3, D - 0.55, D - 0.05, 0.45, 0.47, 0x6b4a2f); solid(-hl + 0.7, -hl + 1.3, D - 0.55, D - 0.05, 0, 0.47);
+  // brand signs, posters, a clock and a camera dome (all invented brands)
+  sign(-hl * 0.5, dw - 0.1, top + 0.2, 2.4, 'נץ שטח', F.fx, F.fz);
+  sign(hl * 0.45, dw - 0.1, top + 0.2, 2.4, 'טיטאן ציוד', F.fx, F.fz);
+  sign(0, dw - 0.1, 0.78, 1.6, 'מבצע השבוע', F.fx, F.fz);
+  for (const [a, c] of [[-hl + 1.2, 0x1f3a6b], [-hl + 2.6, 0xb3261e]]) if (a < hl - 1) box(a - 0.35, a + 0.35, 0.05, 0.08, 1.7, 2.45, c);   // posters by the door (front wall, inside)
+  box(0.9, 1.3, dw - 0.07, dw - 0.05, top - 0.1, top + 0.3, 0xf4f4f4); box(1.05, 1.15, dw - 0.08, dw - 0.07, top + 0.04, top + 0.16, 0x111111);   // clock face
+  box(hl - 0.6, hl - 0.4, 0.4, 0.6, yc - 0.12, yc - 0.03, 0x1d1d1f);   // camera dome
+  spec.lamps.push(...[0.25, 0.75].map((k) => { const [x, z] = F.pt(-hl + L * k, D - 1.0); return { x, z, y: y0 + H - 0.03 }; }));
+}
+
 export function interiorSpec(b) {
   if (b._spec) return b._spec;
   const F = frame(b);
@@ -336,11 +436,22 @@ export function interiorSpec(b) {
     const isCafe = CAFE.some((k) => b.sign?.includes(k)), isClothes = CLOTHES.some((k) => b.sign?.includes(k));
     // counter near the back
     const cw = Math.min(3.2, L * 0.4);
-    spec.counter = { pt: F.pt(hl - cw / 2 - 0.6, D - 2.9), keeper: F.pt(hl - cw / 2 - 0.6, D - 1.0), yaw: Math.atan2(F.fx, F.fz), y: y0 };
-    furn(hl - cw - 0.6, hl - 0.6, D - 2.2, D - 1.5, y0, y0 + 1.05, 0x7a5233);
-    furn(hl - cw - 0.6, hl - 0.6, D - 2.25, D - 1.45, y0 + 1.05, y0 + 1.1, 0xd8d2c8, false);
-    if (/חנות נשקים/.test(b.sign || '')) gunWall(F, spec, y0, H, hl, D, cw);
-    if (isCafe) {
+    const gunShop = /חנות נשקים/.test(b.sign || '') && L >= 6 && D >= 6;
+    if (gunShop) {
+      // a compact shop room inside the bigger building (real gun stores are small and packed)
+      const Ls = Math.min(L, 10), Ds = Math.min(D, 11), hs = Ls / 2, room = spec.rooms[spec.rooms.length - 1];
+      Object.assign(room, { rect: F.rect(-hs, hs, 0, Ds), floor: 0xf2f0ea, wall: 0xece6da });
+      if (Ds < D) C.push(colFromRect(F.rect(-hs, hs, Ds, Ds + 0.2), y0 - 0.1, y0 + H));
+      if (hs < hl) for (const sg of [-1, 1]) C.push(colFromRect(F.rect(sg < 0 ? -hs - 0.2 : hs, sg < 0 ? -hs : hs + 0.2, 0, Ds), y0 - 0.1, y0 + H));
+      gunStore(F, spec, C, y0, H, Ls, Ds, hs, furn);
+    }
+    else {
+      spec.counter = { pt: F.pt(hl - cw / 2 - 0.6, D - 2.9), keeper: F.pt(hl - cw / 2 - 0.6, D - 1.0), yaw: Math.atan2(F.fx, F.fz), y: y0 };
+      furn(hl - cw - 0.6, hl - 0.6, D - 2.2, D - 1.5, y0, y0 + 1.05, 0x7a5233);
+      furn(hl - cw - 0.6, hl - 0.6, D - 2.25, D - 1.45, y0 + 1.05, y0 + 1.1, 0xd8d2c8, false);
+      if (/חנות נשקים/.test(b.sign || '')) gunWall(F, spec, y0, H, hl, D, cw);
+    }
+    if (gunShop) { /* laid out above */ } else if (isCafe) {
       const n = Math.max(1, Math.min(4, Math.floor((L - 2) / 2.6)));
       for (let i = 0; i < n; i++) for (const dd of [2.2, 4.6]) {
         if (dd > D - 3) continue;
@@ -361,7 +472,7 @@ export function interiorSpec(b) {
     } else {
       for (let a = -hl + 1.2; a < hl - cw - 1.5; a += 2.4) furn(a, a + 0.7, 1.8, Math.max(2.6, D - 3.2), y0, y0 + 1.8, [0x5d8aa8, 0xb35a3c, 0x6a994e][Math.floor(a + 20) % 3]);
     }
-    for (let d = 1.8; d < D; d += 3.5) lamp(0, d, y0 + H - 0.03);
+    if (!gunShop) for (let d = 1.8; d < D; d += 3.5) lamp(0, d, y0 + H - 0.03);
   } else if (b.interior === 'house') {
     const two = b.h >= 5.6;
     const H1 = two ? b.h / 2 : b.h;

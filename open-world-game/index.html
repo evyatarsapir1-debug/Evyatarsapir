@@ -41,17 +41,20 @@
   <!-- Character creator -->
   <div id="creator" class="screen panel-screen">
     <div class="creator-panel">
-      <h2>יצירת דמות</h2>
-      <div class="presets" id="presets"></div>
-      <label>שם <input id="cName" maxlength="14" /></label>
+      <h2 id="cTitle">המראה של מיגל</h2>
+      <div class="presets" id="presets" hidden></div>
+      <label hidden>שם <input id="cName" maxlength="14" /></label>
       <div class="row"><span>גוון עור</span><div class="swatches" id="cSkin"></div></div>
       <div class="row"><span>תסרוקת</span><select id="cHair"></select></div>
       <div class="row"><span>צבע שיער</span><div class="swatches" id="cHairColor"></div></div>
+      <div class="row"><span>זקן</span><select id="cBeard"></select></div>
+      <div class="row"><span>משקפיים</span><select id="cGlasses"></select></div>
       <div class="row"><span>חולצה</span><select id="cTop"></select></div>
       <div class="row"><span>צבע חולצה</span><div class="swatches" id="cTopColor"></div></div>
       <div class="row"><span>מכנסיים</span><select id="cBottom"></select></div>
       <div class="row"><span>צבע מכנסיים</span><div class="swatches" id="cBottomColor"></div></div>
-      <div class="row"><span>נעליים</span><select id="cShoes"><option value="0">לבנות</option><option value="1">שחורות</option></select></div>
+      <div class="row"><span>נעליים</span><select id="cShoes"><option value="0">לבנות</option><option value="1">שחורות</option><option value="4">חומות</option></select></div>
+      <div class="row"><span>סוג נעליים</span><select id="cShoeStyle"></select></div>
       <div class="row"><span>גובה</span><input type="range" id="cHeight" min="0.88" max="1.12" step="0.01" /></div>
       <div class="row"><span>מבנה גוף</span><input type="range" id="cBuild" min="0.85" max="1.2" step="0.01" /></div>
       <div class="creator-actions">

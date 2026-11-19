@@ -16,6 +16,7 @@ import { HitFX } from './game/hitfx.js';
 import { Flight } from './game/flight.js';
 import { Heists } from './game/heist.js';
 import { Tuning, applyMods } from './game/tuning.js';
+import { Characters } from './game/characters.js';
 import { Police, POLICE_STATION, HOSPITAL } from './game/police.js';
 import { VEHICLE_TYPES } from './vehicles/vehicleTypes.js';
 import { ShopUI, shopKind } from './game/shops.js';
@@ -102,6 +103,7 @@ class Game {
     this.flight = new Flight(this);
     this.heist = new Heists(this);
     this.tuning = new Tuning(this);
+    this.chars = new Characters(this);
     this.vehicleTypes = VEHICLE_TYPES;
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());
@@ -175,7 +177,7 @@ class Game {
     const unlock = () => this.audio.unlock();
     addEventListener('pointerdown', unlock); addEventListener('keydown', unlock);
     $('btnContinue').onclick = () => this.continueGame();
-    $('btnNew').onclick = () => { this.pendingNew = true; this.toCreator(); };
+    $('btnNew').onclick = () => { this.pendingNew = true; this.newGame(); };   // you start as Miguel (look can be changed later)
     $('btnChar').onclick = () => { this.pendingNew = !hasSave(); this.toCreator(); };
     $('btnSettings').onclick = () => { this.settingsBack = 'menu'; showScreen('settings'); };
     $('btnExit').onclick = () => { this.save(); showScreen('exitScreen'); try { window.close(); } catch { /* ignore */ } };
@@ -238,16 +240,17 @@ class Game {
 
   newGame() {
     this.previewVehicleSafe();
-    this.player.model.setAppearance(this.creator.app);
+    this.chars.reset(START);
+    this.player.model.setAppearance(this.chars.data.miguel.app); this.creator.app = { ...this.chars.data.miguel.app };
     this.player.setPosition(START.x, START.z, START.facing);
     this.player.state = 'foot';
     this.rig.yaw = START.facing; this.rig.pitch = 0.25; this.rig.first = true;
     this.playTime = 0;
-    this.econ.reset(); this.equip(null);
+    this.econ.reset(); this.econ.money = this.chars.data.miguel.money; this.equip(null);
     this.missions.load(null); this.gps.clear();
     this.save();
     this.startPlaying();
-    this.toast('ברוכים הבאים ללוס אנטוס! מצא רכב חונה ולחץ F (או "כניסה") כדי לנהוג.', 6);
+    this.toast('אתה מיגל. ברוכים הבאים ללוס אנטוס! מצא רכב חונה ולחץ F כדי לנהוג · 👥 / K — החלפה לטבור או לג׳ייסון', 7);
   }
 
   continueGame() {
@@ -262,6 +265,7 @@ class Game {
     this.player.state = 'foot';
     this.playTime = s.playTime || 0;
     this.econ.load(s.econ); this.equip(this.econ.equipped);
+    this.chars.load(s.chars, START);
     if (s.world) { this.env.hour = s.world.hour ?? 10; this.env.setWeather(s.world.weather || 'clear'); }
     this.gps.clear();
     this.missions.load(s.missions);
@@ -678,6 +682,7 @@ class Game {
         econ: this.econ.toJSON(),
         world: { hour: this.env.hour, weather: this.env.weather },
         missions: this.missions.toJSON(),
+        chars: this.chars.toJSON(),
       };
     }
     saveGame(data);
@@ -698,6 +703,8 @@ class Game {
     else if (this.state === 'shop' && this.shop.tryOn) this._fittingFrame(dt);
     else if (this.state === 'playing') this._playFrame(dt);
     else if (this.state === 'tuning') this.tuning.frame(dt);
+    else if (this.state === 'switching') this.chars.frame(dt);
+    else if (this.state === 'charwheel') this.chars.wheelFrame(dt);
     this._lights();
     this.fx.render();
     this.env.probe(this.camera);   // live reflections: one cube-map face per frame
@@ -797,6 +804,7 @@ class Game {
     if (input.wasPressed('map')) { this.openMap(); input.endFrame(); return; }
     if (input.wasPressed('camera')) this.rig.toggleMode();
     if (input.wasPressed('bag')) { this.openBag(); input.endFrame(); return; }
+    if (input.wasPressed('switch')) { this.chars.open(); input.endFrame(); return; }
     if (input.wasPressed('phone')) this.phone.toggle();
     if (input.wasPressed('cycle')) { this.cycleWeapon(); this.aiming = false; }
     // aim button (touch: tap to toggle, keyboard Z) or hold the right mouse button

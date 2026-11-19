@@ -184,12 +184,30 @@ export function getRoof() {
   return cache.roof ||= (() => { const [c, g] = canvas(128, 128); noise(g, 128, 128, '#8b8b88', 30, 2500, 2, 11); return tex(c); })();
 }
 export function getTiles() {
+  // sidewalks: red clay pavers laid in a herringbone pattern (seamless: the pattern repeats every 32 px)
   return cache.tiles ||= (() => {
-    const [c, g] = canvas(128, 128);
-    noise(g, 128, 128, '#d8d8d8', 18, 800, 2, 12);
-    g.fillStyle = 'rgba(0,0,0,0.25)';
-    for (let y = 0; y < 128; y += 16) { g.fillRect(0, y, 128, 2); }
-    for (let y = 0; y < 128; y += 16) for (let x = (y / 16) % 2 * 16; x < 128; x += 32) g.fillRect(x, y, 2, 16);
+    const N = 256, u = 8, [c, g] = canvas(N, N);
+    g.fillStyle = '#6f5b4d'; g.fillRect(0, 0, N, N);                      // mortar / sand joints
+    const shades = ['#a9563b', '#b4613f', '#9b4b34', '#bf6d4c', '#a34f39', '#b86a47', '#94462f'];
+    const hash = (x, y) => { const h = Math.sin((((x % N) + N) % N) * 12.9898 + (((y % N) + N) % N) * 78.233) * 43758.5453; return h - Math.floor(h); };
+    const brick = (x, y, w, h) => {
+      const col = shades[Math.floor(hash(x, y) * shades.length)];
+      for (const ox of [-N, 0, N]) for (const oy of [-N, 0, N]) {
+        const X = x + ox, Y = y + oy; if (X > N || Y > N || X + w < 0 || Y + h < 0) continue;
+        g.fillStyle = col; g.fillRect(X + 0.6, Y + 0.6, w - 1.2, h - 1.2);
+        g.fillStyle = 'rgba(255,230,200,0.10)'; g.fillRect(X + 0.6, Y + 0.6, w - 1.2, 1.2);   // worn top edge
+        g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(X + 0.6, Y + h - 1.6, w - 1.2, 1);
+      }
+    };
+    for (let s = -20; s <= 20; s++) for (let k = -40; k <= 40; k++) {
+      const x = k * u + s * 2 * u, y = k * u - s * 2 * u;
+      if (x < -3 * u || x > N || y < -3 * u || y > N) continue;
+      brick(x, y, 2 * u, u); brick(x, y + u, u, 2 * u);
+    }
+    // grime and wear
+    const img = g.getImageData(0, 0, N, N), d = img.data;
+    for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 22; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+    g.putImageData(img, 0, 0);
     return tex(c);
   })();
 }
