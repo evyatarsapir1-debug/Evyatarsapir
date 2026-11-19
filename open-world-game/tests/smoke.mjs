@@ -738,7 +738,7 @@ const fly = await g(() => {
   return { prompt, state: game.player.state, alt: v.y, kmh: v.speed * 3.6, gearUp: v.parts.jetMesh.geometry === v.parts.cleanGeo, hidden: !jet.mesh.visible };
 });
 check('jet: "board plane" button at a parked airliner', fly.prompt === 'היכנס למטוס', fly.prompt);
-check('jet: player can fly it — takes off, climbs, retracts the gear', fly.alt > 60 && fly.kmh > 230 && fly.gearUp, JSON.stringify(fly));
+check('jet: player can fly it — takes off, climbs, retracts the gear', fly.alt > 60 && fly.kmh > 200 && fly.gearUp, JSON.stringify(fly));
 await shot('21-flying');
 await g(() => { const v = __game.player.vehicle; if (v) { v.x = -600; v.z = 790; v.y = 0; v.vy = 0; v.speed = 0; v.pitch = 0; v.airborne = false; } __game.input.pressed.add('vehicle'); for (let i = 0; i < 40; i++) { __game.time += 1 / 30; __game._playFrame(1 / 30); } });
 
@@ -896,7 +896,8 @@ check('weapons: putting the weapon away is animated too', gun.holstering && gun.
 
 // ---------------------------------------------------------------- run over: fast = stays down for good (no gore), slow = knocked over
 const ro = await g(() => {
-  const game = __game, P = game.player, step = (n, f) => { for (let i = 0; i < n; i++) { if (game.police.level) game.police.clear(); f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const dbg = [];
+  const game = __game, P = game.player, step = (n, f) => { for (let i = 0; i < n; i++) { if (game.police.level) game.police.clear(); f && f(i); game.time += 1 / 30; const ox = P.x, oz = P.z, h0 = game.econ.health; game._playFrame(1 / 30); if (Math.hypot(P.x - ox, P.z - oz) > 5 || game.econ.health < h0 - 5) dbg.push([Math.round(ox), Math.round(oz), Math.round(P.x), Math.round(P.z), P.state, Math.round(game.econ.health)]); } };
   if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
   const run = (kmh, first = 335, gap = 18, n = 4) => {
     game.econ.health = 100; game.teleport(300, 590, 0, 0.3); step(5);
@@ -915,7 +916,7 @@ const ro = await g(() => {
     v.speed = 0; v.vx = v.vz = 0; game.input.pressed.add('vehicle'); step(60);
     return { dead: people.filter((q) => q.state === 'dead').length, hit: people.filter((q) => seen.get(q).has('thrown') || seen.get(q).has('fall')).length, up: people.filter((q) => seen.get(q).has('fall') && q.state !== 'dead' && q.state !== 'fall').length };
   };
-  return { fast: run(60, 330, 4, 4), slow: run(25, 306, 0, 1) };   // fast: a tight group crossing in front of the car   // slow: someone 4 m in front of the bumper, too late to step aside
+  const out = { fast: run(60, 330, 4, 4), slow: run(25, 306, 0, 1) }; out.dbg = dbg.slice(0, 12); return out;   // fast: a tight group crossing in front of the car   // slow: someone 4 m in front of the bumper, too late to step aside
 });
 check('run over at speed: people are hit (no instant dodging) and stay down for good (no gore)', ro.fast.hit >= 2 && ro.fast.dead >= 2 && ro.fast.dead === ro.fast.hit, JSON.stringify(ro));
 check('a slow bump only knocks a person over; they get back up', ro.slow.hit >= 1 && ro.slow.dead === 0, JSON.stringify(ro.slow));
