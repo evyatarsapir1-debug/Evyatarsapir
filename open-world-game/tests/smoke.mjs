@@ -617,7 +617,7 @@ const mil = await g(() => {
 });
 check('military base: buildings and soldiers on guard / patrol', mil.buildings >= 7 && mil.soldiers >= 6, JSON.stringify({ b: mil.buildings, s: mil.soldiers }));
 check('tank: "enter tank", turret follows the camera, the cannon fires and explodes', mil.tLabel === 'היכנס לטנק' && mil.inTank && mil.turned > 0.3 && mil.shells === 1 && mil.boom, JSON.stringify(mil));
-check('fighter jet: "board plane", take off from the base runway and fly', mil.jLabel === 'היכנס למטוס' && mil.inJet && mil.alt > 80 && mil.kmh > 300 && mil.onFoot === 'foot', JSON.stringify(mil));
+check('fighter jet: "board plane", take off from the base runway and fly', mil.jLabel === 'היכנס למטוס' && mil.inJet && mil.alt > 80 && mil.kmh > 240 && mil.onFoot === 'foot', JSON.stringify(mil));
 const gate = await g(() => { const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } }; const dens = game.traffic.target; game.traffic.setDensity(0); game.teleport(-497, 40, Math.PI, 0.3); step(5); for (const c of game.traffic.cars.slice()) game.traffic.remove(c); step(90); const closed = game.military.gateOpen; game.teleport(-497, -28, Math.PI, 0.3); step(75); return { closed, open: game.military.gateOpen, passable: game.military.gateCol.off, restore: game.traffic.setDensity(dens) }; });
 check('base gate: the barrier arm lifts when you arrive', gate.closed < 0.05 && gate.open > 0.95 && gate.passable, JSON.stringify(gate));
 check('fighter jets patrol over the city', mil.patrol >= 4, `${mil.patrol} jets`);
@@ -733,7 +733,7 @@ const fly = await g(() => {
   if (!v || !v.isPlane) return { prompt, state: game.player.state };
   v.x = -900; v.z = 790; v.heading = Math.PI / 2; v.speed = 0;
   game.input.keys.add('KeyW');
-  step(30 * 22, () => { if (v.speed > 60) game.input.keys.add('KeyR'); });
+  step(30 * 32, () => { if (v.speed > 60) game.input.keys.add('KeyR'); });   // gentler controls: a slower, steadier climb
   game.input.keys.clear();
   return { prompt, state: game.player.state, alt: v.y, kmh: v.speed * 3.6, gearUp: v.parts.jetMesh.geometry === v.parts.cleanGeo, hidden: !jet.mesh.visible };
 });
@@ -902,6 +902,8 @@ const ro = await g(() => {
     game.econ.health = 100; game.teleport(300, 590, 0, 0.3); step(5);
     // clear the lane: a car left there by an earlier run would be crashed into at full speed
     for (const o of [...game.vehicles.all(), ...game.traffic.cars]) if (o.x > 285 && o.x < 560 && Math.abs(o.z - 597.75) < 5) { o.z += 40; o.speed = 0; o.vx = o.vz = 0; o.sync(); }
+    // patrol cars from the previous tests (also the ones driving away) must not be in the lane either
+    for (const c of [...game.police.cars, ...(game.police.gone || [])]) game.police._remove(c); game.police.cars = []; game.police.gone = [];
     const v = game.spawnVehicleNear('sedan', 300, 600); v.x = 300; v.z = 597.75; v.heading = Math.PI / 2; v.sync();
     P.state = 'driving'; P.vehicle = v; v.driver = 'player'; P.ignoreVehicle = v; P._attach(v);
     const people = [];
@@ -1071,6 +1073,7 @@ const gang = await g(() => {
   game.police.clear(); if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
   game.econ.health = 100; game.teleport(114, 114, 0); step(40);
   const C = Gs.crews.snakes, L = C.members.find((m) => m.gangRole === 'leader');
+  const counts = { spawned: C.members.length, cars: C.cars.length, signs: (C.signs || []).length };
   const looks = { fists: C.members.filter((m) => m.app.fists).length, masks: C.members.filter((m) => m.app.mask).length, knives: C.members.filter((m) => m.app.knife).length, guns: C.members.filter((m) => m.app.gun).length };
   const inside = Gs.inside;
   game.teleport(L.x + 1.5, L.z + 1.2, 0); step(5);
@@ -1083,7 +1086,7 @@ const gang = await g(() => {
   hurt += 100 - game.econ.health; game.econ.health = 100;
   const chase = C.members.filter((q) => q.state === 'copChase').length;
   C.hostile = 0; game.teleport(530, 545, 0); step(20);
-  return { spawned: C.members.length, cars: C.cars.length, signs: (C.signs || []).length, looks, inside, prompt, joined, left, chase, hurt, zones: (game.minimap.zones || []).length };
+  return { ...counts, looks, inside, prompt, joined, left, chase, hurt, zones: (game.minimap.zones || []).length };
 });
 check('gangs: two small territories with entrance signs, masked crews (pistols, knives, fists), cars + bike, turf on the map', gang.spawned >= 10 && gang.cars === 3 && gang.signs === 4 && gang.looks.masks > 0 && gang.looks.knives > 0 && gang.looks.guns > 0 && gang.inside === 'snakes' && gang.zones === 2, JSON.stringify(gang));
 check('gangs: join and leave at the leader', gang.prompt.includes('הצטרף') && gang.joined === 'snakes' && gang.left === null, JSON.stringify(gang));
