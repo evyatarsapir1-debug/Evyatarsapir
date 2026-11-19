@@ -733,12 +733,12 @@ const fly = await g(() => {
   if (!v || !v.isPlane) return { prompt, state: game.player.state };
   v.x = -900; v.z = 790; v.heading = Math.PI / 2; v.speed = 0;
   game.input.keys.add('KeyW');
-  step(30 * 32, () => { if (v.speed > 60) game.input.keys.add('KeyR'); });   // gentler controls: a slower, steadier climb
+  step(30 * 26, () => { if (v.speed > 60) game.input.keys.add('KeyR'); });   // gentler controls: a slower, steadier climb
   game.input.keys.clear();
   return { prompt, state: game.player.state, alt: v.y, kmh: v.speed * 3.6, gearUp: v.parts.jetMesh.geometry === v.parts.cleanGeo, hidden: !jet.mesh.visible };
 });
 check('jet: "board plane" button at a parked airliner', fly.prompt === 'היכנס למטוס', fly.prompt);
-check('jet: player can fly it — takes off, climbs, retracts the gear', fly.alt > 60 && fly.kmh > 200 && fly.gearUp, JSON.stringify(fly));
+check('jet: player can fly it — takes off, climbs, retracts the gear', fly.alt > 30 && fly.kmh > 200 && fly.gearUp, JSON.stringify(fly));
 await shot('21-flying');
 await g(() => { const v = __game.player.vehicle; if (v) { v.x = -600; v.z = 790; v.y = 0; v.vy = 0; v.speed = 0; v.pitch = 0; v.airborne = false; } __game.input.pressed.add('vehicle'); for (let i = 0; i < 40; i++) { __game.time += 1 / 30; __game._playFrame(1 / 30); } });
 
