@@ -6,7 +6,7 @@ const _navDir = new THREE.Vector3();
 import { heightAt, surfaces } from './world/terrain.js';
 import { Pedestrians } from './npc/pedestrians.js';
 import { InteriorManager } from './world/interiorManager.js';
-import { Economy, fmt, FOODS } from './game/economy.js';
+import { Economy, fmt, FOODS, VESTS } from './game/economy.js';
 import { PostFX } from './render/postfx.js';
 import { LunaPark, LUNA } from './world/lunapark.js';
 import { BoatTraffic } from './world/boats.js';
@@ -250,7 +250,7 @@ class Game {
     this.player.state = 'foot';
     this.rig.yaw = START.facing; this.rig.pitch = 0.25; this.rig.first = true;
     this.playTime = 0;
-    this.econ.reset(); this.econ.money = this.chars.data.miguel.money; this.equip(null);
+    this.econ.reset(); this.econ.money = this.chars.data.miguel.money; this.equip(null); this.player.model.setVest(null);
     this.missions.load(null); this.gps.clear();
     this.save();
     this.startPlaying();
@@ -269,6 +269,7 @@ class Game {
     this.player.state = 'foot';
     this.playTime = s.playTime || 0;
     this.econ.load(s.econ); this.equip(this.econ.equipped);
+    this.player.model.setVest(this.econ.vest ? VESTS[this.econ.vest.type].color : null);
     this.chars.load(s.chars, START);
     if (s.world) { this.env.hour = s.world.hour ?? 10; this.env.setWeather(s.world.weather || 'clear'); }
     this.gps.clear();
@@ -535,6 +536,12 @@ class Game {
   }
   hurt(n, why) {
     if (n <= 0) return;
+    // a vest takes part of the hit and wears out
+    const V = this.econ.vest;
+    if (V && V.armor > 0) {
+      const ab = n * VESTS[V.type].prot; n -= ab; V.armor = Math.max(0, V.armor - ab * 2.2);
+      if (V.armor <= 0) { this.econ.vest = null; this.player.model.setVest(null); this.toast('האפוד נהרס', 2); }
+    }
     this.econ.hurt(n);
     $('hurtFlash').classList.remove('on'); void $('hurtFlash').offsetWidth; $('hurtFlash').classList.add('on');
     if (this.econ.health <= 0) this.knockedOut(why);
@@ -839,7 +846,7 @@ class Game {
     if (hp && input.wasPressed('interact')) { input.pressed.delete('interact'); hp.action(); }
     // garage: drive slowly onto the turntable inside the workshop
     const tp = p.state === 'driving' ? this.tuning.promptFor(p.vehicle) : null;
-    const gp = !hp ? this.gangs.promptFor(p) : null;   // join / leave a gang at its leader
+    const gp = !hp ? (this.robbery.promptFor(p) || this.gangs.promptFor(p)) : null;   // kick open a counter door / join or leave a gang
     if (gp && input.wasPressed('interact')) { input.pressed.delete('interact'); gp.action(); }
     if (tp && input.wasPressed('interact')) { input.pressed.delete('interact'); tp.action(); if (this.state === 'tuning') { input.endFrame(); return; } }
     p.update(dt, input, this.rig.yaw, world);
@@ -1013,6 +1020,8 @@ class Game {
     $('money').textContent = fmt(this.econ.money);
     $('clock').textContent = `${this.env.clockText} · ${this.env.weatherName}`;
     $('hpFill').style.width = this.econ.health + '%';
+    { const V = this.econ.vest, ab = $('armorBar') || (() => { const d = document.createElement('div'); d.id = 'armorBar'; d.innerHTML = '<i></i>'; $('hpBar').after(d); return d; })();
+      ab.classList.toggle('show', !!V); if (V) ab.firstChild.style.width = Math.round(V.armor) + '%'; }
     $('hpFill').classList.toggle('low', this.econ.health < 30);
     const wid = this.econ.equipped;
     {

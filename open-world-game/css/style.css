@@ -477,3 +477,11 @@ body.switching canvas { filter: saturate(.35) contrast(1.08); }
 
 /* no navigation strip at the top: the route is only the purple line on the map */
 #gpsHud { display: none !important; }
+
+/* armour bar (vest) under the health bar, and the sticky-charge timer */
+#armorBar { display: none; height: 5px; margin-top: 3px; border-radius: 3px; background: #0006; overflow: hidden; width: 110px; border: 1px solid #fff4; }
+#armorBar.show { display: block; }
+#armorBar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #6fb3ff, #b7dcff); }
+#bombTimer { position: absolute; top: max(64px, calc(env(safe-area-inset-top) + 56px)); left: 50%; transform: translateX(-50%); display: none; padding: 3px 10px; border-radius: 10px;
+  background: #000a; color: #ff6b5a; font: 700 14px system-ui, sans-serif; letter-spacing: .5px; pointer-events: none; }
+#bombTimer.show { display: block; }

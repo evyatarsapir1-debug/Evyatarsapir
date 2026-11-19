@@ -1,7 +1,7 @@
 // Shops: every enterable shop has a counter with a shopkeeper. Walk up to the counter and press E (or tap the button)
 // to open the store. Catalogue depends on the kind of shop (from its sign).
 import { WEAPONS, WEAPON_ORDER } from './weapons.js';
-import { fmt, FOODS } from './economy.js';
+import { fmt, FOODS, VESTS } from './economy.js';
 import { TOP_STYLES, TOP_NAMES, BOTTOM_STYLES, BOTTOM_NAMES, HAIR_STYLES, HAIR_NAMES, HAIR_COLORS, CLOTH_COLORS, SHOE_COLORS } from '../character/characterModel.js';
 
 const KINDS = [
@@ -121,7 +121,13 @@ function catalogue(kind, ctx) {
       for (const id of WEAPON_ORDER) {
         const W = WEAPONS[id], have = econ.weapons[id];
         if (!have) out.push({ id: `w-${id}`, name: W.name, desc: `${W.ammoPack} יחידות תחמושת`, swatch: W.color, price: W.price, buy: () => { econ.weapons[id] = { ammo: W.ammoPack }; econ.equipped = id; game.equip(id); return `${W.name} — בידיים שלך (G להחלפה)`; } });
-        else out.push({ id: `a-${id}`, name: `תחמושת: ${W.name}`, desc: `+${W.ammoPack} (יש ${have.ammo})`, swatch: W.color, price: W.ammoPrice, buy: () => { have.ammo += W.ammoPack; return 'נוספה תחמושת'; } });
+        else out.push({ id: `a-${id}`, name: W.ammoPack === 1 ? `עוד ${W.name}` : `תחמושת: ${W.name}`, desc: `+${W.ammoPack} (יש ${have.ammo})`, swatch: W.color, price: W.ammoPrice, buy: () => { have.ammo += W.ammoPack; return W.ammoPack === 1 ? `נוסף ${W.name}` : 'נוספה תחמושת'; } });
+      }
+      // protective vests: black (basic) -> grey -> green -> pink (best)
+      for (const [k, V] of Object.entries(VESTS)) {
+        const cur = econ.vest?.type === k;
+        out.push({ id: `v-${k}`, name: V.name, desc: cur ? `לבוש עליך (${Math.round(econ.vest.armor)}%)` : V.desc, swatch: V.color, price: V.price,
+          disabled: cur && econ.vest.armor >= 99, buy: () => { econ.vest = { type: k, armor: 100 }; game.player.model.setVest(V.color); return `${V.name} — לבוש עליך`; } });
       }
       break;
   }

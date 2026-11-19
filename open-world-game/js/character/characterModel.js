@@ -109,6 +109,14 @@ export class CharacterModel {
       const edge = this._mesh(new THREE.BoxGeometry(0.014, 0.36, 0.012), M.top, this.shirtOpen, sx * 0.05, 0.27, 0.126); edge.rotation.z = -sx * 0.1;
     }
     this.shirtOpen.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+    // protective vest (worn over the clothes when bought)
+    this.vestMat = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.75 });
+    this.vest = this._pivot(spine, 0, 0, 0);
+    const vb = this._mesh(new THREE.BoxGeometry(0.4, 0.36, 0.27), this.vestMat, this.vest, 0, 0.28, 0.005);
+    vb.geometry = sculpt(vb.geometry, (v) => { v.x *= 1 - Math.max(0, -v.y) * 0.25; });
+    for (const sx of [-1, 1]) this._mesh(new THREE.BoxGeometry(0.075, 0.1, 0.25), this.vestMat, this.vest, sx * 0.11, 0.48, 0.005);
+    for (const sx of [-1, 1]) this._mesh(new THREE.BoxGeometry(0.09, 0.08, 0.04), this.vestMat, this.vest, sx * 0.09, 0.2, 0.145);   // pouches
+    this.vest.visible = false;
     this.chest = torso;
     const neck = this.neck = this._pivot(spine, 0, 0.5, 0);
     this._mesh(cap(0.05, 0.06), M.skin, neck, 0, 0.03, 0);
@@ -287,6 +295,8 @@ export class CharacterModel {
       default: break;
     }
   }
+
+  setVest(color) { this.vest.visible = color != null; if (color != null) this.vestMat.color.setHex(color); }
 
   setAppearance(app) {
     this.app = { ...app };

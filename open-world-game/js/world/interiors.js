@@ -354,11 +354,14 @@ function gunStore(F, spec, C, y0, H, L, D, hl, furn) {
   for (let a = -hl + 0.45, k = 0; a + 0.45 < hl - 0.3; a += (k % 3 === 2 ? 0.55 : 0.42), k++) k % 3 === 2 ? smg(a, 1.4, bz0, bz1) : pistol(a, 1.38, bz0, bz1, k % 4 === 1 ? 0x8a8f94 : steel);
   // red ammo-box shelf on the back wall under the pieces
   box(-hl + 0.2, hl - 0.2, dw - 0.32, dw - 0.04, 1.08, 1.11, 0x8a9096, 'metal');
-  for (let a = -hl + 0.3, k = 0; a + 0.2 < hl - 0.3; a += 0.24, k++) box(a, a + 0.2, dw - 0.28, dw - 0.08, 1.11, 1.11 + (k % 2 ? 0.1 : 0.14), [0xb3261e, 0xb3261e, 0x1f4d8a, 0xd4a017][k % 4]);
+  // grenades and two-sided sticky charges on the shelf, spaced out (game items, invented look)
+  const grenade = (a, d, y) => { box(a - 0.045, a + 0.045, d - 0.045, d + 0.045, y, y + 0.1, 0x4f5a32); box(a - 0.02, a + 0.02, d - 0.02, d + 0.02, y + 0.1, y + 0.13, 0x8a9096, 'metal'); box(a + 0.015, a + 0.06, d - 0.008, d + 0.008, y + 0.07, y + 0.12, 0x8a9096, 'metal'); };
+  const sticky = (a, d, y) => { box(a - 0.09, a + 0.09, d - 0.06, d + 0.06, y, y + 0.05, 0xb59a6a); box(a - 0.09, a + 0.09, d - 0.012, d + 0.012, y + 0.05, y + 0.056, 0xc0392b); box(a - 0.03, a + 0.03, d - 0.03, d + 0.03, y + 0.05, y + 0.075, 0x1d1d1f); };
+  for (let a = -hl + 0.45, k = 0; a + 0.2 < hl - 0.3; a += 0.42, k++) (k % 3 === 2 ? sticky : grenade)(a, dw - 0.18, 1.11);
   // --- right wall: rows of shelves with ammo boxes, pistols on the slatwall between them
   for (const y of [0.45, 0.95, 1.45]) {
     box(aw - 0.36, aw - 0.04, 1.3, D - 0.2, y, y + 0.03, 0x8a9096, 'metal');
-    for (let d = 1.4, k = 0; d + 0.2 < D - 0.25; d += 0.26, k++) box(aw - 0.32, aw - 0.08, d, d + 0.2, y + 0.03, y + 0.03 + [0.12, 0.16, 0.1, 0.14][k % 4], [0xb3261e, 0x2e7d32, 0xd4a017, 0x6b7a3a, 0x1f4d8a][(k + Math.round(y * 3)) % 5]);
+    for (let d = 1.55, k = 0; d + 0.2 < D - 0.3; d += 0.5, k++) (((k + Math.round(y * 2)) % 3 === 0) ? sticky : grenade)(aw - 0.2, d, y + 0.03);
   }
   for (let d = 1.6, k = 0; d + 0.3 < D - 0.3; d += 0.55, k++) { const [z0, z1] = [aw - 0.1, aw - 0.06]; spec.boxes.push(boxFromRect(F.rect(z0, z1, d, d + 0.2), y0 + 2.05, y0 + 2.095, steel)); spec.boxes.push(boxFromRect(F.rect(z0, z1, d + 0.13, d + 0.19), y0 + 1.94, y0 + 2.05, poly)); }
   solid(aw - 0.38, hl, 1.2, D, 0, 1.6);
@@ -376,13 +379,15 @@ function gunStore(F, spec, C, y0, H, L, D, hl, furn) {
   box(cA1, aw - 0.38, cb0, cb0 + 0.06, 0, 0.95, 0xd9d9d6); solid(cA1, aw - 0.38, cb0, cb0 + 0.06, 0, 0.95);   // closes the corridor behind the side counter
   // pieces lying in the display (under the glass)
   for (let a = cA0 + 0.15; a + 0.25 < cA1 - 0.65; a += 0.38) { box(a, a + 0.2, cd0 + 0.25, cd0 + 0.32, 0.625, 0.65, steel); box(a + 0.14, a + 0.2, cd0 + 0.32, cd0 + 0.43, 0.625, 0.648, poly); }
-  for (let d = cb0 + 0.2; d + 0.3 < cd0; d += 0.45) box(cA1 - 0.4, cA1 - 0.2, d, d + 0.25, 0.625, 0.66, [0xb3261e, 0x6b7a3a, 0x1f4d8a][Math.round(d * 3) % 3]);
+  for (let d = cb0 + 0.25, k = 0; d + 0.3 < cd0; d += 0.5, k++) (k % 2 ? sticky : grenade)(cA1 - 0.3, d, 0.625);
   // on top: an open hard case, the till and a card reader
   box(cA0 + 0.25, cA0 + 0.85, cd0 + 0.08, cd0 + 0.48, 1.0, 1.08, 0x1d1d1f); box(cA0 + 0.27, cA0 + 0.83, cd0 + 0.1, cd0 + 0.46, 1.08, 1.085, 0x5a5a5a);
   box(cA0 + 0.25, cA0 + 0.85, cd0 + 0.44, cd0 + 0.5, 1.08, 1.45, 0x1d1d1f);
   box(cA1 - 1.3, cA1 - 0.9, cd0 + 0.1, cd0 + 0.45, 1.0, 1.12, 0x2b2b2b); box(cA1 - 1.28, cA1 - 0.92, cd0 + 0.3, cd0 + 0.33, 1.12, 1.35, 0x111111);
   box(cA1 - 1.25, cA1 - 0.95, cd0 + 0.28, cd0 + 0.3, 1.15, 1.32, 0x3fa7d6, 'lamp');
-  box(cA0 - 0.06, cA0, cd1, D - 0.05, 0, 0.95, 0xd9d9d6); solid(cA0 - 0.06, cA0, cd1, D - 0.05, 0, 0.95);   // half door
+  // half door into the back of the counter: kicked open to reach the seller (see robbery.js)
+  const gcol = colFromRect(F.rect(cA0 - 0.06, cA0, cd1, D - 0.05), y0 - 0.1, y0 + 0.95, 'gate'); C.push(gcol);
+  spec.gate = { col: gcol, hinge: F.pt(cA0 - 0.03, D - 0.05), tip: F.pt(cA0 - 0.03, cd1), y: y0, h: 0.95 };
   spec.counter = { pt: F.pt((cA0 + cA1) / 2 - 0.3, cd0 - 0.6), keeper: F.pt((cA0 + cA1) / 2 - 0.3, cd1 + 0.55), yaw: Math.atan2(F.fx, F.fz), y: y0 };
   // --- left wall: tall open shelving with cases and boxes; aisle gondola in the middle
   const shelfUnit = (a0, a1, d0, d1, hgt, faceSign) => {
@@ -399,9 +404,21 @@ function gunStore(F, spec, C, y0, H, L, D, hl, furn) {
     box(a0, a1, d0, d1, hgt, hgt + 0.03, 0x6f6a62);
     solid(a0, a1, d0, d1, 0, hgt);
   };
-  shelfUnit(-hl + 0.02, -hl + 0.5, 1.0, D - 0.6, Math.min(2.1, top - 0.2), 1);
-  const gA = -hl + 1.9;
-  if (gA + 0.7 < cA0 - 0.9) shelfUnit(gA, gA + 0.7, 1.6, Math.min(D - 2.4, cd0 - 0.6), 1.4, 1);
+  void shelfUnit;
+  // vests on display (left wall): black, grey, green, pink - each on a torso stand with a price-tag colour strip
+  const vd1 = Math.min(D - 0.8, 6.4);
+  box(-hl, -hl + 0.04, 1.2, vd1, 0.05, 2.3, 0xcfc4b0);
+  box(-hl + 0.04, -hl + 0.5, 1.2, vd1, 0.0, 0.35, 0x3a2f26); solid(-hl, -hl + 0.5, 1.2, vd1, 0, 0.35);
+  [0x1b1b1d, 0x7d8288, 0x3f7a35, 0xe86aa8].forEach((c, i) => {
+    const d = 1.75 + i * 1.15; if (d + 0.5 > D - 0.8) return;
+    const a = -hl + 0.27;
+    box(a - 0.03, a + 0.03, d - 0.03, d + 0.03, 0.35, 1.05, 0x8a9096, 'metal');
+    box(a - 0.13, a + 0.13, d - 0.22, d + 0.22, 1.05, 1.62, 0xe9e4dc);
+    box(a - 0.16, a + 0.16, d - 0.25, d + 0.25, 1.1, 1.58, c);
+    for (const s2 of [-1, 1]) box(a - 0.15, a + 0.15, d + s2 * 0.18 - 0.05, d + s2 * 0.18 + 0.05, 1.58, 1.72, c);
+    box(a + 0.16, a + 0.17, d - 0.12, d + 0.12, 1.3, 1.4, 0x111111);
+    box(a - 0.05, a + 0.05, d - 0.2, d + 0.2, 0.25, 0.33, [0x8a8a8a, 0xcfcfcf, 0xd4a017, 0xe86aa8][i]);
+  });
   // ammo cans + crates on the floor
   for (let k = 0; k < 3; k++) box(aw - 0.9 - k * 0.38, aw - 0.58 - k * 0.38, 0.8, 1.1, 0, 0.22 + (k % 2) * 0.22, od);
   box(-hl + 0.7, -hl + 1.3, D - 0.55, D - 0.05, 0, 0.45, 0x8a6a3e); box(-hl + 0.7, -hl + 1.3, D - 0.55, D - 0.05, 0.45, 0.47, 0x6b4a2f); solid(-hl + 0.7, -hl + 1.3, D - 0.55, D - 0.05, 0, 0.47);

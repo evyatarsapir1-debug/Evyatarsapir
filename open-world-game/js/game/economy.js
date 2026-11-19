@@ -22,6 +22,13 @@ export const FOODS = {
   crepe:     { name: 'קרפ', icon: '🥞', heal: 20, color: 0xe8c58a },
   snack:     { name: 'חטיף', icon: '🍫', heal: 20, color: 0x6e4b3a },
 };
+// protective vests (game items): how much of each hit they take, sold in the gun store
+export const VESTS = {
+  black: { name: 'אפוד שחור', color: 0x1b1b1d, prot: 0.25, price: 300, desc: 'בסיסי — סופג רבע מהפגיעה' },
+  gray: { name: 'אפוד אפור', color: 0x7d8288, prot: 0.4, price: 500, desc: 'בינוני — סופג 40% מהפגיעה' },
+  green: { name: 'אפוד ירוק', color: 0x3f7a35, prot: 0.55, price: 800, desc: 'טוב מאוד — סופג יותר מחצי מהפגיעה' },
+  pink: { name: 'אפוד ורוד', color: 0xe86aa8, prot: 0.7, price: 1000, desc: 'הכי טוב — סופג 70% מהפגיעה' },
+};
 export class Economy {
   constructor() { this.reset(); }
   reset() {
@@ -35,9 +42,10 @@ export class Economy {
     this.ownedCars = [];        // bought vehicles [{ type, color }]
     this.wardrobe = [];         // clothes the player owns: [{ id, name, swatch, patch }]
     this.gang = null; this.gangPrev = null;   // street gang you joined (per character)
+    this.vest = null;           // { type, armor 0..100 }
     this.log = [];
   }
-  toJSON() { return { money: this.money, health: this.health, items: this.items, weapons: this.weapons, equipped: this.equipped, wardrobe: this.wardrobe, startOutfit: this.startOutfit, ownedCars: this.ownedCars, flightSchool: this.flightSchool || 0, heists: this.heists || {}, gang: this.gang || null, gangPrev: this.gangPrev || null }; }
+  toJSON() { return { money: this.money, health: this.health, items: this.items, weapons: this.weapons, equipped: this.equipped, wardrobe: this.wardrobe, startOutfit: this.startOutfit, ownedCars: this.ownedCars, flightSchool: this.flightSchool || 0, heists: this.heists || {}, gang: this.gang || null, gangPrev: this.gangPrev || null, vest: this.vest || null }; }
   load(o) {
     this.reset();
     if (!o) return;
@@ -50,6 +58,7 @@ export class Economy {
     this.ownedCars = Array.isArray(o.ownedCars) ? o.ownedCars : [];
     this.weapons = o.weapons || {}; this.equipped = o.equipped && this.weapons[o.equipped] ? o.equipped : null;
     this.gang = o.gang || null; this.gangPrev = o.gangPrev || null;
+    this.vest = o.vest && VESTS[o.vest.type] ? o.vest : null;
   }
   ownsCloth(id) { return this.wardrobe.some((w) => w.id === id); }
   addCloth(it) { if (!this.ownsCloth(it.id)) this.wardrobe.push({ id: it.id, name: it.name, swatch: it.swatch, patch: it.patch }); }

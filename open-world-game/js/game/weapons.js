@@ -10,8 +10,8 @@ export const WEAPONS = {
   x4: { name: 'רובה סער', kind: 'rifle', price: 4800, ammoPack: 90, ammoPrice: 160, rate: 9, damage: 6, pedDmg: 3, range: 120, auto: true, color: 0x4a4f3a, hold: 'rifle', mag: 30, reloadT: 1.9 },
   nz: { name: 'רובה צלפים', kind: 'long', price: 7500, ammoPack: 12, ammoPrice: 140, rate: 0.9, damage: 34, pedDmg: 8, range: 260, color: 0x2f3b2a, hold: 'rifle', mag: 5, reloadT: 2.3 },
   hp: { name: 'מטול', kind: 'heavy', price: 14000, ammoPack: 6, ammoPrice: 600, rate: 0.7, damage: 60, range: 160, explosive: 6, color: 0x5a6148, hold: 'heavy', mag: 1, reloadT: 2.4 },
-  gr: { name: 'רימון', kind: 'grenade', price: 300, ammoPack: 4, ammoPrice: 300, rate: 1.2, explosive: 7, damage: 70, thrown: true, color: 0x4f5a3c, hold: 'hand' },
-  fc: { name: 'מטען נפץ', kind: 'charge', price: 450, ammoPack: 3, ammoPrice: 450, rate: 1, explosive: 8, damage: 80, placed: true, color: 0xb03a2e, hold: 'hand' },
+  gr: { name: 'רימון', kind: 'grenade', price: 50, ammoPack: 1, ammoPrice: 50, rate: 1.2, explosive: 7, damage: 70, thrown: true, color: 0x4f5a3c, hold: 'hand' },
+  fc: { name: 'פצצה דו־צדדית', kind: 'charge', price: 80, ammoPack: 1, ammoPrice: 80, rate: 1, explosive: 8, damage: 80, placed: true, fuse: 5, color: 0xb59a6a, hold: 'hand' },   // sticks where you put it, goes off by itself after 5 s
 };
 export const WEAPON_ORDER = ['p7', 'x4', 'nz', 'hp', 'gr', 'fc'];
 
@@ -303,6 +303,13 @@ export class WeaponSystem {
   }
 
   // trigger held / pressed this frame
+  _bombHud() {
+    let el = this._bombEl;
+    if (!el) { el = this._bombEl = document.createElement('div'); el.id = 'bombTimer'; document.getElementById('hud')?.appendChild(el); }
+    const t = this.charges.length ? Math.min(...this.charges.map((c) => c.t)) : null;
+    el.classList.toggle('show', t !== null);
+    if (t !== null) { const txt = `💣 ${Math.ceil(t)}`; if (el.textContent !== txt) el.textContent = txt; }
+  }
   update(dt, ctx) {
     const { player, econ, input, camera } = ctx;
     this.lastCtx = ctx;
@@ -315,10 +322,7 @@ export class WeaponSystem {
       if (inv.mag > inv.ammo) inv.mag = inv.ammo;
       const want = W.auto ? input.isHeld('fire') : input.wasPressed('fire');
       if (want && this.cool <= 0) {
-        if (W.placed && this.charges.length) { // second press detonates placed charges
-          for (const c of this.charges) { this.scene.remove(c.obj); this.explode(c.obj.position.clone(), W.explosive, W.damage, ctx); }
-          this.charges = []; this.cool = 0.5;
-        } else if (inv.ammo > 0 && (!W.mag || inv.mag > 0) && !this.reloading && !(this.drawT > this.drawDur * 0.4)) {
+        if (inv.ammo > 0 && (!W.mag || inv.mag > 0) && !this.reloading && !(this.drawT > this.drawDur * 0.4)) {
           inv.ammo--; if (W.mag) inv.mag--;
           this.kickT = 0.07;                                       // slide / bolt snaps back
           if (W.mag && inv.mag === 0 && inv.ammo > 0) this.autoReloadT = 0.35;   // empty: reload by itself
@@ -346,10 +350,19 @@ export class WeaponSystem {
             this.pendingThrow = { t: 0.3, W, dir: _d.clone() };
             this.cool = Math.max(this.cool, 0.6);
           } else if (W.placed) {
-            const s = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.16, 0.22), new THREE.MeshStandardMaterial({ color: 0x8a6f4a, roughness: 0.8 }));
-            s.position.set(player.x + Math.sin(player.facing) * 0.8, heightAt(player.x, player.z, player.y + 0.3) + 0.08, player.z + Math.cos(player.facing) * 0.8);
-            this.scene.add(s); this.charges.push({ obj: s });
-            ctx.message?.('המטען הונח — לחץ ירי שוב כדי להפעיל');
+            // two-sided sticky charge: sticks to the wall / door / car in front of you (or the floor), 5 s fuse
+            const s = new THREE.Group();
+            s.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.06), new THREE.MeshStandardMaterial({ color: 0xb59a6a, roughness: 0.8 })));
+            const strip = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.065), new THREE.MeshStandardMaterial({ color: 0xc0392b })); s.add(strip);
+            const led = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.07), new THREE.MeshBasicMaterial({ color: 0xff2a2a })); led.position.y = 0.05; s.add(led);
+            const fx = Math.sin(player.facing), fz = Math.cos(player.facing);
+            const from = new THREE.Vector3(player.x, player.y + 1.0, player.z), hit = this._ray(from, new THREE.Vector3(fx, 0, fz), 1.4, ctx.vehicles, [], null);
+            const dist = hit.point ? hit.point.distanceTo(from) : 99;
+            let stuck = null;
+            if (dist < 1.35) { s.position.copy(hit.point).addScaledVector(new THREE.Vector3(fx, 0, fz), -0.04); s.rotation.y = player.facing; if (hit.vehicle) stuck = { v: hit.vehicle, ox: s.position.x - hit.vehicle.x, oy: s.position.y - hit.vehicle.y, oz: s.position.z - hit.vehicle.z, h: hit.vehicle.heading }; }
+            else { s.position.set(player.x + fx * 0.7, heightAt(player.x, player.z, player.y + 0.3) + 0.04, player.z + fz * 0.7); s.rotation.set(-Math.PI / 2, 0, player.facing); }
+            this.scene.add(s); this.charges.push({ obj: s, t: W.fuse || 5, W, led, stuck });
+            ctx.message?.(dist < 1.35 ? 'הפצצה הודבקה — 5 שניות, תתרחק!' : 'הפצצה הונחה — 5 שניות, תתרחק!');
           } else {
             const camPos = camera.position.clone();
             const r = this._ray(camPos, _d, W.range + 8, ctx.vehicles, ctx.peds, null);
@@ -454,6 +467,14 @@ export class WeaponSystem {
       pr.fuse -= dt;
       if (pr.fuse <= 0) { this.scene.remove(pr.obj); this.explode(pr.obj.position.clone(), pr.W.explosive, pr.W.damage, ctx); this.projectiles.splice(i, 1); }
     }
+    // sticky charges: count down (blinking light, a small timer on screen), then go off
+    for (let i = this.charges.length - 1; i >= 0; i--) {
+      const c = this.charges[i]; c.t -= dt;
+      if (c.stuck) { const v = c.stuck.v, da = v.heading - c.stuck.h, cs = Math.cos(da), sn = Math.sin(da); c.obj.position.set(v.x + c.stuck.ox * cs + c.stuck.oz * sn, v.y + c.stuck.oy, v.z - c.stuck.ox * sn + c.stuck.oz * cs); c.obj.rotation.y += 0; }
+      c.led.visible = (c.t % (c.t < 1.5 ? 0.25 : 0.6)) < (c.t < 1.5 ? 0.12 : 0.3);
+      if (c.t <= 0) { this.scene.remove(c.obj); this.explode(c.obj.position.clone(), c.W.explosive, c.W.damage, ctx); this.charges.splice(i, 1); }
+    }
+    this._bombHud();
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const t = this.tracers[i]; t.t -= dt;
       if (t.streak) {
