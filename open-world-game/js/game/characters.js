@@ -79,17 +79,9 @@ export class Characters {
 
   // ------------------------------------------------------------------ the character wheel
   _ui() {
-    // the switch dial, bottom-left: a ring with the three characters on it; tap one to switch, the middle opens
-    // the full character wheel
-    const dial = document.createElement('div'); dial.id = 'charDial'; dial.setAttribute('aria-label', 'החלפת דמות');
-    dial.innerHTML = '<div class="cd-ring"></div>' + PROTAGONISTS.map((P, i) => `<button type="button" class="cd-dot cd-${i}" data-char="${P.id}" aria-label="${P.name}"><img alt=""><b>${P.name}</b></button>`).join('') + '<button type="button" class="cd-mid" aria-label="כל הדמויות">⇄</button>';
-    document.getElementById('hud').appendChild(dial); this.dial = dial;
-    dial.addEventListener('pointerdown', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      const d = e.target.closest('[data-char]');
-      if (d) { if (d.dataset.char !== this.active) this.pick(d.dataset.char); return; }
-      if (e.target.closest('.cd-mid')) this.toggle();
-    });
+    const btn = document.createElement('button'); btn.id = 'charBtn'; btn.type = 'button'; btn.setAttribute('aria-label', 'החלף דמות'); btn.textContent = '👥';
+    document.getElementById('hud').appendChild(btn);
+    btn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.toggle(); });
     const w = document.createElement('div'); w.id = 'charWheel'; document.body.appendChild(w); this.wheel = w;
     w.addEventListener('pointerdown', (e) => {
       const c = e.target.closest('[data-char]'); e.preventDefault(); e.stopPropagation();
@@ -98,14 +90,7 @@ export class Characters {
     });
     const fl = document.createElement('div'); fl.id = 'switchFlash'; document.body.appendChild(fl); this.flash = fl;
   }
-  _hud() {
-    if (!this.dial) return;
-    if (!this.pics) { try { this._portraits(); } catch { /* cards work without pictures */ } }
-    this.dial.querySelectorAll('.cd-dot').forEach((b) => {
-      const id = b.dataset.char; b.classList.toggle('on', id === this.active);
-      const img = b.querySelector('img'); if (this.pics?.[id] && img.getAttribute('src') !== this.pics[id]) img.src = this.pics[id];
-    });
-  }
+  _hud() { const b = document.getElementById('charBtn'); if (b) b.title = this.current.name; }
   toggle() { this.wheel.classList.contains('show') ? this.close() : this.open(); }
   open() {
     const g = this.game; if (g.state !== 'playing' || this.sw) return;
