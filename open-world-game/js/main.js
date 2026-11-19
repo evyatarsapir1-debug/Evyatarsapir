@@ -1097,7 +1097,10 @@ class Game {
       const hx = v ? v.x : p.x, hz = v ? v.z : p.z;
       let near = null, nd = 70;
       for (const L of this.landmarks()) { const dd = Math.hypot(L.x - hx, L.z - hz); if (dd < nd) { nd = dd; near = L; } }
-      const here = near ? `${near.icon} ${near.short}` : `📍 ${d}`;
+      // inside a shop / building: its own name, never the name of a place next door
+      let inside = null;
+      for (const L of this.interiors.loaded.values()) { const b = L.b; if (b.sign && Math.abs(hx - b.x) < b.w / 2 && Math.abs(hz - b.z) < b.d / 2) { inside = b; break; } }
+      const here = inside ? `🏬 ${inside.sign}` : near ? `${near.icon} ${near.short}` : `📍 ${d}`;
       if ($('here').textContent !== here) $('here').textContent = here;
       if (d !== this.lastDistrict) {
         this.lastDistrict = d;

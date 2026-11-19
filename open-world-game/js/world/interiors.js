@@ -415,6 +415,95 @@ function gunStore(F, spec, C, y0, H, L, D, hl, furn) {
   spec.lamps.push(...[0.25, 0.75].map((k) => { const [x, z] = F.pt(-hl + L * k, D - 1.0); return { x, z, y: y0 + H - 0.03 }; }));
 }
 
+// A shop with real stock on its shelves: wall shelving and aisle gondolas packed with products, and for the
+// electronics / equipment store the things it actually sells - flashlights, parachute packs, repair kits, a fridge
+// of snacks and drinks, TVs - each with a section sign. Books, toys and pharmacy shops get matching shelves.
+function stockedShop(F, spec, C, y0, H, L, D, hl, cw, sign) {
+  const box = (a0, a1, d0, d1, ya, yb, color, m = 'prop') => spec.boxes.push(boxFromRect(F.rect(Math.min(a0, a1), Math.max(a0, a1), Math.min(d0, d1), Math.max(d0, d1)), y0 + ya, y0 + yb, color, m));
+  const solid = (a0, a1, d0, d1, h) => C.push(colFromRect(F.rect(a0, a1, d0, d1), y0 - 0.1, y0 + h));
+  const label = (a, d, y, w, name, back = false) => { const [x, z] = F.pt(a, d); spec.signs.push({ x, y: y0 + y, z, nx: back ? -F.fx : F.fx, nz: back ? -F.fz : F.fz, w, name }); };
+  const type = /ספרים/.test(sign) ? 'books' : /צעצועי/.test(sign) ? 'toys' : /פארם/.test(sign) ? 'pharm' : 'equip';
+  const PAL = { books: [0x7b1f1f, 0x1f4d8a, 0x2e7d32, 0x5a3a7a, 0xc8a24a, 0x2b2b2b, 0x8a5a2b, 0x1e5a5a],
+    toys: [0xe74c3c, 0xf1c40f, 0x3498db, 0x2ecc71, 0x9b59b6, 0xe67e22, 0xff6fa8, 0x1abc9c],
+    pharm: [0xf4f4f4, 0x2e9e5a, 0xe8f0f8, 0x3a7bd5, 0xf2f2f2, 0xd9534f, 0xeeeeee, 0x7fbf7f],
+    equip: [0x1d1d1f, 0x2f3338, 0xe8e8e8, 0x1f4d8a, 0xd4a017, 0xc0392b, 0x4a4f55, 0xf2f2f2] }[type];
+  let k = 0;
+  const pick = () => PAL[(k++ * 7 + (k >> 2)) % PAL.length];
+  // products on one shelf board: `along` = 'd' (shelf runs into the room) or 'a' (runs across)
+  const fill = (u0, u1, v0, v1, y, along) => {
+    for (let u = u0 + 0.04; u < u1 - 0.12;) {
+      const w = type === 'books' ? 0.035 + (k % 3) * 0.012 : type === 'pharm' ? 0.07 : 0.1 + (k % 4) * 0.035, h = type === 'books' ? 0.2 + (k % 5) * 0.025 : type === 'toys' ? 0.14 + (k % 4) * 0.06 : 0.1 + (k % 4) * 0.05;
+      const dv = (v1 - v0) * (type === 'books' ? 0.8 : 0.7);
+      if (along === 'd') box(v0 + 0.03, v0 + 0.03 + dv, u, u + w, y, y + h, pick()); else box(u, u + w, v0 + 0.03, v0 + 0.03 + dv, y, y + h, pick());
+      u += w + (type === 'books' ? 0.004 : 0.025);
+    }
+  };
+  const levels = [0.12, 0.55, 0.98, 1.41], topY = 1.84;
+  const unit = (a0, a1, d0, d1, along) => {   // a shelving unit with four stocked boards
+    box(a0, a1, d0, d1, 0, 0.1, 0x5f646b, 'metal');
+    for (const y of levels) { box(a0, a1, d0, d1, y - 0.02, y, 0xcfd3d6, 'metal'); along === 'd' ? fill(d0, d1, a0, a1, y, 'd') : fill(a0, a1, d0, d1, y, 'a'); }
+    box(a0, a1, d0, d1, topY, topY + 0.03, 0x5f646b, 'metal');
+    solid(a0, a1, d0, d1, topY);
+  };
+  const dBack = D - 0.45, aCounter = hl - cw - 1.0;
+  // left wall shelving (into the room) and back wall shelving (across, up to the counter)
+  box(-hl, -hl + 0.03, 0.9, D - 0.3, 0, topY + 0.1, 0x8e959c, 'metal');
+  unit(-hl + 0.03, -hl + 0.45, 0.9, D - 0.6, 'd');
+  if (aCounter - (-hl + 0.7) > 1) unit(-hl + 0.7, aCounter, dBack, D - 0.02, 'a');
+  // aisle gondolas, stocked on both sides
+  for (let a = -hl + 2.1; a + 0.8 < aCounter - 0.4; a += 2.3) {
+    const d0 = 1.9, d1 = Math.max(d0 + 1.5, D - 3.0);
+    unit(a, a + 0.38, d0, d1, 'd'); unit(a + 0.42, a + 0.8, d0, d1, 'd');
+    box(a + 0.37, a + 0.43, d0, d1, 0, topY, 0xb8bec4, 'metal');
+  }
+  if (type !== 'equip') { label(-hl + 0.3, (D - 0.6) / 2, 2.15, 2.2, sign, false); return; }
+  // ---- equipment / electronics: the things it sells, by sections on the right wall
+  const aw = hl - 0.03, d0 = 1.0;
+  // flashlights: a pegboard with flashlights hanging in rows
+  box(aw - 0.03, aw, d0, d0 + 1.6, 0.9, 2.0, 0xa08a6c);
+  for (const y of [1.2, 1.5, 1.8]) for (let d = d0 + 0.15; d < d0 + 1.5; d += 0.22) {
+    box(aw - 0.09, aw - 0.04, d, d + 0.05, y - 0.2, y, 0x1d1d1f); box(aw - 0.1, aw - 0.03, d - 0.01, d + 0.06, y, y + 0.06, 0xd4a017);
+  }
+  label(aw - 0.05, d0 + 0.8, 2.15, 1.5, 'פנסים', true);
+  // parachute packs on wall hooks
+  const d1 = d0 + 1.9;
+  for (let i = 0; i < 4; i++) { const d = d1 + i * 0.45, c = [0x4f5a32, 0xe67e22, 0x2e3b4a, 0x4f5a32][i];
+    box(aw - 0.3, aw - 0.05, d, d + 0.36, 0.95, 1.6, c); box(aw - 0.33, aw - 0.3, d + 0.06, d + 0.1, 0.95, 1.6, 0x111111); box(aw - 0.33, aw - 0.3, d + 0.26, d + 0.3, 0.95, 1.6, 0x111111); box(aw - 0.22, aw - 0.12, d + 0.1, d + 0.26, 1.6, 1.68, 0x8a9096, 'metal'); }
+  label(aw - 0.05, d1 + 0.9, 2.15, 1.5, 'מצנחים', true);
+  // repair kits: red cases with a white cross, stacked on a low shelf
+  const d2 = d1 + 2.0;
+  if (d2 + 1.2 < D - 2.6) {
+    box(aw - 0.45, aw, d2, d2 + 1.2, 0, 0.5, 0x5f646b, 'metal');
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) { const d = d2 + 0.08 + i * 0.37, y = 0.5 + j * 0.2;
+      box(aw - 0.42, aw - 0.06, d, d + 0.32, y, y + 0.18, 0xc0392b); box(aw - 0.43, aw - 0.42, d + 0.13, d + 0.19, y + 0.03, y + 0.15, 0xf4f4f4); box(aw - 0.43, aw - 0.42, d + 0.06, d + 0.26, y + 0.07, y + 0.11, 0xf4f4f4); }
+    solid(aw - 0.45, aw, d2, d2 + 1.2, 0.9);
+    label(aw - 0.05, d2 + 0.6, 2.15, 1.6, 'ערכות תיקון', true);
+  }
+  // snacks & drinks fridge by the entrance (glass door, lit, bottles and cans inside)
+  const fa = Math.max(-hl + 1.3, -0.4);
+  box(fa, fa + 1.2, 0.05, 0.75, 0, 2.0, 0xdfe4e8, 'metal');
+  for (const y of [0.35, 0.8, 1.25, 1.7]) { box(fa + 0.05, fa + 1.15, 0.2, 0.7, y - 0.02, y, 0xbfc5ca, 'metal'); for (let a = fa + 0.1; a < fa + 1.1; a += 0.09) box(a, a + 0.06, 0.3, 0.38, y, y + (k % 2 ? 0.24 : 0.14), [0xc0392b, 0x2e86c1, 0x27ae60, 0xf1c40f, 0xe67e22, 0x1d1d1f][(k++) % 6]); }
+  box(fa + 0.05, fa + 1.15, 0.72, 0.74, 0.1, 1.95, 0xd6eef7, 'glass');
+  box(fa + 0.08, fa + 1.12, 0.12, 0.14, 1.9, 1.94, 0xffffff, 'lamp');
+  solid(fa, fa + 1.2, 0.05, 0.75, 2.0);
+  label(fa + 0.6, 0.78, 2.15, 1.8, 'חטיפים ושתייה', false);
+  // TVs and screens on the back wall above the shelving, a "electronics" sign
+  if (aCounter - (-hl + 0.7) > 2) for (let a = -hl + 1.0; a + 1.0 < aCounter; a += 1.25) { box(a, a + 1.0, D - 0.06, D - 0.03, 2.05, 2.62, 0x111111); box(a + 0.04, a + 0.96, D - 0.065, D - 0.06, 2.09, 2.58, [0x3a7bd5, 0x2e9e5a, 0xd4a017][Math.round(a * 3) & 1 ? 1 : 0], 'lamp'); }
+  label(-hl + 0.3, (D - 0.6) / 2, 2.15, 2.2, 'מוצרי חשמל', false);
+}
+// barber shop: chairs facing mirrors, a wash basin, product shelf
+function barberShop(F, spec, C, y0, L, D, hl) {
+  const box = (a0, a1, d0, d1, ya, yb, color, m = 'prop') => spec.boxes.push(boxFromRect(F.rect(a0, a1, d0, d1), y0 + ya, y0 + yb, color, m));
+  box(-hl, -hl + 0.04, 1.0, D - 2.6, 0.9, 2.0, 0xd6eef7, 'glass');   // mirror wall
+  for (let d = 1.6; d < D - 3.0; d += 1.5) {
+    box(-hl + 0.6, -hl + 1.2, d - 0.3, d + 0.3, 0.42, 0.55, 0x1d1d1f); box(-hl + 0.6, -hl + 0.72, d - 0.3, d + 0.3, 0.55, 1.15, 0x1d1d1f);
+    box(-hl + 0.85, -hl + 0.95, d - 0.06, d + 0.06, 0, 0.42, 0xc9ced3, 'metal'); box(-hl + 0.7, -hl + 1.1, d - 0.25, d + 0.25, 0, 0.03, 0x8a9096, 'metal');
+    box(-hl + 0.04, -hl + 0.4, d - 0.4, d + 0.4, 0.85, 0.9, 0xeeeae2);
+    for (let i = 0; i < 4; i++) box(-hl + 0.1, -hl + 0.16, d - 0.3 + i * 0.18, d - 0.24 + i * 0.18, 0.9, 1.05, [0x2e86c1, 0xc0392b, 0xf2f2f2, 0x1d1d1f][i]);
+    C.push(colFromRect(F.rect(-hl + 0.6, -hl + 1.2, d - 0.3, d + 0.3), y0 - 0.1, y0 + 1.15));
+  }
+}
+
 export function interiorSpec(b) {
   if (b._spec) return b._spec;
   const F = frame(b);
@@ -462,17 +551,12 @@ export function interiorSpec(b) {
         piece(F, spec, 'chair', a, dd - 0.8, y0, '+d', 0x2f2f2f, false);
         piece(F, spec, 'chair', a, dd + 0.8, y0, '-d', 0x2f2f2f, false);
       }
-    } else if (isClothes && /חנות בגדים|אופנת|בגדי/.test(b.sign || '')) {
-      clothesStore(F, spec, C, y0, L, D, hl, cw, furn);
-    } else if (isClothes) {
-      for (let dd = 2; dd < D - 3; dd += 2.4) {
-        furn(-hl + 0.4, -hl + 0.7, dd, dd + 1.8, y0 + 1.5, y0 + 1.6, 0x888888, false, 'metal');
-        furn(-hl + 0.3, -hl + 0.9, dd + 0.1, dd + 1.7, y0 + 0.6, y0 + 1.5, [0xc0392b, 0x2e86c1, 0x27ae60, 0x8e44ad][Math.floor(dd) % 4]);
-      }
-      furn(-0.8, 0.8, D * 0.45, D * 0.45 + 0.8, y0, y0 + 0.9, 0xe0d6c8); // display table
-      furn(hl - 0.15, hl - 0.05, 1.5, 2.6, y0 + 0.3, y0 + 2.2, 0xcfe3ef, false, 'glass'); // mirror
+    } else if (/מספרת/.test(b.sign || '')) {
+      barberShop(F, spec, C, y0, L, D, hl);
+    } else if (isClothes && !/משקפי/.test(b.sign || '')) {
+      clothesStore(F, spec, C, y0, L, D, hl, cw, furn);   // every clothes / shoes / boutique / jewellery shop is a real clothes store
     } else {
-      for (let a = -hl + 1.2; a < hl - cw - 1.5; a += 2.4) furn(a, a + 0.7, 1.8, Math.max(2.6, D - 3.2), y0, y0 + 1.8, [0x5d8aa8, 0xb35a3c, 0x6a994e][Math.floor(a + 20) % 3]);
+      stockedShop(F, spec, C, y0, H, L, D, hl, cw, b.sign || '');
     }
     if (!gunShop) for (let d = 1.8; d < D; d += 3.5) lamp(0, d, y0 + H - 0.03);
   } else if (b.interior === 'house') {
@@ -1114,7 +1198,7 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
       piece(F, spec, 'rug', lm, at(depth * 0.45), y, '+d', 0x7d5a8c, false);
       piece(F, spec, 'sofa', lm, at(0.75), y, inward, [0x4a6fa5, 0x8a5a44, 0x5b7f5a, 0x7a6f66][k % 4]);
       piece(F, spec, 'coffee', lm, at(1.9), y, inward);
-      if (uw > 6.5) piece(F, spec, 'armchair', u0 + 1.45, at(1.15), y, '+a', 0x8a6a4a);
+      if (uw > 6.5) piece(F, spec, 'armchair', lm + 1.4, at(1.9), y, '-a', 0x8a6a4a);   // beside the coffee table, facing it (clear of the sofa)
       if (depth > 5.5) piece(F, spec, 'tv', lm, at(depth - 2.0), y, back);
       piece(F, spec, 'kitchen', u0 + 0.38, at(depth * 0.5), y, '+a', Math.min(depth - 2.6, 3.0));
       piece(F, spec, 'bed', bm, at(1.2), y, inward, [0x5d8aa8, 0xa86f5d, 0x6d9a6a][k % 3]);

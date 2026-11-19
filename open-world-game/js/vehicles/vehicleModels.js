@@ -34,18 +34,20 @@ export const shared = {
 function carInterior(parts, body, o) {
   const { W, clear, lowH, cabZ, cabL, cabH, rear } = o, y = clear + lowH, S = shared;
   const fz = cabZ + cabL * 0.02;
+  // everything inside stays below the roof: seat backs and headrests scale with the cabin height
+  const vs = Math.max(0.4, Math.min(1, (cabH - 0.08) / 0.82)), bh = 0.58 * vs, hr = 0.17 * vs;
   for (const sx of [-1, 1]) {
     const x = sx * W * 0.22;
-    m(box(0.46, 0.12, 0.48), S.leather, body, x, y + 0.02, fz, false);                         // cushion
-    m(box(0.46, 0.58, 0.12), S.leather, body, x, y + 0.33, fz - 0.27, false).rotation.x = -0.12; // backrest
-    m(box(0.26, 0.17, 0.09), S.leather, body, x, y + 0.72, fz - 0.33, false);                    // headrest
-    m(box(0.03, 0.5, 0.125), S.stitch, body, x, y + 0.33, fz - 0.265, false).rotation.x = -0.12; // centre seam
+    m(box(0.46, 0.12, 0.48), S.leather, body, x, y + 0.02, fz, false);                                   // cushion
+    m(box(0.46, bh, 0.12), S.leather, body, x, y + 0.06 + bh / 2, fz - 0.27, false).rotation.x = -0.12;    // backrest
+    m(box(0.26, hr, 0.09), S.leather, body, x, y + 0.08 + bh + hr / 2, fz - 0.31, false);                 // headrest
+    m(box(0.03, bh * 0.86, 0.125), S.stitch, body, x, y + 0.06 + bh / 2, fz - 0.265, false).rotation.x = -0.12; // centre seam
   }
   if (rear) {
     const rz = cabZ - cabL * 0.3;
     m(box(W * 0.78, 0.12, 0.46), S.leather, body, 0, y + 0.02, rz, false);
-    m(box(W * 0.78, 0.5, 0.12), S.leather, body, 0, y + 0.3, rz - 0.26, false).rotation.x = -0.15;
-    for (const sx of [-1, 0, 1]) m(box(0.22, 0.14, 0.08), S.leather, body, sx * W * 0.26, y + 0.62, rz - 0.31, false);
+    m(box(W * 0.78, bh * 0.86, 0.12), S.leather, body, 0, y + 0.06 + bh * 0.43, rz - 0.26, false).rotation.x = -0.15;
+    for (const sx of [-1, 0, 1]) m(box(0.22, hr * 0.8, 0.08), S.leather, body, sx * W * 0.26, y + 0.08 + bh * 0.86 + hr * 0.4, rz - 0.3, false);
   }
   // dashboard, instruments, centre screen, vents
   const dz = cabZ + cabL * 0.44;
