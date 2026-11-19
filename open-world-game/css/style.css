@@ -408,3 +408,43 @@ body.touch #heistHud div.done, body.touch #heistHud div:not(.cur):not(.loot) { d
 #heistReward .bill { position: absolute; top: -40px; font-size: 30px; animation: billfall linear infinite; }
 @keyframes billfall { from { transform: translateY(0) rotate(0deg); } to { transform: translateY(110vh) rotate(540deg); } }
 @keyframes rwpop { from { transform: translate(-50%, -50%) scale(.6); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+
+/* garage (Los Antos Customs) */
+#tunePanel { position: fixed; z-index: 40; display: none; flex-direction: column; gap: 10px; direction: rtl;
+  right: max(12px, env(safe-area-inset-right)); top: 12px; bottom: 12px; width: min(380px, 44vw); padding: 14px;
+  background: linear-gradient(180deg, #14171cf2, #0d0f13f2); border: 1px solid #ffffff1a; border-radius: 16px; color: #eef1f4;
+  box-shadow: 0 18px 50px #0009; font: 14px system-ui, sans-serif; backdrop-filter: blur(8px); }
+#tunePanel.show { display: flex; }
+.tn-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.tn-head b { font-size: 18px; color: #ffb347; }
+.tn-head span { opacity: .7; font-size: 12px; flex: 1; }
+.tn-head em { font-style: normal; font-weight: 700; color: #7ee08a; }
+.tn-cats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tn-cat { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 2px; border-radius: 10px; border: 1px solid #ffffff14;
+  background: #ffffff0a; color: inherit; font: 11px system-ui, sans-serif; cursor: pointer; }
+.tn-cat span { font-size: 17px; }
+.tn-cat.on { background: #ff8a3d33; border-color: #ff8a3d; }
+.tn-opts { flex: 1; min-height: 80px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding-inline-end: 2px; }
+.tn-opt { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; border: 1px solid #ffffff12; background: #ffffff08;
+  color: inherit; font: 13px system-ui, sans-serif; text-align: right; cursor: pointer; }
+.tn-opt span { flex: 1; display: flex; flex-direction: column; }
+.tn-opt small { opacity: .6; font-size: 11px; }
+.tn-opt b { font-weight: 600; color: #ffd27a; white-space: nowrap; }
+.tn-opt i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff6; flex: none; }
+.tn-opt.sel { background: #ff8a3d2e; border-color: #ff8a3d; }
+.tn-opt.inst b { color: #7ee08a; }
+.tn-foot { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 6px; }
+.tn-btn { padding: 11px 6px; border-radius: 10px; border: 1px solid #ffffff22; background: #ffffff10; color: inherit; font: 600 13px system-ui, sans-serif; cursor: pointer; }
+.tn-btn.buy { background: #ff8a3d; border-color: #ff8a3d; color: #1a0e04; }
+.tn-btn.buy:disabled { background: #ffffff10; border-color: #ffffff22; color: #fff6; cursor: default; }
+.tn-btn.on { background: #2e86c1; border-color: #2e86c1; }
+.tn-btn.exit { background: #ffffff18; }
+.tn-work { display: flex; flex-direction: column; gap: 6px; }
+.tn-work i { display: block; height: 8px; border-radius: 4px; background: #ffffff18; overflow: hidden; }
+.tn-work i b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ff8a3d, #ffd27a); }
+.tn-hint { font-size: 11px; opacity: .55; text-align: center; }
+@media (max-width: 700px) {
+  #tunePanel { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; height: 46vh; padding: 10px; gap: 7px; }
+  .tn-cats { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 64px; overflow-x: auto; }
+}
+body.tuning #hud > *:not(#toast), body.tuning #touch > *:not(#joystick) { display: none !important; }

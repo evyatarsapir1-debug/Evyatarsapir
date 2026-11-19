@@ -130,7 +130,7 @@ function shellColliders(b, top, door, out) {
   }
 }
 
-const DOORS = { bank: [2.6, 3.0], shop: [1.8, 2.6], house: [1.2, 2.2], hall: [3.0, 3.2], mall: [4, 3.4], apartment: [2.2, 2.7], tower: [2.2, 2.7], terminal: [8, 3.4], hangar: [46, 16], ctower: [1.8, 2.6], villa: [2.0, 2.5], library: [2.4, 2.8] };
+const DOORS = { workshop: [6.0, 4.2], bank: [2.6, 3.0], shop: [1.8, 2.6], house: [1.2, 2.2], hall: [3.0, 3.2], mall: [4, 3.4], apartment: [2.2, 2.7], tower: [2.2, 2.7], terminal: [8, 3.4], hangar: [46, 16], ctower: [1.8, 2.6], villa: [2.0, 2.5], library: [2.4, 2.8] };
 export function doorFor(b) { const d = DOORS[b.interior]; return d ? { face: b.face, w: d[0], h: d[1] } : null; }
 
 // The player's villa: an open, bright two-storey home. Ground floor: living room, dining, kitchen with island.
@@ -451,6 +451,8 @@ export function interiorSpec(b) {
     }
     for (let a = -hl + 3; a < hl - 4; a += 5) piece(F, spec, 'bench', a, D * 0.4, y0, '+d');
     for (let a = -hl + 3; a < hl; a += 7) for (let d = 3; d < D; d += 7) lamp(a, d, y0 + H - 0.03);
+  } else if (b.interior === 'workshop') {
+    workshopSpec(b, F, spec, piece, lamp, furn);
   } else if (b.interior === 'bank') {
     bankSpec(b, F, spec, piece, lamp, furn);
   } else if (b.interior === 'apartment' || b.interior === 'tower') {
@@ -645,6 +647,71 @@ function ctowerSpec(b, F, spec, piece, lamp, furn) {
     floors, ldoors, cabin: F.rect(sa0 + 0.12, hl - 0.05, sd0 + 0.1, sd1 - 0.1), shaft: F.rect(sa0, hl, sd0, sd1),
     doorPt: F.pt(sa0 - 0.9, D / 2), doorCenter: F.pt(sa0, D / 2), insidePt: F.pt((sa0 + hl) / 2, D / 2),
     out: [-rx, -rz], lat: [-F.fx, -F.fz], width: 1.2, height: 2.3, labels: ['לובי', 'חדר פיקוח'],
+  };
+}
+
+// --------------------------------------------------------------------------- garage workshop (car customisation)
+// A real workshop you drive into: a turntable bay in the middle (your car goes there for paint, rims, body kits and
+// tuning), a two-post lift with a car on it, tool walls, red tool chests, tyre racks, a workbench, a paint booth,
+// a reception counter (repairs) and mechanics. Turntable, tyres, drums and the lifted car are 3D objects added by
+// the garage system (game/tuning.js).
+function workshopSpec(b, F, spec, piece, lamp, furn) {
+  const C = spec.colliders, y0 = CURB_H, L = F.L, D = F.D, hl = L / 2;
+  const H = Math.min(b.h - 0.3, 7);
+  spec.door = { face: b.face, w: 6.0, h: 4.2 };
+  shellColliders(b, y0 + H, spec.door, C);
+  if (b.h > H) C.push(makeBox(b.x, b.z, b.w / 2, b.d / 2, 0, y0 + H, y0 + b.h));
+  spec.rooms.push({ rect: F.rect(-hl, hl, 0, D), y0, y1: y0 + H, wall: 0xd9dbdd, floor: 0x7d8186, ceil: 0xe9ebec, door: spec.door, b });
+  const yaw = Math.atan2(F.fx, F.fz);                    // facing out of the door
+  const bayD = Math.min(D * 0.48, 12);
+  // wall band (dark lower half), floor markings around the bay and the driving lane
+  furn(-hl, hl, D - 0.06, D, y0, y0 + 1.2, 0x3b4148, false);
+  for (const sx of [-1, 1]) furn(sx * hl - 0.03, sx * hl + 0.03, 0, D, y0, y0 + 1.2, 0x3b4148, false);
+  const Y = 0xf2c230, mk = (a0, a1, d0, d1) => furn(a0, a1, d0, d1, y0 + 0.005, y0 + 0.015, Y, false);
+  mk(-3.6, 3.6, bayD - 3.6, bayD - 3.45); mk(-3.6, 3.6, bayD + 3.45, bayD + 3.6); mk(-3.6, -3.45, bayD - 3.6, bayD + 3.6); mk(3.45, 3.6, bayD - 3.6, bayD + 3.6);
+  for (let d = 0.5; d < bayD - 4; d += 1.6) { mk(-3.05, -2.95, d, d + 0.8); mk(2.95, 3.05, d, d + 0.8); }
+  // two-post lift on the left with its arms (the raised car is added by the garage system)
+  const la = -hl + 5.2;
+  for (const sd of [-1.7, 1.7]) {
+    furn(la - 1.75, la - 1.35, bayD + sd - 0.2, bayD + sd + 0.2, y0, y0 + 4.2, 0xc0392b);
+    furn(la + 1.35, la + 1.75, bayD + sd - 0.2, bayD + sd + 0.2, y0, y0 + 4.2, 0xc0392b);
+  }
+  furn(la - 1.8, la + 1.8, bayD - 2.0, bayD - 1.4, y0 + 4.2, y0 + 4.4, 0x7a1f17, false);
+  furn(la - 1.8, la + 1.8, bayD + 1.4, bayD + 2.0, y0 + 4.2, y0 + 4.4, 0x7a1f17, false);
+  for (const sd of [-1.7, 1.7]) furn(la - 1.3, la + 1.3, bayD + sd - 0.08, bayD + sd + 0.08, y0 + 1.6, y0 + 1.7, 0x4a4f55, false, 'metal');
+  // tool wall (pegboard + tools) along the back
+  furn(-hl + 1, hl - 1, D - 0.12, D - 0.06, y0 + 1.25, y0 + 3.2, 0x5a5f66, false);
+  for (let a = -hl + 1.4; a < hl - 1.4; a += 0.55) {
+    const k = Math.floor((a + 50) * 3) % 4;
+    furn(a, a + (k === 0 ? 0.06 : 0.04), D - 0.2, D - 0.13, y0 + 1.6 + (k % 2) * 0.6, y0 + 1.95 + (k % 2) * 0.6 + k * 0.1, [0xc9ced3, 0x2e86c1, 0xc0392b, 0x9aa0a6][k], false, 'metal');
+  }
+  // red tool chests with drawers
+  for (const a of [hl - 7, hl - 5.2, -2.5, 2.5]) {
+    furn(a - 0.8, a + 0.8, D - 1.0, D - 0.3, y0, y0 + 1.05, 0xb3261e);
+    for (let k = 0; k < 4; k++) furn(a - 0.75, a + 0.75, D - 1.02, D - 1.0, y0 + 0.15 + k * 0.22, y0 + 0.17 + k * 0.22, 0x2a2a2a, false, 'metal');
+  }
+  // workbench with a vice + monitor, right side
+  furn(hl - 1.0, hl - 0.3, D * 0.45, D * 0.45 + 3.2, y0, y0 + 0.92, 0x6b5a4a);
+  furn(hl - 0.9, hl - 0.4, D * 0.45 + 0.4, D * 0.45 + 0.7, y0 + 0.92, y0 + 1.1, 0x3a3f45, false, 'metal');
+  furn(hl - 0.7, hl - 0.55, D * 0.45 + 1.5, D * 0.45 + 2.1, y0 + 0.95, y0 + 1.35, 0x111418, false);
+  furn(hl - 0.71, hl - 0.7, D * 0.45 + 1.55, D * 0.45 + 2.05, y0 + 1.0, y0 + 1.3, 0x2a5a8a, false, 'screen');
+  // paint booth (back right): translucent curtains + bright lights
+  const pa0 = hl - 9, pa1 = hl - 1.2, pd0 = D - 7.5, pd1 = D - 1.4;
+  furn(pa0, pa0 + 0.05, pd0, pd1, y0, y0 + 3.4, 0xdfe9ef, true, 'glass');
+  furn(pa0, pa1, pd0, pd0 + 0.05, y0 + 2.4, y0 + 3.4, 0xdfe9ef, false, 'glass');
+  for (let a = pa0 + 1; a < pa1; a += 2) furn(a - 0.6, a + 0.6, (pd0 + pd1) / 2 - 0.1, (pd0 + pd1) / 2 + 0.1, y0 + 3.3, y0 + 3.36, 0xffffff, false, 'lamp');
+  // reception counter by the door (repairs and quick services, as before)
+  furn(hl - 4.8, hl - 1.2, 1.6, 2.3, y0, y0 + 1.05, 0x3a3f45);
+  furn(hl - 4.8, hl - 1.2, 1.55, 2.35, y0 + 1.05, y0 + 1.1, 0xd8d2c8, false);
+  spec.counter = { pt: F.pt(hl - 3, 1.0), keeper: F.pt(hl - 3, 3.0), yaw, y: y0 };
+  // mechanics at work
+  spec.staff = [{ pt: F.pt(hl - 1.7, D * 0.45 + 1.0), yaw: Math.atan2(-F.fz, F.fx), y: y0, mech: true }, { pt: F.pt(la + 2.4, bayD + 2.6), yaw: Math.atan2(F.fx, F.fz), y: y0, mech: true }];
+  for (let a = -hl + 4; a < hl; a += 7) for (let d = 3; d < D; d += 6) lamp(a, d, y0 + H - 0.05);
+  // garage props placed by the garage system
+  spec.workshop = {
+    bay: { pt: F.pt(0, bayD), y: y0, yaw }, lift: { pt: F.pt(la, bayD), y: y0 + 1.75, yaw },
+    tires: [...Array(10)].map((_, i) => ({ pt: F.pt(-hl + 0.5, 3 + i * 0.36), y: y0 })), drums: [F.pt(hl - 0.7, D * 0.25), F.pt(hl - 1.4, D * 0.25), F.pt(hl - 0.7, D * 0.25 + 0.75)],
+    out: [F.fx, F.fz], lat: [-F.fz, F.fx], y: y0, rect: F.rect(-hl, hl, 0, D),
   };
 }
 

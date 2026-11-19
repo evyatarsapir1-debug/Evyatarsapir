@@ -15,6 +15,7 @@ import { Crashes } from './game/crashes.js';
 import { HitFX } from './game/hitfx.js';
 import { Flight } from './game/flight.js';
 import { Heists } from './game/heist.js';
+import { Tuning, applyMods } from './game/tuning.js';
 import { Police, POLICE_STATION, HOSPITAL } from './game/police.js';
 import { VEHICLE_TYPES } from './vehicles/vehicleTypes.js';
 import { ShopUI, shopKind } from './game/shops.js';
@@ -100,6 +101,7 @@ class Game {
     this.police = new Police(this);
     this.flight = new Flight(this);
     this.heist = new Heists(this);
+    this.tuning = new Tuning(this);
     this.vehicleTypes = VEHICLE_TYPES;
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());
@@ -264,7 +266,7 @@ class Game {
     this.gps.clear();
     this.missions.load(s.missions);
     // cars you bought wait for you next to your villa
-    this.econ.ownedCars.forEach((c, i) => { const v = this.spawnVehicleNear(c.type, VILLA.door.x - 20 + i * 8, VILLA.door.z - 12); if (v) { v.owned = true; v.setColor(c.color); v.rebuildLod?.(); } });
+    this.econ.ownedCars.forEach((c, i) => { const v = this.spawnVehicleNear(c.type, VILLA.door.x - 20 + i * 8, VILLA.door.z - 12); if (v) { v.owned = true; v.ownedRef = c; v.setColor(c.color); v.rebuildLod?.(); if (c.mods) { v.mods = { ...c.mods }; applyMods(v); } } });
     if (s.vehicle) {
       const vd = s.vehicle;
       this.chunks.update(vd.x, vd.z, true);
@@ -551,7 +553,8 @@ class Game {
     const v = this.spawnVehicleNear(type, at.x, at.z);
     if (!v) return 'אין מקום פנוי לרכב כרגע';
     v.owned = true;
-    this.econ.ownedCars.push({ type, color: v.color });
+    v.ownedRef = { type, color: v.color };
+    this.econ.ownedCars.push(v.ownedRef);
     this.save();
     return `${v.T.name} חדש שלך! מחכה ליד הסוכנות (גם בטלפון ← הרכבים שלי)`;
   }
@@ -694,6 +697,7 @@ class Game {
     else if (this.state === 'creator') this._creatorFrame(dt);
     else if (this.state === 'shop' && this.shop.tryOn) this._fittingFrame(dt);
     else if (this.state === 'playing') this._playFrame(dt);
+    else if (this.state === 'tuning') this.tuning.frame(dt);
     this._lights();
     this.fx.render();
     this.env.probe(this.camera);   // live reflections: one cube-map face per frame
@@ -820,8 +824,12 @@ class Game {
     // chair nearby etc., so the E / "פעולה" press goes to the heist before the player handles it
     const hp = p.state === 'foot' ? this.heist.promptFor(p) : null;
     if (hp && input.wasPressed('interact')) { input.pressed.delete('interact'); hp.action(); }
+    // garage: drive slowly onto the turntable inside the workshop
+    const tp = p.state === 'driving' ? this.tuning.promptFor(p.vehicle) : null;
+    if (tp && input.wasPressed('interact')) { input.pressed.delete('interact'); tp.action(); if (this.state === 'tuning') { input.endFrame(); return; } }
     p.update(dt, input, this.rig.yaw, world);
     if (hp && p.state === 'foot' && (!p.prompt || p.prompt.key === 'interact')) p.prompt = { key: 'interact', text: hp.text };
+    if (tp && p.state === 'driving') p.prompt = { key: 'interact', text: tp.text, drive: true };
     // luna park rides at the marina
     if (!p.prompt && p.state === 'foot') {
       const lp = this.luna.promptFor(p);
@@ -926,6 +934,7 @@ class Game {
     this.hitfx.update(dt);
     this.flight.update(dt);
     this.heist.update(dt);
+    this.tuning.update(dt);
     this.crashes.update(dt, { vehicles: all, player: p, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.military.update(dt, { player: p, input, vehicles: all, onCrime: (k, x, z) => this.police.crime(k, x, z), camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.rig.update(dt, input, p);
@@ -1011,7 +1020,7 @@ class Game {
     if (this.input.isTouch) {
       const mode = v ? (v.isHeli ? 'heli' : v.isPlane ? 'plane' : 'drive') : (p.state === 'foot' || p.state === 'sitting' ? 'foot' : null);
       document.querySelectorAll('.tbtns').forEach((el) => el.classList.toggle('show', el.classList.contains(mode)));
-      $('tInteract').classList.toggle('show', p.prompt?.key === 'interact' && !v);
+      $('tInteract').classList.toggle('show', p.prompt?.key === 'interact' && (!v || p.prompt.drive));
       if (p.prompt?.key === 'interact') { const t = p.prompt.text + (p.prompt.seat ? ` · ${p.prompt.seat}` : ''); if ($('tInteract').textContent !== t) $('tInteract').textContent = t; }
       $('tVehicle').classList.toggle('show', p.prompt?.key === 'vehicle' && !v);
       { const t = p.prompt?.label || 'היכנס לרכב'; if ($('tVehicle').textContent !== t) $('tVehicle').textContent = t; }

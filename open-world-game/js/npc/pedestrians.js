@@ -223,7 +223,7 @@ export class Pedestrians {
       if (c) want.set(key + ':k', { x: c.keeper[0], z: c.keeper[1], y: c.y, yaw: c.yaw, state: 'shopkeeper' });
       if (L.spec.home) { const h = L.spec.home; want.set(key + ':h', { x: h.pt[0], z: h.pt[1], y: h.y, yaw: h.yaw, state: 'resident' }); }
       (L.spec.counters || []).forEach((c, i) => want.set(`${key}:c${i}`, { x: c.keeper[0], z: c.keeper[1], y: c.y, yaw: c.yaw, state: 'shopkeeper' }));
-      (L.spec.staff || []).forEach((c, i) => want.set(`${key}:s${i}`, { x: c.pt[0], z: c.pt[1], y: c.y, yaw: c.yaw, state: c.sit ? 'resident' : 'shopkeeper', guard: !!c.guard }));
+      (L.spec.staff || []).forEach((c, i) => want.set(`${key}:s${i}`, { x: c.pt[0], z: c.pt[1], y: c.y, yaw: c.yaw, state: c.sit ? 'resident' : 'shopkeeper', guard: !!c.guard, mech: !!c.mech }));
       // bank security guards patrolling the lobby
       if (L.spec.guards) { const G = L.spec.guards; for (let i = 0; i < G.n; i++) want.set(`${key}:g${i}`, { x: G.points[i % G.points.length][0], z: G.points[i % G.points.length][1], y: G.y, yaw: i, state: 'wander', pts: G.points, seats: [], guard: true, bank: true }); }
       (L.spec.outdoor || []).forEach((c, i) => want.set(`${key}:o${i}`, { x: c.pt[0], z: c.pt[1], y: c.y, yaw: c.yaw, state: 'shopkeeper', phone: i === 1 }));
@@ -250,6 +250,7 @@ export class Pedestrians {
       const p = this._add({ x: w.x, z: w.z, y: w.y, state: w.state, shopKey: k, pts: w.pts, seats: w.seats, suitcase: !!w.suitcase });
       if (w.cop) this._copLook(p);
       if (w.guard) this._guardLook(p);
+      if (w.mech) { Object.assign(p.app, { shirt: 0xe36414, pants: 0xe36414, shoes: 0x2a2a2a, long: false }); p.phone = false; p.suitcase = false; this._colors(); }   // mechanic overalls
       if (w.bank) p.inBank = true;
       if (w.soldier) {
         // soldier: olive uniform, helmet (the short-hair cap in olive), dark boots

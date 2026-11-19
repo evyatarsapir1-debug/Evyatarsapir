@@ -310,6 +310,7 @@ export function buildVehicleModel(type, color) {
         for (const sx of [-0.12, 0.12]) m(box(0.12, 0.012, L * 0.98), shared.white, body, sx, clear + lowH + 0.005, 0);
       }
       parts.seat.set(W * 0.22, clear + lowH * 0.5 - 0.42, cabZ + cabL * 0.05);
+      parts.dims = { W, L, H, clear, lowH, r, wb, cabZ, cabL, cabH, wheelW: 0.24 };   // used by the garage (body kits, rims)
       // driver door (left side for left-hand drive = +x)
       const hinge = new THREE.Group();
       hinge.position.set(W / 2 + 0.005, clear, cabZ + cabL * 0.42);

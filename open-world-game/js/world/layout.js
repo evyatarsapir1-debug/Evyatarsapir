@@ -410,7 +410,8 @@ export function markInteriors(B, rng) {
     else if (b.villa) b.interior = 'villa';
     else if (b.forceShop) b.interior = 'shop';
     else if (b.mall) b.interior = 'mall';
-    else if (b.station || b.airport || b.sign === 'בית העירייה' || b.garage) b.interior = 'hall';
+    else if (b.garage) b.interior = 'workshop';
+    else if (b.station || b.airport || b.sign === 'בית העירייה') b.interior = 'hall';
     else if (b.house) { if (rng.chance(0.7)) b.interior = 'house'; }
     else if (b.tower) b.interior = 'tower';
     else if (!b.storefront && ['plaster', 'concrete', 'brick', 'office', 'glass'].includes(b.style) && b.h >= 9 && b.w >= 12 && b.d >= 12) b.interior = 'apartment';

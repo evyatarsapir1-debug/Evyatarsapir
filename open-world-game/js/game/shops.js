@@ -111,9 +111,10 @@ function catalogue(kind, ctx) {
     case 'mechanic': {
       const v = game.myVehicleNear(45);
       if (!v) { out.push({ id: 'none', name: 'אין רכב שלך ליד המוסך', desc: 'הגע ברכב והחנה אותו קרוב למוסך', price: 0, disabled: true }); break; }
+      out.push({ id: 'tip', name: '🔧 התאמה אישית מלאה', desc: 'סע עם הרכב פנימה אל הבמה המסתובבת ולחץ E — חישוקים, ספוילרים, ניאון, גובה ועוד', price: 0, disabled: true });
       out.push({ id: 'repair', name: `תיקון מלא — ${v.T.name}`, desc: `נזק כרגע: ${Math.round(v.damage)}%`, price: 250 + Math.round(v.damage * 6), disabled: v.damage < 1 && !v.wrecked, buy: () => { v.repair(); return 'הרכב תוקן ונראה כמו חדש'; } });
-      [0xc0392b, 0x2e86c1, 0x111111, 0xf5f5f5, 0xf1c40f, 0x27ae60, 0x8e44ad, 0xe67e22].forEach((c) => out.push({ id: `paint-${c}`, name: 'צביעה מחדש', swatch: c, price: 500, buy: () => { v.setColor(c); v.rebuildLod?.(); return 'הרכב נצבע מחדש'; } }));
-      out.push({ id: 'engine', name: 'שדרוג מנוע', desc: `+15% תאוצה ומהירות (רמה ${v.tune || 0}/3)`, price: 2500 * ((v.tune || 0) + 1), disabled: (v.tune || 0) >= 3, buy: () => { v.upgradeEngine(); return 'המנוע שודרג'; } });
+      [0xc0392b, 0x2e86c1, 0x111111, 0xf5f5f5, 0xf1c40f, 0x27ae60, 0x8e44ad, 0xe67e22].forEach((c) => out.push({ id: `paint-${c}`, name: 'צביעה מחדש', swatch: c, price: 500, buy: () => { game.tuning.setMods(v, { color: c }); return 'הרכב נצבע מחדש'; } }));
+      out.push({ id: 'engine', name: 'שדרוג מנוע', desc: `+15% תאוצה ומהירות (רמה ${v.tune || 0}/3)`, price: 2500 * ((v.tune || 0) + 1), disabled: (v.tune || 0) >= 3, buy: () => { game.tuning.setMods(v, { engine: Math.min(3, (v.tune || 0) + 1) }); return 'המנוע שודרג'; } });
       break;
     }
     case 'weapons':

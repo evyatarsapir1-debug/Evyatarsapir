@@ -973,6 +973,43 @@ check('heist: alarm, police stars and people reacting (hide / flee / call)', ban
 check('heist: completing it pays the bank loot into the account, with the money animation', bank.done && bank.paid === 150000 && bank.reward, JSON.stringify(bank));
 check('heist: result is saved and the robbed bank closes for a while', bank.rec && bank.saved === 1 && bank.status === 'cooldown');
 
+// ---------------------------------------------------------------- garage: drive onto the turntable, live mods, before/after, pay, save
+const gar = await g(async () => {
+  const WG = await import('./js/world/worldGen.js');
+  const game = __game, P = game.player, T = game.tuning;
+  const step = (n) => { for (let i = 0; i < n; i++) { if (game.police.level) game.police.clear(); game.time += 1 / 30; if (game.state === 'tuning') T.frame(1 / 30); else game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.econ.money = 60000;
+  const bld = WG.cellData(8, 3).buildings.find((q) => q.garage);
+  game.teleport(bld.door.x, bld.door.z, 0); step(40);
+  const L = [...game.interiors.loaded.values()].find((q) => q.spec.workshop);
+  if (!L) return { err: 'no workshop' };
+  const W = L.spec.workshop, v = game.spawnVehicleNear('sedan', W.bay.pt[0], W.bay.pt[1]);
+  v.x = W.bay.pt[0]; v.z = W.bay.pt[1]; v.y = W.y; v.heading = W.bay.yaw; v.speed = 0; v.sync();
+  P.state = 'driving'; P.vehicle = v; v.driver = 'player'; P.ignoreVehicle = v; P._attach(v);
+  step(5);
+  const prompt = P.prompt?.text || '';
+  game.input.pressed.add('interact'); step(1);
+  const opened = game.state === 'tuning' && document.getElementById('tunePanel').classList.contains('show');
+  const wheelGeo0 = v.parts.wheels[0].spin.children[0].geometry, m0 = game.econ.money, accel0 = v.T.accel;
+  T.setCat('rim'); T.pick('rim', 2);
+  const livePreview = v.parts.wheels[0].spin.children[0].geometry !== wheelGeo0 && game.econ.money === m0;
+  T.buy(); step(3); const working = !!T.s.work && !!T.mech; step(80);
+  T.setCat('spoiler'); T.pick('spoiler', 2); T.buy(); step(70);
+  T.setCat('engine'); T.pick('engine', 1); T.buy(); step(70);
+  T.setCat('color'); T.pick('color', 0x27ae60); T.buy(); step(100);
+  const kit = v.parts.kit.children.length, paid = m0 - game.econ.money, faster = v.T.accel > accel0;
+  T.toggleBefore(); step(1); const beforeShowsOld = v.mods.rim === 0 && v.parts.kit.children.length === 0; T.toggleBefore(); step(1);
+  T.setCat('own'); T.pick('own', 1); T.buy(); step(70);
+  T.close(); step(3);
+  game.save(); const sv = JSON.parse(localStorage.getItem('azura_city_save_v1')).econ.ownedCars.find((c) => c.type === 'sedan' && c.mods);
+  return { prompt, opened, livePreview, working, kit, paid, faster, beforeShowsOld, back: game.state === 'playing', saved: sv && sv.mods.rim === 2 && sv.mods.spoiler === 2 && sv.mods.color === 0x27ae60 };
+});
+check('garage: driving onto the turntable inside the workshop offers the garage and opens it', gar.prompt.includes('מוסך') && gar.opened, JSON.stringify(gar));
+check('garage: picking a part shows it on the car right away, before paying', gar.livePreview);
+check('garage: buying it — the mechanic works on the car, the money is paid, parts and performance change', gar.working && gar.kit > 0 && gar.paid > 0 && gar.faster, JSON.stringify(gar));
+check('garage: before / after view, and the mods are saved with your registered car', gar.beforeShowsOld && gar.back && gar.saved, JSON.stringify(gar));
+
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);
 await g(() => __game.save());
