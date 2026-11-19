@@ -18,6 +18,7 @@ import { Heists } from './game/heist.js';
 import { Tuning, applyMods } from './game/tuning.js';
 import { Characters } from './game/characters.js';
 import { Gangs } from './game/gangs.js';
+import { Robbery } from './game/robbery.js';
 import { Police, POLICE_STATION, HOSPITAL } from './game/police.js';
 import { VEHICLE_TYPES } from './vehicles/vehicleTypes.js';
 import { ShopUI, shopKind } from './game/shops.js';
@@ -106,6 +107,7 @@ class Game {
     this.tuning = new Tuning(this);
     this.chars = new Characters(this);
     this.gangs = new Gangs(this);
+    this.robbery = new Robbery(this);
     this.vehicleTypes = VEHICLE_TYPES;
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());
@@ -949,6 +951,7 @@ class Game {
     this.heist.update(dt);
     this.tuning.update(dt);
     this.gangs.update(dt);
+    this.robbery.update(dt);
     this.crashes.update(dt, { vehicles: all, player: p, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.military.update(dt, { player: p, input, vehicles: all, onCrime: (k, x, z) => this.police.crime(k, x, z), camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.rig.update(dt, input, p);

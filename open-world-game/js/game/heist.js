@@ -19,8 +19,7 @@ export const HEISTS = {
     intro: 'תוכנית: להשבית את המצלמות בקומת ההנהלה, להשיג את קוד הכספת מהמשרד של המנהל, לפתוח את הכספת בשקט — ולברוח הביתה.',
     stages: [
       { type: 'hold', text: 'עלה במעלית לקומת ההנהלה והשבת את מצלמות האבטחה', where: 'security', dur: 3.5, busy: 'משבית את המצלמות', done: 'המצלמות כבויות — אף אחד לא רואה אותך.' },
-      { type: 'hold', text: 'השג את קוד הכספת מהכספת הקטנה במשרד המנהל', where: 'manager', dur: 3, busy: 'מחפש את הקוד', done: 'יש קוד! עכשיו לכספת בקומת הקרקע.' },
-      { type: 'unlock', text: 'רד לכספת והקלד את הקוד', dur: 2.5, busy: 'מקליד את הקוד', alarm: 'open', done: 'הכספת נפתחה… והאזעקה התחילה!' },
+      { type: 'vault', text: 'פתח את הכספת — קח את המפתח מהמאבטח או מהפקיד, או פוצץ את הדלת', dur: 2.4, done: 'הכספת פתוחה!' },
       { type: 'loot', text: 'אסוף את השלל מהכספת', from: 'vault', dur: 2.6 },
       { type: 'escape', text: 'ברח הביתה, לווילה — המשטרה בדרך!', dest: () => ({ x: VILLA.door.x, z: VILLA.door.z - 1, r: 8, name: 'הבית שלי' }) },
     ],
@@ -29,8 +28,7 @@ export const HEISTS = {
     title: 'שוד בנק הנמל', stars: 2,
     intro: 'תוכנית: לקחת את כרטיס המפתח מאחד הקופאים, לפוצץ את דלת הכספת בפיצוץ קולנועי, לאסוף ולברוח לסירה שמחכה בחוף.',
     stages: [
-      { type: 'hold', text: 'קח את כרטיס המפתח ממגירת הקופאי מאחורי הדלפק', where: 'drawer', dur: 2, busy: 'לוקח את כרטיס המפתח', done: 'יש כרטיס — עכשיו לחדר הכספת.' },
-      { type: 'blast', text: 'הנח את המטען הבדיוני על דלת הכספת — ותתרחק!', dur: 2, busy: 'מצמיד את המטען', alarm: 'blast', done: 'בום! הדלת עפה — האזעקה פועלת!' },
+      { type: 'vault', text: 'פתח את הכספת — קח את המפתח מהמאבטח או מהפקיד, או פוצץ את הדלת', dur: 2.4, done: 'הכספת פתוחה!' },
       { type: 'loot', text: 'אסוף את השלל מהכספת', from: 'vault', dur: 3 },
       { type: 'escape', text: 'ברח לסירה שמחכה בחוף', dest: () => ({ x: 1052, z: 640, r: 10, name: 'הסירה בחוף' }) },
     ],
@@ -41,7 +39,7 @@ export const HEISTS = {
     alarmAtStart: true,
     stages: [
       { type: 'loot', text: 'רוקן את מגירות הקופאים', from: 'drawers', dur: 1.4, share: 0.35 },
-      { type: 'unlock', text: 'פתח את הכספת הקטנה עם המפתח של המנהלת', dur: 2.2, busy: 'פותח את הכספת', done: 'הכספת פתוחה!' },
+      { type: 'vault', text: 'פתח את הכספת — קח את המפתח מהמאבטח או מהפקיד, או פוצץ את הדלת', dur: 2.4, done: 'הכספת פתוחה!' },
       { type: 'loot', text: 'אסוף את השלל מהכספת', from: 'vault', dur: 2.2, share: 0.65 },
       { type: 'escape', text: 'היעלם מהמשטרה (עד שהכוכבים נעלמים)', lose: true },
     ],
@@ -51,7 +49,7 @@ export const HEISTS = {
     intro: 'השוד הגדול מכולם: להשבית את מרכז האבטחה בקומה 1, לעלות לקומת האוצר, לפוצץ את הכספת הענקית, לאסוף זהב ומזומן ולברוח לנמל.',
     stages: [
       { type: 'hold', text: 'עלה במעלית לקומת האבטחה והשבת את המערכות', where: 'security', dur: 4, busy: 'משבית את מערכות האבטחה', done: 'מערכות האבטחה כבויות. עכשיו לקומת האוצר.' },
-      { type: 'blast', text: 'בקומת האוצר: הנח את המטען הבדיוני על הכספת הענקית — ותתרחק!', dur: 2.5, busy: 'מצמיד את המטען', alarm: 'blast', done: 'פיצוץ ענק! הכספת פתוחה — כל המשטרה בדרך!' },
+      { type: 'vault', text: 'פתח את הכספת — קח את המפתח מהמאבטח או מהפקיד, או פוצץ את הדלת', dur: 2.4, done: 'הכספת פתוחה!' },
       { type: 'loot', text: 'אסוף את הזהב והמזומן', from: 'vault', dur: 3.2 },
       { type: 'escape', text: 'ברח לנקודת האיסוף בנמל', dest: () => ({ x: 100, z: 852, r: 12, name: 'נקודת האיסוף בנמל' }) },
     ],
@@ -93,8 +91,16 @@ export class Heists {
     if (!this.active) return null;     // no "start" button: the robbery begins when you actually rob the bank
     const A = this.active, S = this.stage(), I = this.info(A.id);
     if (!S || A.busy || A.wait) return null;
+    if (S.type === 'vault' && !A.hasKey) {
+      // the key holder gave up (hands raised): take the key off him
+      const h = A.keyHolder;
+      if (h && h.state === 'surrender' && near([h.x, h.z], h.y, 1.8)) return { text: '🔑 קח ממנו את מפתח הכספת', action: () => { A.hasKey = true; this.game.peds.say(h, 'קח, קח! רק אל תירה', 2.2); this.game.toast('🔑 יש לך את מפתח הכספת!', 2.5); this.game.audio.mech?.('in'); } };
+    }
     for (const t of this.targets()) {
       if (t.taken) continue;
+      if (S.type === 'vault' && near(t.pt, t.y, 1.9)) return A.hasKey
+        ? { text: '🔑 פתח את הכספת עם המפתח', action: () => { A.busy = { t: 0, dur: S.dur, target: t, mode: 'key' }; } }
+        : { text: '🧨 הצמד מטען פריצה לדלת (אין לך מפתח)', action: () => { A.busy = { t: 0, dur: 2, target: t, mode: 'blast' }; } };
       if (near(t.pt, t.y, 1.9)) return { text: S.type === 'loot' ? 'אסוף את השלל' : S.busy || S.text, action: () => { A.busy = { t: 0, dur: S.dur, target: t }; } };
     }
     return null;
@@ -108,7 +114,7 @@ export class Heists {
     if (A.targets) return A.targets;
     let list = [];
     if (S.type === 'hold') list = S.where === 'drawer' ? [I.drawers[0]] : [I[S.where]];
-    else if (S.type === 'unlock' || S.type === 'blast') list = [{ pt: I.vault.outside, y: I.vault.y }];
+    else if (S.type === 'unlock' || S.type === 'blast' || S.type === 'vault') list = [{ pt: I.vault.outside, y: I.vault.y }];
     else if (S.type === 'loot') list = (S.from === 'drawers' ? I.drawers : I.vault.loot).map((q, i) => ({ ...q, key: (S.from === 'drawers' ? 'd' : 'v') + i }));
     A.targets = list.filter(Boolean).map((q) => ({ ...q, taken: false }));
     return A.targets;
@@ -154,7 +160,7 @@ export class Heists {
   _next(msg) {
     const A = this.active;
     if (msg) this.game.toast(msg, 3);
-    A.stage++; A.targets = null; A.busy = null; A.wait = null;
+    A.stage++; A.targets = null; A.busy = null; A.wait = null; A.keyHolder = undefined;
     if (A.stage >= HEISTS[A.id].stages.length) return this._success();
     const S = this.stage();
     setTimeout(() => { if (this.active === A && this.stage() === S) this.game.toast(S.text, 3.5); }, msg ? 2600 : 0);
@@ -193,6 +199,7 @@ export class Heists {
   // ------------------------------------------------------------------ per frame
   update(dt) {
     const g = this.game, P = g.player, pos = g.playerPos();
+    if (!this._exHooked && g.weapons?.explode) { this._exHooked = true; const ex = g.weapons.explode.bind(g.weapons); g.weapons.explode = (p, r, d, ctx) => { const out = ex(p, r, d, ctx); this.onExplosion(p); return out; }; }
     this._doors(dt);
     this._fx(dt);
     this._alarmLights(dt);
@@ -200,6 +207,7 @@ export class Heists {
     const A = this.active;
     if (!A) { this._hud.classList.remove('show'); this._busy.classList.remove('show'); this._autoStart(); return; }
     const S = this.stage();
+    if (S?.type === 'vault') this._vaultKey(dt, A);
     if (A.timer !== null) { A.timer -= dt; if (A.timer <= 0) return this.fail('נגמר הזמן'); }
     // an action in progress (hold / loot / unlock / blast): stay at the spot until it is done
     if (A.busy) {
@@ -219,7 +227,8 @@ export class Heists {
             if (this.targets().every((q) => q.taken)) return this._next('יש! כל השלל בתיק — עכשיו לברוח!');
             this._gps(); this._hudRender(true);
           }
-          if (S.type === 'unlock') { this._openVault('unlock'); A.wait = { kind: 'opening' }; }
+          if (S.type === 'unlock' || (S.type === 'vault' && done.mode === 'key')) { this._openVault('unlock'); A.wait = { kind: 'opening' }; }
+          if (S.type === 'vault' && done.mode === 'blast') { A.wait = { kind: 'countdown', t: 5 }; g.toast('המטען מוכן — התרחק מהדלת! 5…', 1.5); }
           if (S.type === 'blast') { A.wait = { kind: 'countdown', t: 5 }; g.toast('המטען מוכן — התרחק מהדלת! 5…', 1.5); }
         }
       }
@@ -227,12 +236,12 @@ export class Heists {
     // waiting for the vault door / the blast
     if (A.wait) {
       const W = A.wait, D = this.doors[A.id];
-      if (W.kind === 'opening' && D.open > 0.92) { if (S.alarm) this.alarm('open'); this._next(S.done); }
+      if (W.kind === 'opening' && D.open > 0.92) { if (S.alarm || S.type === 'vault') this.alarm('open'); this._next(S.done); }
       if (W.kind === 'countdown') {
         const before = Math.ceil(W.t); W.t -= dt; const after = Math.ceil(W.t);
         if (after !== before && after > 0) { g.toast(`${after}…`, 0.9); g.audio.mech?.('dry'); }
         if (W.t <= 0) { this._blast(); W.kind = 'blown'; W.t = 1.2; }
-      } else if (W.kind === 'blown') { W.t -= dt; if (W.t <= 0) { if (S.alarm) this.alarm('blast'); this._next(S.done); } }
+      } else if (W.kind === 'blown') { W.t -= dt; if (W.t <= 0) { if (S.alarm || S.type === 'vault') this.alarm('blast'); this._next(S.type === 'vault' ? 'בום! דלת הכספת עפה — האזעקה פועלת!' : S.done); } }
     }
     // escape
     if (S?.type === 'escape') {
@@ -300,6 +309,47 @@ export class Heists {
     parent.add(pivot);
     const qY = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0);
     return { setAngle: (a) => pivot.quaternion.copy(baseQ).multiply(qY.setFromAxisAngle(Y, a)), door, wheel, bolts };
+  }
+  // ---- the vault key: one of the guards / tellers carries it (sometimes nobody does). Take it from him when he
+  //      surrenders, or when he is down for good it drops on the floor and you pick it up. No key: blow the door.
+  _assignKey(A) {
+    const b = A.b, peds = this.game.peds.peds;
+    const staff = peds.filter((p) => p.state !== 'dead' && Math.abs(p.x - b.x) < b.w / 2 && Math.abs(p.z - b.z) < b.d / 2 && (p.app.guard || p.state === 'shopkeeper' || (p.state === 'surrender' && p.shopKey)));
+    A.keyHolder = staff.length && Math.random() < 0.75 ? staff.sort((a, c) => (c.app.guard ? 1 : 0) - (a.app.guard ? 1 : 0))[Math.floor(Math.random() * Math.min(2, staff.length))] : null;
+    A.staff = staff; A.hasKey = false; A.keyObj = null; A.noKeyTold = false;
+  }
+  _vaultKey(dt, A) {
+    const g = this.game, P = g.player;
+    if (A.keyHolder === undefined) this._assignKey(A);
+    if (A.hasKey) return;
+    // someone from the staff went down: search him
+    for (const p of A.staff || []) {
+      if (p.state !== 'dead' || p.searched) continue;
+      p.searched = true;
+      if (p === A.keyHolder) {
+        const m = new THREE.Group();
+        const gold = new THREE.MeshStandardMaterial({ color: 0xe8c040, metalness: 1, roughness: 0.25, emissive: 0x6a4a08, emissiveIntensity: 0.8 });
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 8, 16), gold); ring.rotation.x = Math.PI / 2; m.add(ring);
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.012, 0.13), gold); shaft.position.z = 0.11; m.add(shaft);
+        for (const z of [0.15, 0.17]) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.012, 0.012), gold); t.position.set(0.02, 0, z); m.add(t); }
+        m.position.set(p.x + 0.4, p.y + 0.06, p.z + 0.2); g.scene.add(m); A.keyObj = m;
+        if (Math.hypot(P.x - p.x, P.z - p.z) < 25) g.toast('🔑 נפל לו מפתח — קח אותו', 2.5);
+      } else if (Math.hypot(P.x - p.x, P.z - p.z) < 25) g.toast('אין עליו מפתח…', 1.8);
+    }
+    if (A.keyObj) {
+      const k = A.keyObj; k.rotation.y += dt * 2.5; k.position.y = (k.userData.y0 ??= k.position.y) + 0.05 + Math.sin(performance.now() * 0.004) * 0.03;
+      if (Math.hypot(P.x - k.position.x, P.z - k.position.z) < 1.3 && Math.abs(P.y - k.userData.y0) < 1.5) {
+        g.scene.remove(k); A.keyObj = null; A.hasKey = true; g.audio.mech?.('in'); g.toast('🔑 יש לך את מפתח הכספת! עכשיו לדלת הכספת', 3);
+      }
+    }
+    // nobody had it: tell the player once there is nobody left to search
+    if (!A.noKeyTold && (A.staff || []).length && A.staff.every((p) => p.searched || p.state === 'dead') && !A.keyObj) { A.noKeyTold = true; g.toast('לאף אחד אין מפתח — תצטרך לפוצץ את דלת הכספת', 3); }
+  }
+  // a grenade (or any explosive) that goes off right at the vault door blows it open
+  onExplosion(pt) {
+    const A = this.active, S = this.stage(); if (!A || S?.type !== 'vault' || A.wait || A.busy) return;
+    const v = this.info(A.id)?.vault; if (!v) return;
+    if (Math.hypot(pt.x - v.outside[0], pt.z - v.outside[1]) < 3.2 && Math.abs(pt.y - v.y - 1) < 2.5) { this._blast(); A.wait = { kind: 'blown', t: 1.2 }; }
   }
   _openVault(mode) {
     const D = this.doors[this.active.id];

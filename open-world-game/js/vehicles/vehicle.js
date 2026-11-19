@@ -167,6 +167,8 @@ export class Vehicle {
     const onGround = this.y <= ground + 0.05;
     const thr = this.driver ? (ctl.throttle || 0) : 0;
     const lift = this.driver ? (ctl.lift || 0) : 0;
+    // flown by you: a lower top speed and softer responses so it stays easy to control
+    const mine = this.driver === 'player', VMAX = mine ? (T.fighter ? 90 : 70) : T.maxSpeed;
     let v = this.speed;
     // throttle lever (0..100%): gas moves it up, brake moves it down; the engines spool towards it
     this.throttleSet = clamp((this.throttleSet || 0) + thr * (thr < 0 ? 0.9 : 0.5) * dt, 0, 1);
@@ -183,7 +185,7 @@ export class Vehicle {
     if (!this.driver) this.throttleSet = 0;
     this.thrust = damp(this.thrust || 0, this.throttleSet, 0.9, dt);
     if (!(onGround && this.throttleSet < 0.3)) v += T.accel * this.thrust * dt;   // on the ground, a low throttle is idle
-    v -= v * Math.abs(v) * (T.accel / (T.maxSpeed * T.maxSpeed)) * dt;
+    v -= v * Math.abs(v) * (T.accel / (VMAX * VMAX)) * dt;
     if (onGround) {
       // wheel brakes once the throttle is at idle and you keep pulling back
       if (thr < 0 && this.throttleSet === 0) v = v > 0.3 ? Math.max(0, v - T.brake * 2.2 * -thr * dt) : Math.max(-4, v - 1.5 * dt);   // stopped + brake held = slow reverse (taxi back)
@@ -202,13 +204,13 @@ export class Vehicle {
       // pitch with the climb/descend controls, otherwise ease back towards gentle level flight
       const p0 = -this.pitch;
       const ag = T.agility || 1;
-      let pt = clamp(p0 + lift * 0.5 * ag * dt, -0.3 - (ag - 1) * 0.2, 0.27 + (ag - 1) * 0.25);
+      let pt = clamp(p0 + lift * (mine ? 0.34 : 0.5) * ag * dt, -0.3 - (ag - 1) * 0.2, 0.27 + (ag - 1) * 0.25);
       if (!lift) pt = damp(pt, clamp(pt, -0.05, 0.08), 0.6, dt);
       this.pitch = -pt;
       // bank and turn
       // stick right: the right wing dips (positive roll) and the plane turns right (heading decreases)
-      this.roll = damp(this.roll, (ctl.steer || 0) * (0.62 + (ag - 1) * 0.35), 2.2 * ag, dt);
-      this.heading -= Math.tan(this.roll) * 19 * ag / Math.max(25, v) * dt;
+      this.roll = damp(this.roll, (ctl.steer || 0) * (mine ? 0.5 + (ag - 1) * 0.25 : 0.62 + (ag - 1) * 0.35), (mine ? 1.5 : 2.2) * ag, dt);
+      this.heading -= Math.tan(this.roll) * (mine ? 15 : 19) * ag / Math.max(25, v) * dt;
       this.steer = 0;
       // gravity along the flight path, lift vs. stall
       v -= Math.sin(pt) * 9.8 * 0.55 * dt;
@@ -229,7 +231,7 @@ export class Vehicle {
       if (L < 0.5) this.pitch = damp(this.pitch, 0.12, 0.8, dt); // nose drops in a stall
     }
     if (this.holdSpeed != null && !onGround) { v = this.holdSpeed; this.thrust = damp(this.thrust || 0, 0.55, 1, dt); }
-    v = clamp(v, onGround ? (thr < 0 ? -4 : Math.min(0, v)) : 18, T.maxSpeed * 1.08);   // reverse only while braking on the ground; in the air it keeps a gliding speed
+    v = clamp(v, onGround ? (thr < 0 ? -4 : Math.min(0, v)) : 18, mine ? VMAX : T.maxSpeed * 1.08);   // reverse only while braking on the ground; in the air it keeps a gliding speed
     this.speed = v;
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     const hv = v * Math.cos(this.pitch);

@@ -608,7 +608,7 @@ const mil = await g(() => {
   const inJet = P.state === 'driving' && P.vehicle === jet;
   jet.x = -900; jet.z = -720; jet.heading = Math.PI / 2; jet.speed = 0;
   I.held.add('gas'); step(90); I.held.delete('gas');
-  step(30 * 9, () => { I.joyY = jet.speed > 55 ? 0.8 : 0; I.held.add('gas'); /* joystick up = climb, + speed held */ }); I.held.delete('gas');
+  step(30 * 9, () => { I.joyY = jet.speed > 55 ? -0.8 : 0; I.held.add('gas'); /* joystick pulled down = climb, + speed held */ }); I.held.delete('gas');
   I.joyY = 0;
   const alt = jet.y, kmh = jet.speed * 3.6;
   jet.x = -500; jet.z = -720; jet.y = 0; jet.vy = 0; jet.speed = 0; jet.pitch = 0; jet.roll = 0; jet.throttleSet = 0; jet.thrust = 0; jet.airborne = false; step(5);
@@ -640,7 +640,7 @@ const strike = await g(() => {
   car.x = -300; car.z = -640; car.sync();   // tow the wreck off the runway first
   jet.x = -950; jet.z = -720; jet.y = 40; jet.heading = Math.PI / 2; jet.speed = 72; jet.pitch = 0.06; jet.roll = 0.3; jet.vy = -4; jet.throttleSet = 0.25; jet.damage = 0; jet.airborne = true;
   let landedAt = null;
-  for (let i = 0; i < 30 * 40 && landedAt === null; i++) { I.joyY = jet.y > 12 ? -0.25 : 0; /* joystick down = descend */ step(1); if (!jet.airborne && jet.y < 0.5) landedAt = i; }
+  for (let i = 0; i < 30 * 40 && landedAt === null; i++) { I.joyY = jet.y > 12 ? 0.25 : 0; /* joystick pushed up = descend */ step(1); if (!jet.airborne && jet.y < 0.5) landedAt = i; }
   I.joyY = 0;
   const landDamage = jet.damage;
   step(30 * 25);
@@ -958,8 +958,9 @@ const bank = await g(() => {
     const S = H.stage();
     if (S.type === 'escape') { game.police.clear(); step(3); continue; }
     const t = H.targets().find((q) => !q.taken); if (!t) { step(5); continue; }
-    go(t.pt, t.y); press(); step(Math.ceil(S.dur * 30) + 3);
+    go(t.pt, t.y); press(); step(Math.ceil((S.type === 'vault' && !H.active.hasKey ? 2 : S.dur) * 30) + 3);
     if (S.type === 'unlock') step(30 * 6);
+    if (S.type === 'vault') { go(I.start.pt, I.start.y); step(30 * 8); game.econ.health = 100; }   // charge set: step back from the blast
   }
   step(30);
   const L = [...game.interiors.loaded.values()].find((q) => q.b.bank?.id === 'local');
@@ -973,6 +974,26 @@ check('heist: no "start" button — walking in is fine, robbing (behind the coun
 check('heist: the cash and gold you take disappear from the bank', bank.lootAll > 0 && bank.lootGone === bank.lootAll, `${bank.lootGone}/${bank.lootAll}`);
 check('heist: alarm, police stars and people reacting (hide / flee / call)', bank.alarm && bank.stars >= 2 && bank.peopleReacted > 0, JSON.stringify(bank));
 check('heist: completing it pays the bank loot into the account, with the money animation', bank.done && bank.paid === 150000 && bank.reward, JSON.stringify(bank));
+const vkey = await g(() => {
+  const game = __game, P = game.player, H = game.heist, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  game.police.clear(); game.econ.health = 100; game.econ.heists = {};
+  const I = H.info('central'); game.teleport(I.start.pt[0], I.start.pt[1], Math.PI, I.start.y + 0.6); step(60);
+  H.start('central', false); const A = H.active;
+  A.stage = 1; A.targets = null; A.keyHolder = undefined;   // central: 0 security, 1 vault
+  step(2);
+  // make sure someone holds the key, then take him down
+  if (!A.keyHolder) { H._assignKey(A); if (!A.keyHolder && A.staff.length) A.keyHolder = A.staff[0]; }
+  const kh = A.keyHolder; if (!kh) return { err: 'no staff' };
+  kh.state = 'dead'; kh.timer = 45; step(3);
+  const dropped = !!A.keyObj;
+  game.teleport(A.keyObj.position.x, A.keyObj.position.z, 0, A.keyObj.position.y + 0.5); step(3);
+  const hasKey = A.hasKey;
+  const t = H.targets()[0]; game.teleport(t.pt[0], t.pt[1], 0, t.y + 0.6); step(3);
+  const prompt = P.prompt?.text || '';
+  H.fail('בדיקה'); game.police.clear(); game.econ.heists = {};
+  return { dropped, hasKey, prompt };
+});
+check('bank vault: the guard / teller with the key drops it when taken down; with the key the vault opens (or blow it without)', vkey.dropped && vkey.hasKey && vkey.prompt.includes('פתח את הכספת עם המפתח'), JSON.stringify(vkey));
 check('heist: result is saved and the robbed bank closes for a while', bank.rec && bank.saved === 1 && bank.status === 'cooldown');
 
 // ---------------------------------------------------------------- garage: drive onto the turntable, live mods, before/after, pay, save
@@ -1042,6 +1063,53 @@ const gs = await g(async () => {
   return { boxes: S.boxes.length, glass, lamps, signs: S.signs.map((x) => x.name), counter: !!S.counter, room: S.rooms[0].rect };
 });
 check('gun store: compact store with glass counter, wall displays, shelves, ceiling lights and brand signs', gs.boxes > 400 && gs.glass >= 4 && gs.lamps >= 4 && gs.counter && gs.signs.includes('נץ שטח'), JSON.stringify({ ...gs, room: undefined }));
+
+// ---------------------------------------------------------------- gang territories
+const gang = await g(() => {
+  const game = __game, P = game.player, Gs = game.gangs;
+  const step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  game.police.clear(); if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.econ.health = 100; game.teleport(114, 114, 0); step(40);
+  const C = Gs.crews.snakes, L = C.members.find((m) => m.gangRole === 'leader');
+  const looks = { masks: C.members.filter((m) => m.app.mask).length, knives: C.members.filter((m) => m.app.knife).length, guns: C.members.filter((m) => m.app.gun).length };
+  const inside = Gs.inside;
+  game.teleport(L.x + 1.5, L.z + 1.2, 0); step(5);
+  const prompt = P.prompt?.text || ''; game.input.pressed.add('interact'); step(2); const joined = game.econ.gang;
+  step(5); game.input.pressed.add('interact'); step(2); const left = game.econ.gang;
+  const m = C.members.find((q) => q.gangRole === 'member' && q.app.gun && q.state !== 'dead');
+  game.teleport(m.x + 8, m.z + 8, 0); step(5);
+  game.peds.hit(m, P, 1, false);
+  let hurt = 0; step(30 * 8, () => { if (game.econ.health < 50) { hurt += 100 - game.econ.health; game.econ.health = 100; } });
+  hurt += 100 - game.econ.health; game.econ.health = 100;
+  const chase = C.members.filter((q) => q.state === 'copChase').length;
+  C.hostile = 0; game.teleport(530, 545, 0); step(20);
+  return { spawned: C.members.length, cars: C.cars.length, looks, inside, prompt, joined, left, chase, hurt, zones: (game.minimap.zones || []).length };
+});
+check('gangs: two territories with crews (masks, knives, pistols), cars, and the turf marked on the map', gang.spawned >= 10 && gang.cars === 2 && gang.looks.masks > 0 && gang.looks.knives > 0 && gang.looks.guns > 0 && gang.inside === 'snakes' && gang.zones === 2, JSON.stringify(gang));
+check('gangs: join and leave at the leader', gang.prompt.includes('הצטרף') && gang.joined === 'snakes' && gang.left === null, JSON.stringify(gang));
+check('gangs: touch one of them and the crew comes for you and shoots (game damage)', gang.chase >= 2 && gang.hurt > 0, JSON.stringify(gang));
+
+// ---------------------------------------------------------------- holding up a shop
+const rob = await g(async () => {
+  const WG = await import('./js/world/worldGen.js'), IN = await import('./js/world/interiors.js');
+  const game = __game, P = game.player;
+  const step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  game.police.clear();
+  const bld = WG.cellData(7, 6).buildings.find((q) => q.sign === 'פלאפל הכיכר'), c = IN.interiorSpec(bld).counter;
+  game.teleport(c.pt[0], c.pt[1], 0, c.y + 0.3); step(40);
+  const k = game.peds.peds.find((q) => q.shopKey && Math.hypot(q.x - c.keeper[0], q.z - c.keeper[1]) < 1.8);
+  if (!k) return { err: 'no keeper' };
+  P.x = c.pt[0] - (c.keeper[0] - c.pt[0]) * 0.8; P.z = c.pt[1] - (c.keeper[1] - c.pt[1]) * 0.8;
+  game.econ.weapons.p7 = { ammo: 40 }; game.equip('p7'); step(20);
+  const m0 = game.econ.money;
+  step(30 * 7, () => { P.aimT = 1.5; game.aiming = true; P.facing = Math.atan2(k.x - P.x, k.z - P.z); });
+  const started = !!game.robbery.cur || game.robbery.robbed.size > 0, hands = k.state, thrown = game.robbery.cash.length;
+  for (const cs of [...game.robbery.cash]) { if (!cs.landed) continue; P.x = cs.m.position.x; P.z = cs.m.position.z; step(2, () => { P.aimT = 1.5; }); }
+  const got = game.econ.money - m0;
+  game.aiming = false; game.equip(null); step(30 * 4);
+  return { started, hands, thrown, got };
+});
+check('shop robbery: aim at the shopkeeper — hands up, he throws cash bundles, you pick them up', rob.started && rob.hands === 'surrender' && rob.thrown > 0 && rob.got > 0, JSON.stringify(rob));
 
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);

@@ -74,7 +74,40 @@ function addProp(pb, p, lampB) {
       for (const lx of [-0.75, 0.75]) { q = at(lx, 0.22, 0); pb.addGeometry(G.box, mat(q[0], q[1], q[2], r, 0.08, 0.45, 0.5), 0x333333); }
       break;
     }
-    case 'bin': pb.addGeometry(G.cyl, mat(p.x, y + 0.45, p.z, 0, 0.55, 0.9, 0.55), 0x2e5d3a); break;
+    case 'bin': pb.addGeometry(G.cyl, mat(p.x, y + 0.45, p.z, 0, 0.55, 0.9, 0.55), 0x2e5d3a); pb.addGeometry(G.cyl, mat(p.x, y + 0.92, p.z, 0, 0.6, 0.06, 0.6), 0x22472c); break;
+    case 'streettree': {
+      // sidewalk tree in an iron grate: trunk, a few overlapping crowns
+      const s = p.s || 0.85, h = (k) => ((Math.sin(p.x * 12.9898 + p.z * 78.233 + k * 37.7) * 43758.5453) % 1 + 1) % 1;
+      pb.addGeometry(G.box, mat(p.x, y + 0.01, p.z, 0, 1.2, 0.02, 1.2), 0x2b2b2b);
+      pb.addGeometry(G.box, mat(p.x, y + 0.015, p.z, 0, 1.0, 0.02, 1.0), 0x4a3a2a);
+      pb.addGeometry(G.cyl, mat(p.x, y + 1.6 * s, p.z, 0, 0.16 * s, 3.2 * s, 0.16 * s), 0x6b5038);
+      const greens = [0x3f7a35, 0x4a8a3c, 0x356b2e, 0x55913f];
+      for (let k = 0; k < 4; k++) { const a = k * 1.7 + h(k) * 2, r = 0.55 * s; pb.addGeometry(G.crown, mat(p.x + Math.sin(a) * r, y + (3.4 + h(k + 4) * 0.6) * s, p.z + Math.cos(a) * r, a, 1.25 * s, 1.0 * s, 1.25 * s), greens[k]); }
+      pb.addGeometry(G.crown, mat(p.x, y + 4.2 * s, p.z, 0, 1.3 * s, 1.0 * s, 1.3 * s), greens[Math.floor(h(9) * 4)]);
+      break;
+    }
+    case 'hydrant':
+      pb.addGeometry(G.cyl, mat(p.x, y + 0.32, p.z, 0, 0.22, 0.64, 0.22), 0xc0392b);
+      pb.addGeometry(G.cyl, mat(p.x, y + 0.67, p.z, 0, 0.26, 0.06, 0.26), 0xa93226);
+      pb.addGeometry(G.cyl, mat(p.x, y + 0.74, p.z, 0, 0.14, 0.1, 0.14), 0xc0392b);
+      pb.addGeometry(G.cyl, mat(p.x, y + 0.45, p.z, 0, 0.1, 0.38, 0.1, 0, Math.PI / 2), 0xd4d4d4);
+      pb.addGeometry(G.cyl, mat(p.x, y + 0.04, p.z, 0, 0.32, 0.08, 0.32), 0x8e2a20);
+      break;
+    case 'meter':
+      pb.addGeometry(G.cyl, mat(p.x, y + 0.55, p.z, 0, 0.06, 1.1, 0.06), 0x5a5f66);
+      pb.addGeometry(G.box, mat(p.x, y + 1.18, p.z, 0, 0.16, 0.26, 0.12), 0x2f3338);
+      pb.addGeometry(G.box, mat(p.x - 0.061, y + 1.22, p.z, 0, 0.01, 0.08, 0.08), 0xbfe0ea);
+      break;
+    case 'utility':
+      pb.addGeometry(G.box, mat(p.x, y + 0.62, p.z, 0, 0.7, 1.24, 0.5), 0x6b7f5a);
+      pb.addGeometry(G.box, mat(p.x, y + 1.26, p.z, 0, 0.76, 0.05, 0.56), 0x5a6b4b);
+      pb.addGeometry(G.box, mat(p.x - 0.356, y + 0.7, p.z, 0, 0.01, 0.9, 0.36), 0x5f7350);
+      break;
+    case 'newsbox':
+      pb.addGeometry(G.box, mat(p.x, y + 0.55, p.z, 0, 0.5, 0.9, 0.48), p.c || 0x1f4d8a);
+      pb.addGeometry(G.box, mat(p.x, y + 0.75, p.z + 0.245, 0, 0.36, 0.3, 0.01), 0xdfe9ef);
+      for (const sx of [-0.2, 0.2]) pb.addGeometry(G.box, mat(p.x + sx, y + 0.06, p.z, 0, 0.05, 0.12, 0.45), 0x333333);
+      break;
     case 'pool': {
       // swimming pool: white stone coping, tiled walls, turquoise water and a steel ladder
       const hw = p.w / 2, hd = p.d / 2, c = 0.6;

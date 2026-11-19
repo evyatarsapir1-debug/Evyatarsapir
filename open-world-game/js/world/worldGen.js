@@ -590,6 +590,10 @@ export function propColliders(p, out) {
     case 'tree': case 'palm': out.push(makeCircle(p.x, p.z, 0.3 * (p.s || 1), 0, 6)); break;
     case 'bench': out.push(makeBox(p.x, p.z, 0.85, 0.3, p.rot || 0, 0, 0.9)); break;
     case 'bin': out.push(makeCircle(p.x, p.z, 0.3, 0, 1)); break;
+    case 'streettree': out.push(makeCircle(p.x, p.z, 0.22, 0, 5)); break;
+    case 'hydrant': case 'meter': out.push(makeCircle(p.x, p.z, 0.15, 0, 0.9)); break;
+    case 'utility': out.push(makeBox(p.x, p.z, 0.35, 0.25, 0, 0, 1.3)); break;
+    case 'newsbox': out.push(makeBox(p.x, p.z, 0.25, 0.25, 0, 0, 1.1)); break;
     case 'hedge': out.push(makeBox(p.x, p.z, p.w / 2, p.d / 2, 0, 0, 1.5)); break;
     case 'fence': out.push(makeBox((p.x0 + p.x1) / 2, (p.z0 + p.z1) / 2, Math.max(0.1, (p.x1 - p.x0) / 2), Math.max(0.1, (p.z1 - p.z0) / 2), 0, 0, 3)); break;
     case 'watchtower': for (const sx of [-1.6, 1.6]) for (const sz of [-1.6, 1.6]) out.push(makeCircle(p.x + sx, p.z + sz, 0.2, 0, 7)); break;

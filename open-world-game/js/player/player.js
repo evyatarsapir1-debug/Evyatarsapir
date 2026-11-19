@@ -359,14 +359,15 @@ export class Player {
   _driving(dt, input, world) {
     const v = this.vehicle;
     const throttle = input.isHeld('gas') ? 1 : input.isHeld('brake') ? -1 : input.moveY;
-    const turn = (input.isHeld('right') ? 1 : 0) - (input.isHeld('left') ? 1 : 0);   // big turn buttons (touch)
+    const turn = v.isPlane ? 0 : (input.isHeld('right') ? 1 : 0) - (input.isHeld('left') ? 1 : 0);   // planes turn with the joystick only
     const ctl = { throttle, steer: clamp(input.moveX + turn, -1, 1), handbrake: input.isHeld('handbrake'), lift: (input.isHeld('up') ? 1 : 0) - (input.isHeld('down') || input.isHeld('run') ? 1 : 0) };
     if (v.isHeli) ctl.handbrake = false;
     if (v.isPlane) {
       // joystick sideways = bank & turn, up / down = climb / descend.
       // Throttle is a lever: gas pushes it up, brake pulls it down (it stays where you leave it).
-      // joystick up = climb, joystick down = descend (keyboard: Space / R up, Q down)
-      const jy = Math.abs(input.joyY) > 0.12 ? input.joyY : 0;
+      // like a real control stick: pull back (joystick down) = nose up / climb, push forward (joystick up) = descend
+      // (keyboard: Space / R up, Q down)
+      const jy = Math.abs(input.joyY) > 0.12 ? -input.joyY : 0;
       ctl.lift = clamp(jy + (input.isHeld('up') || input.isHeld('jump') ? 1 : 0) - (input.isHeld('down') ? 1 : 0), -1, 1);
       ctl.throttle = input.isHeld('gas') ? 1 : input.isHeld('brake') ? -1 : input.keyY || 0;
       // flight assistance: stability mode, assisted take-off / landing (buttons "יציב" and "המראה"/"נחיתה")

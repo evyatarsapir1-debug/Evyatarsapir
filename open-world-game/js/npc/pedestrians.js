@@ -12,7 +12,29 @@ import { heightAt, WATER_Y } from '../world/terrain.js';
 import { lightState } from '../traffic/roadGraph.js';
 import { circleVs, verticalOverlap } from '../physics/collision.js';
 import { interiorSpec } from '../world/interiors.js';
-import { SKIN_TONES, HAIR_COLORS, CLOTH_COLORS } from '../character/characterModel.js';
+import { SKIN_TONES, HAIR_COLORS, CLOTH_COLORS, limb, sculpt } from '../character/characterModel.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+// body parts shaped like the playable characters (shoulders, chest, waist, tapered arms and legs, a real face)
+const torsoGeo = () => sculpt(new THREE.CapsuleGeometry(0.15, 0.26, 4, 12), (v) => {
+  const t = (v.y + 0.28) / 0.56;
+  v.x *= 0.84 + 0.2 * Math.exp(-((t - 0.78) ** 2) / 0.03) - 0.04 * Math.exp(-((t - 0.32) ** 2) / 0.02);
+  if (v.z > 0) v.z *= 1 + 0.16 * Math.exp(-((t - 0.7) ** 2) / 0.02); else v.z *= 0.92;
+  if (t > 0.86) v.y -= Math.abs(v.x) * 0.25;
+});
+const headGeo = () => {
+  const skull = sculpt(new THREE.SphereGeometry(0.115, 14, 11), (v) => {
+    if (v.y < 0) { const k = 1 + v.y * 2.2; v.x *= Math.max(0.62, k); if (v.z < 0) v.z *= Math.max(0.7, k); }
+    if (v.y < -0.07 && v.z > 0.02) v.z += 0.012;
+  });
+  const ears = [-1, 1].map((sx) => new THREE.SphereGeometry(0.03, 6, 5).scale(0.35, 1, 0.7).translate(sx * 0.112, 0, -0.005));
+  const g = mergeGeometries([skull.toNonIndexed(), ...ears.map((e) => e.toNonIndexed())]); g.computeVertexNormals(); return g;
+};
+const handGeo = () => {
+  const palm = sculpt(new THREE.BoxGeometry(0.032, 0.085, 0.075, 1, 2, 2), (v) => { v.z *= 1 - (v.y + 0.04) * 1.2; }).translate(0, -0.012, 0);
+  const fingers = new THREE.BoxGeometry(0.026, 0.055, 0.07).translate(0, -0.075, 0.003);
+  const thumb = new THREE.CapsuleGeometry(0.01, 0.035, 2, 6).rotateX(0.6).translate(0, -0.01, 0.045);
+  const g = mergeGeometries([palm.toNonIndexed(), fingers.toNonIndexed(), thumb.toNonIndexed()]); g.computeVertexNormals(); return g;
+};
 
 const MAX = 64;
 const CORNERS = [[10, 10], [90, 10], [90, 90], [10, 90]];
@@ -98,15 +120,15 @@ export class Pedestrians {
     const capG = new THREE.SphereGeometry(0.122, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.55);
     this.M = {
       pelvis: mk(new THREE.BoxGeometry(0.32, 0.18, 0.2), MAX, 0xffffff),
-      torso: mk(cap(0.15, 0.26), MAX, 0xffffff),
-      head: mk(new THREE.SphereGeometry(0.115, 12, 9), MAX, 0xffffff),
+      torso: mk(torsoGeo(), MAX, 0xffffff),
+      head: mk(headGeo(), MAX, 0xffffff),
       hairS: mk(capGeo(capG), MAX, 0xffffff),
       hairL: mk(new THREE.BoxGeometry(0.24, 0.32, 0.08), MAX, 0xffffff),
-      uArm: mk(cap(0.055, 0.2), MAX * 2, 0xffffff),
-      lArm: mk(cap(0.048, 0.2), MAX * 2, 0xffffff),
-      hand: mk(new THREE.SphereGeometry(0.052, 6, 5), MAX * 2, 0xffffff),
-      uLeg: mk(cap(0.08, 0.3), MAX * 2, 0xffffff),
-      lLeg: mk(cap(0.065, 0.3), MAX * 2, 0xffffff),
+      uArm: mk(limb(0.058, 0.044, 0.0, -0.27, 0.008, 0.3).translate(0, 0.14, 0), MAX * 2, 0xffffff),
+      lArm: mk(limb(0.047, 0.032, 0.02, -0.24, 0.007, 0.25).translate(0, 0.13, 0), MAX * 2, 0xffffff),
+      hand: mk(handGeo(), MAX * 2, 0xffffff),
+      uLeg: mk(sculpt(limb(0.088, 0.058, 0.02, -0.42, 0.01, 0.3), (v) => { if (v.z > 0) v.z *= 1.06; }).translate(0, 0.21, 0), MAX * 2, 0xffffff),
+      lLeg: mk(sculpt(limb(0.056, 0.038, 0.02, -0.4, 0.014, 0.3), (v) => { if (v.z < 0) v.z *= 1.18; }).translate(0, 0.2, 0), MAX * 2, 0xffffff),
       foot: mk(new THREE.BoxGeometry(0.1, 0.07, 0.25), MAX * 2, 0xffffff),
       phone: mk(new THREE.BoxGeometry(0.07, 0.14, 0.012), MAX, 0x111111),
       neck: mk(new THREE.CylinderGeometry(0.045, 0.05, 0.1, 8), MAX, 0xffffff),
@@ -147,7 +169,7 @@ export class Pedestrians {
     return {
       skin: SKIN_TONES[r.int(0, SKIN_TONES.length - 1)], hair: HAIR_COLORS[r.int(0, 5)], long, bald: !long && r.chance(0.12),
       shirt: CLOTH_COLORS[r.int(0, CLOTH_COLORS.length - 1)], pants: CLOTH_COLORS[r.int(0, CLOTH_COLORS.length - 1)],
-      shoes: r.chance(0.5) ? 0x1d1d1f : 0xeeeeee, h: r.float(0.92, 1.08), w: r.float(0.9, 1.12),
+      shoes: r.chance(0.5) ? 0x1d1d1f : 0xeeeeee, h: r.float(1.0, 1.12), w: r.float(0.94, 1.14),   // grown-up proportions: most people 1.75-1.95 m
     };
   }
 
@@ -499,7 +521,8 @@ export class Pedestrians {
           if (p.copStuck > 1.2 && d > 1.6) { p.detour = { t: 1.3, s: this.rng.chance(0.5) ? 1 : -1 }; p.copStuck = 0; p.copBest = undefined; }
           if (p.detour) { p.detour.t -= dt; goal = [p.x + (-dz / d) * p.detour.s * 3 + dx / d, p.z + (dx / d) * p.detour.s * 3 + dz / d]; if (p.detour.t <= 0) p.detour = null; }
         } else { speed = 0; pose = 'guard'; }
-        if ((ctx.copsArmed || p.gunOut) && d < 30 && d > 3 && !p.chaseTo && p.aimFor > 0) { speed = 0; pose = 'aimGun'; goal = null; p.yaw = dampAngle(p.yaw, Math.atan2(dx, dz), 10, dt); }
+        if (p.gunOut && d < 13 && !p.chaseTo) { speed = 0; pose = 'aimGun'; goal = null; p.yaw = dampAngle(p.yaw, Math.atan2(dx, dz), 10, dt); }   // armed gang members keep their distance and shoot
+        else if ((ctx.copsArmed || p.gunOut) && d < 30 && d > 3 && !p.chaseTo && p.aimFor > 0) { speed = 0; pose = 'aimGun'; goal = null; p.yaw = dampAngle(p.yaw, Math.atan2(dx, dz), 10, dt); }
         p.aimFor = (p.aimFor ?? 0) - dt; if (p.aimFor < -3) p.aimFor = 2.5;   // alternate: run closer, then stop and aim
         if (d > 160) p.copChase = false;
         break;

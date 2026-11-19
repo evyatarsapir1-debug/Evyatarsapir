@@ -8,11 +8,11 @@ import { fmt } from './economy.js';
 
 export const PROTAGONISTS = [
   { id: 'miguel', name: 'מיגל', role: 'סוחר רכבים לשעבר, ממציא את עצמו מחדש בעיר',
-    app: { name: 'מיגל', skin: 3, hairStyle: 'buzz', hairColor: 0, beard: 'stubble', glasses: 'sun', top: 'shirt', topColor: 14, underColor: 0, bottom: 'capri', bottomColor: 18, shoes: 4, shoeStyle: 'sandal', height: 1.0, build: 1.02 } },
+    app: { name: 'מיגל', skin: 3, hairStyle: 'buzz', hairColor: 0, beard: 'stubble', glasses: 'sun', top: 'shirt', topColor: 14, underColor: 0, bottom: 'capri', bottomColor: 18, shoes: 4, shoeStyle: 'sandal', height: 1.08, build: 1.04 } },
   { id: 'tavor', name: 'טבור', role: 'מכונאי קשוח מהנמל, חם מזג ונאמן',
-    app: { name: 'טבור', skin: 1, hairStyle: 'bald', hairColor: 2, beard: 'full', glasses: 'none', top: 'tank', topColor: 18, bottom: 'pants', bottomColor: 16, shoes: 1, shoeStyle: 'boot', height: 1.04, build: 1.18 } },
+    app: { name: 'טבור', skin: 1, hairStyle: 'bald', hairColor: 2, beard: 'full', glasses: 'none', top: 'tank', topColor: 18, bottom: 'pants', bottomColor: 16, shoes: 1, shoeStyle: 'boot', height: 1.12, build: 1.18 } },
   { id: 'jason', name: 'ג׳ייסון', role: 'נהג מירוצים צעיר מהשכונה, מהיר ושאפתן',
-    app: { name: 'ג׳ייסון', skin: 4, hairStyle: 'curly', hairColor: 0, beard: 'goatee', glasses: 'none', top: 'hoodie', topColor: 17, bottom: 'jeans', bottomColor: 10, shoes: 0, shoeStyle: 'sneaker', height: 1.01, build: 0.96 } },
+    app: { name: 'ג׳ייסון', skin: 4, hairStyle: 'curly', hairColor: 0, beard: 'goatee', glasses: 'none', top: 'hoodie', topColor: 17, bottom: 'jeans', bottomColor: 10, shoes: 0, shoeStyle: 'sneaker', height: 1.07, build: 0.98 } },
 ];
 const BY_ID = Object.fromEntries(PROTAGONISTS.map((p) => [p.id, p]));
 // where each one starts: Miguel at home, Tavor by the harbour warehouses, Jason at the beach cafe

@@ -46,9 +46,9 @@ export class Gangs {
   }
   _app(G, role, i) {
     const skins = [0xe9b98f, 0xc98e62, 0xa86f48, 0x7b4a2c, 0x4f2f1d];
-    const a = { skin: skins[(i * 3 + role.length) % skins.length], hair: 0x1b1410, long: false, bald: i % 3 === 0, h: 0.96 + (i % 5) * 0.025, w: 1 + (i % 4) * 0.04,
+    const a = { skin: skins[(i * 3 + role.length) % skins.length], hair: 0x1b1410, long: false, bald: i % 3 === 0, h: 1.02 + (i % 5) * 0.025, w: 1.02 + (i % 4) * 0.04,
       shirt: i % 2 ? G.color : G.dark, pants: i % 3 === 1 ? 0xc8c8c8 : G.accent, shoes: i % 2 ? 0xf2f2f2 : 0x1d1d1f, gang: G.id };
-    if (role === 'leader') Object.assign(a, { shirt: 0xd9d9d6, pants: 0xd9d9d6, shoes: 0xf2f2f2, vestColor: 0x161616, capColor: G.color, gun: true, h: 1.04, w: 1.08 });
+    if (role === 'leader') Object.assign(a, { shirt: 0xd9d9d6, pants: 0xd9d9d6, shoes: 0xf2f2f2, vestColor: 0x161616, capColor: G.color, gun: true, h: 1.1, w: 1.12 });
     else if (role === 'guard') Object.assign(a, { vestColor: 0x161616, gun: true, capColor: i % 2 ? G.color : null });
     else {
       if (i % 3 === 0) a.mask = true;                 // balaclava

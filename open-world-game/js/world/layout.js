@@ -372,6 +372,14 @@ export function generateBlock(bx, bz, type = blockType(bx, bz)) {
   if (type !== 'P' && type !== 'H' && type !== 'V' && type !== 'U' && type !== 'E') {
     if (rng.chance(0.5)) PR.push({ kind: 'bench', x: cx + rng.float(-25, 25), z: oz + 9, rot: Math.PI });
     PR.push({ kind: 'bin', x: ox + 8.4, z: oz + 32 });
+    // street furniture along the sidewalks: trees in grates, a fire hydrant, parking meters, a utility cabinet,
+    // newspaper boxes
+    for (const z of [oz + 22, oz + 52, oz + 80]) PR.push({ kind: 'streettree', x: ox + 9.8, z, s: rng.float(0.75, 0.95) });
+    for (const x of [ox + 40, ox + 72]) PR.push({ kind: 'streettree', x, z: oz + 9.8, s: rng.float(0.75, 0.95) });
+    PR.push({ kind: 'hydrant', x: ox + 7.7, z: oz + 44 });
+    for (const z of [oz + 60, oz + 67]) PR.push({ kind: 'meter', x: ox + 7.5, z });
+    if (rng.chance(0.6)) PR.push({ kind: 'utility', x: ox + 10.3, z: oz + 88 });
+    if (rng.chance(0.5)) PR.push({ kind: 'newsbox', x: ox + 55, z: oz + 7.8, c: rng.pick([0x1f4d8a, 0xc0392b, 0xf1c40f]) });
   }
 
   // a bank in this block: clear its footprint and put the bank there (the rest of the block stays as it was)

@@ -34,7 +34,7 @@ export function defaultAppearance() { return { ...PRESETS[0] }; }
 
 const cap = (r, len) => new THREE.CapsuleGeometry(r, len, 3, 8);
 // a tapered, rounded limb from y=y0 (radius r0) down to y=y1 (radius r1), with an optional bulge in the middle
-function limb(r0, r1, y0, y1, bulge = 0, at = 0.4) {
+export function limb(r0, r1, y0, y1, bulge = 0, at = 0.4) {
   const pts = [], n = 10, L = y0 - y1;
   pts.push(new THREE.Vector2(0.0001, y0 + r0 * 0.6));
   for (let i = 0; i <= 3; i++) { const a = (i / 3) * Math.PI / 2; pts.push(new THREE.Vector2(Math.sin(a) * r0, y0 + Math.cos(a) * r0 * 0.6)); }
@@ -44,7 +44,7 @@ function limb(r0, r1, y0, y1, bulge = 0, at = 0.4) {
   const g = new THREE.LatheGeometry(pts, 12); g.computeVertexNormals(); return g;
 }
 // reshape a geometry vertex by vertex
-function sculpt(geo, fn) {
+export function sculpt(geo, fn) {
   const p = geo.attributes.position, v = new THREE.Vector3();
   for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); fn(v); p.setXYZ(i, v.x, v.y, v.z); }
   geo.computeVertexNormals(); return geo;
