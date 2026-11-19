@@ -34,9 +34,10 @@ export class Economy {
     this.startOutfit = null;
     this.ownedCars = [];        // bought vehicles [{ type, color }]
     this.wardrobe = [];         // clothes the player owns: [{ id, name, swatch, patch }]
+    this.gang = null; this.gangPrev = null;   // street gang you joined (per character)
     this.log = [];
   }
-  toJSON() { return { money: this.money, health: this.health, items: this.items, weapons: this.weapons, equipped: this.equipped, wardrobe: this.wardrobe, startOutfit: this.startOutfit, ownedCars: this.ownedCars, flightSchool: this.flightSchool || 0, heists: this.heists || {} }; }
+  toJSON() { return { money: this.money, health: this.health, items: this.items, weapons: this.weapons, equipped: this.equipped, wardrobe: this.wardrobe, startOutfit: this.startOutfit, ownedCars: this.ownedCars, flightSchool: this.flightSchool || 0, heists: this.heists || {}, gang: this.gang || null, gangPrev: this.gangPrev || null }; }
   load(o) {
     this.reset();
     if (!o) return;
@@ -48,6 +49,7 @@ export class Economy {
     this.startOutfit = o.startOutfit || null;
     this.ownedCars = Array.isArray(o.ownedCars) ? o.ownedCars : [];
     this.weapons = o.weapons || {}; this.equipped = o.equipped && this.weapons[o.equipped] ? o.equipped : null;
+    this.gang = o.gang || null; this.gangPrev = o.gangPrev || null;
   }
   ownsCloth(id) { return this.wardrobe.some((w) => w.id === id); }
   addCloth(it) { if (!this.ownsCloth(it.id)) this.wardrobe.push({ id: it.id, name: it.name, swatch: it.swatch, patch: it.patch }); }

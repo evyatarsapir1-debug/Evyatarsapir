@@ -52,7 +52,7 @@ export class Characters {
   snapshot() {
     const g = this.game, p = g.playerPos(), E = g.econ, d = this.data[this.active];
     if (!d) return;
-    Object.assign(d, { app: { ...g.player.model.app }, x: p.x, z: p.z, facing: p.facing, money: E.money, health: E.health, weapons: JSON.parse(JSON.stringify(E.weapons)), equipped: E.equipped, wardrobe: E.wardrobe.slice() });
+    Object.assign(d, { app: { ...g.player.model.app }, x: p.x, z: p.z, facing: p.facing, money: E.money, health: E.health, weapons: JSON.parse(JSON.stringify(E.weapons)), equipped: E.equipped, wardrobe: E.wardrobe.slice(), gang: E.gang || null, gangPrev: E.gangPrev || null });
   }
   toJSON() { this.snapshot(); return { active: this.active, data: this.data }; }
   // put a character's record into the live game
@@ -60,7 +60,7 @@ export class Characters {
     const g = this.game, d = this.data[id], E = g.econ, P = g.player;
     this.active = id;
     P.model.setAppearance(d.app); g.creator.app = { ...d.app };
-    E.money = d.money; E.health = d.health; E.weapons = JSON.parse(JSON.stringify(d.weapons || {})); E.wardrobe = (d.wardrobe || []).slice();
+    E.money = d.money; E.health = d.health; E.weapons = JSON.parse(JSON.stringify(d.weapons || {})); E.wardrobe = (d.wardrobe || []).slice(); E.gang = d.gang || null; E.gangPrev = d.gangPrev || null;
     E.equipped = d.equipped && E.weapons[d.equipped] ? d.equipped : null; g.equip(E.equipped);
     g.chunks.update(d.x, d.z, true);
     P.setPosition(d.x, d.z, d.facing);

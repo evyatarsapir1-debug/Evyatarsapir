@@ -104,6 +104,7 @@ export class MiniMap {
     g.rotate(Math.PI + camYaw);
     g.scale(zoom, zoom);
     this._drawArea(g, px - R, pz - R, px + R, pz + R, px, pz);
+    for (const zn of this.zones || []) { g.fillStyle = zn.fill; g.strokeStyle = zn.stroke; g.lineWidth = 2; g.beginPath(); g.arc((zn.x - px) * S, (zn.z - pz) * S, zn.r * S, 0, Math.PI * 2); g.fill(); g.stroke(); }
     if (route) {
       g.strokeStyle = '#b35cff'; g.lineWidth = 5 / zoom * 1.6; g.lineJoin = 'round'; g.beginPath();
       route.forEach(([x, z], i) => { const a = (x - px) * S, b = (z - pz) * S; i ? g.lineTo(a, b) : g.moveTo(a, b); });
@@ -143,6 +144,11 @@ export class MiniMap {
     this._drawArea(g, cx - rx, cz - rz, cx + rx, cz + rz, cx - rx, cz - rz);
     g.restore();
     const W2 = (wx, wz) => [c.width / 2 + (wx - cx) * this.fullScale, c.height / 2 + (wz - cz) * this.fullScale];
+    for (const zn of this.zones || []) {
+      const [a, b] = W2(zn.x, zn.z); g.fillStyle = zn.fill; g.strokeStyle = zn.stroke; g.lineWidth = 2 * devicePixelRatio;
+      g.beginPath(); g.arc(a, b, zn.r * this.fullScale, 0, Math.PI * 2); g.fill(); g.stroke();
+      g.fillStyle = '#0f3d18'; g.font = `bold ${12 * devicePixelRatio}px sans-serif`; g.textAlign = 'center'; g.fillText(zn.name, a, b - zn.r * this.fullScale * 0.6);
+    }
     if (this.fullRoute) {
       g.strokeStyle = '#b35cff'; g.lineWidth = 5 * devicePixelRatio; g.lineJoin = 'round'; g.beginPath();
       this.fullRoute.forEach(([x, z], i) => { const [a, b] = W2(x, z); i ? g.lineTo(a, b) : g.moveTo(a, b); }); g.stroke();

@@ -17,6 +17,7 @@ import { Flight } from './game/flight.js';
 import { Heists } from './game/heist.js';
 import { Tuning, applyMods } from './game/tuning.js';
 import { Characters } from './game/characters.js';
+import { Gangs } from './game/gangs.js';
 import { Police, POLICE_STATION, HOSPITAL } from './game/police.js';
 import { VEHICLE_TYPES } from './vehicles/vehicleTypes.js';
 import { ShopUI, shopKind } from './game/shops.js';
@@ -104,6 +105,7 @@ class Game {
     this.heist = new Heists(this);
     this.tuning = new Tuning(this);
     this.chars = new Characters(this);
+    this.gangs = new Gangs(this);
     this.vehicleTypes = VEHICLE_TYPES;
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());
@@ -834,10 +836,13 @@ class Game {
     if (hp && input.wasPressed('interact')) { input.pressed.delete('interact'); hp.action(); }
     // garage: drive slowly onto the turntable inside the workshop
     const tp = p.state === 'driving' ? this.tuning.promptFor(p.vehicle) : null;
+    const gp = !hp ? this.gangs.promptFor(p) : null;   // join / leave a gang at its leader
+    if (gp && input.wasPressed('interact')) { input.pressed.delete('interact'); gp.action(); }
     if (tp && input.wasPressed('interact')) { input.pressed.delete('interact'); tp.action(); if (this.state === 'tuning') { input.endFrame(); return; } }
     p.update(dt, input, this.rig.yaw, world);
     if (hp && p.state === 'foot' && (!p.prompt || p.prompt.key === 'interact')) p.prompt = { key: 'interact', text: hp.text };
     if (tp && p.state === 'driving') p.prompt = { key: 'interact', text: tp.text, drive: true };
+    if (gp && p.state === 'foot' && (!p.prompt || p.prompt.key === 'interact')) p.prompt = { key: 'interact', text: gp.text };
     // luna park rides at the marina
     if (!p.prompt && p.state === 'foot') {
       const lp = this.luna.promptFor(p);
@@ -934,7 +939,7 @@ class Game {
       peds: this.peds.peds.filter((q) => q.state !== 'inside' && !q.car && q.state !== 'pulled' && q.state !== 'thrown'),
       scare: (ped, src, hit) => this.peds.scare(ped, src, hit), hurtPlayer: (n) => this.hurt(n, 'פיצוץ'),
       hitPed: (ped, dmg) => { const r = this.peds.hit(ped, p, dmg, true); if (r === 'dead') this.combat._drop(ped); if (r) this.police.crime(ped.app.cop ? 'copHit' : r === 'dead' ? 'kill' : 'assault', ped.x, ped.z); },
-      onShot: (W) => this.audio.gunshot?.(W.kind), onCrime: (k, x, z) => this.police.crime(k, x, z),
+      onShot: (W) => { this.audio.gunshot?.(W.kind); this.gangs.onShot(p.x, p.z); }, onCrime: (k, x, z) => this.police.crime(k, x, z),
       onRecoil: (k) => { this.rig.pitch -= k; },
       onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); }, message: (m) => this.toast(m, 2),
     });
@@ -943,6 +948,7 @@ class Game {
     this.flight.update(dt);
     this.heist.update(dt);
     this.tuning.update(dt);
+    this.gangs.update(dt);
     this.crashes.update(dt, { vehicles: all, player: p, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.military.update(dt, { player: p, input, vehicles: all, onCrime: (k, x, z) => this.police.crime(k, x, z), camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.rig.update(dt, input, p);

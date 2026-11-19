@@ -64,6 +64,12 @@ class Rig {
     this.a.radio = g(this.spine, -0.12, 0.38, 0.12);
     this.a.pistol = g(this.a.hand[1], 0, -0.02, 0.07); this.a.pistol.rotation.x = Math.PI / 2;
     this.a.bag = g(this.a.hand[0], -0.12, -0.3, 0);
+    // street gang: balaclava with an eye slit, bandana over the face, a knife in the hand
+    this.a.mask = g(this.head, 0, 0.004, 0); this.a.mask.scale.set(0.97, 1.1, 1.05);
+    this.a.mband = g(this.head, 0, 0.022, 0.127);
+    this.a.meyes = g(this.head, 0, 0.022, 0.134);
+    this.a.bandana = g(this.head, 0, -0.045, 0.085); this.a.bandana.rotation.x = 0.15;
+    this.a.knife = g(this.a.hand[1], 0, -0.09, 0.035);
   }
 }
 
@@ -121,6 +127,11 @@ export class Pedestrians {
       holster: mk(new THREE.BoxGeometry(0.05, 0.13, 0.09), MAX, 0x111111),
       radio: mk(new THREE.BoxGeometry(0.05, 0.08, 0.03), MAX, 0x222222),
       pistol: mk(new THREE.BoxGeometry(0.03, 0.05, 0.17).translate(0, 0, 0.04), MAX, 0x1a1c1f),
+      mask: mk(new THREE.SphereGeometry(0.12, 12, 9), MAX, 0x141414),
+      mband: mk(new THREE.BoxGeometry(0.095, 0.03, 0.012), MAX, 0xffffff),
+      meyes: mk(new THREE.BoxGeometry(0.075, 0.014, 0.004), MAX, 0x1a1a1a),
+      bandana: mk(new THREE.CylinderGeometry(0.118, 0.105, 0.09, 12, 1, true, -Math.PI * 0.55, Math.PI * 1.1), MAX, 0x2f9e44),
+      knife: mk(new THREE.BoxGeometry(0.012, 0.19, 0.028).translate(0, -0.02, 0), MAX, 0xc9ced3),
     };
     this.zero = new THREE.Matrix4().makeScale(0, 0, 0);
     this.benchesTaken = new Set();
@@ -180,7 +191,8 @@ export class Pedestrians {
       const set = (m, idx, hex) => m.setColorAt(idx, c.setHex(hex));
       set(this.M.neck, i, a.skin); set(this.M.nose, i, a.skin); set(this.M.eyes, i, 0x1a1a1a); set(this.M.shoulders, i, a.swim ? a.skin : a.shirt);
       set(this.M.helmet, i, a.cop ? 0x111d3a : 0x4b5320); set(this.M.vest, i, 0x3d4428); set(this.M.rifle, i, 0x1d1f1c);
-      set(this.M.cap, i, 0x141c33); set(this.M.brim, i, 0x0b0f1a); set(this.M.badge, i, 0xd8b84a); set(this.M.cvest, i, 0x1b1e26); set(this.M.stripe, i, 0xd9e8a0);
+      set(this.M.cap, i, a.capColor ?? 0x141c33); set(this.M.brim, i, a.capColor ?? 0x0b0f1a); set(this.M.badge, i, 0xd8b84a); set(this.M.cvest, i, a.vestColor ?? 0x1b1e26); set(this.M.stripe, i, 0xd9e8a0);
+      set(this.M.mask, i, 0x141414); set(this.M.mband, i, a.skin); set(this.M.meyes, i, 0x1a1a1a); set(this.M.bandana, i, a.bandana ?? 0x2f9e44); set(this.M.knife, i, 0xc9ced3);
       set(this.M.belt, i, 0x111111); set(this.M.holster, i, 0x111111); set(this.M.radio, i, 0x222222); set(this.M.pistol, i, 0x1a1c1f);
       if (a.swim) {
         // swimwear: trunks / swimsuit in a bright colour, bare arms and legs, barefoot
@@ -272,10 +284,10 @@ export class Pedestrians {
     for (let i = this.peds.length - 1; i >= 0; i--) {
       const p = this.peds[i];
       if (p.state === 'dead' && p.timer <= 0 && Math.hypot(p.x - px, p.z - pz) > 25) { this._release(p); this.peds.splice(i, 1); this._colors(); continue; }
-      const gone = p.state === 'dead' ? Math.hypot(p.x - px, p.z - pz) > 140 : p.car ? p.state === 'driving' && (p.car.removed || (p.car.driver !== 'ai' && p.car.driver !== 'police' && !p.car.jacking)) : !p.shopKey && Math.hypot(p.x - px, p.z - pz) > 140;
+      const gone = p.state === 'dead' ? Math.hypot(p.x - px, p.z - pz) > 140 : p.car ? p.state === 'driving' && (p.car.removed || (p.car.driver !== 'ai' && p.car.driver !== 'police' && !p.car.jacking)) : !p.shopKey && !p.keep && Math.hypot(p.x - px, p.z - pz) > 140;
       if (gone) { if (p.car && p.car.driverPed === p) p.car.driverPed = null; this._release(p); this.peds.splice(i, 1); this._colors(); }
     }
-    const walkers = this.peds.filter((p) => !p.shopKey && !p.car).length;
+    const walkers = this.peds.filter((p) => !p.shopKey && !p.keep && !p.car).length;
     if (walkers < this.target && cells.length && this.peds.length < MAX) this._spawnWalker(px, pz, cells);
     this._skT = (this._skT || 0) - dt;
     if (this._skT <= 0) { this._skT = 1; this._syncInteriorPeople(ctx.places, ctx.player, ctx.cells); }
@@ -487,7 +499,7 @@ export class Pedestrians {
           if (p.copStuck > 1.2 && d > 1.6) { p.detour = { t: 1.3, s: this.rng.chance(0.5) ? 1 : -1 }; p.copStuck = 0; p.copBest = undefined; }
           if (p.detour) { p.detour.t -= dt; goal = [p.x + (-dz / d) * p.detour.s * 3 + dx / d, p.z + (dx / d) * p.detour.s * 3 + dz / d]; if (p.detour.t <= 0) p.detour = null; }
         } else { speed = 0; pose = 'guard'; }
-        if (ctx.copsArmed && d < 30 && d > 3 && !p.chaseTo && p.aimFor > 0) { speed = 0; pose = 'aimGun'; goal = null; p.yaw = dampAngle(p.yaw, Math.atan2(dx, dz), 10, dt); }
+        if ((ctx.copsArmed || p.gunOut) && d < 30 && d > 3 && !p.chaseTo && p.aimFor > 0) { speed = 0; pose = 'aimGun'; goal = null; p.yaw = dampAngle(p.yaw, Math.atan2(dx, dz), 10, dt); }
         p.aimFor = (p.aimFor ?? 0) - dt; if (p.aimFor < -3) p.aimFor = 2.5;   // alternate: run closer, then stop and aim
         if (d > 160) p.copChase = false;
         break;
@@ -1081,9 +1093,16 @@ export class Pedestrians {
       M.nose.setMatrixAt(i, a.nose.matrixWorld); M.eyes.setMatrixAt(i, a.eyes.matrixWorld);
       const sol = !!p.app.soldier;
       const cop = !!p.app.cop || !!p.app.guard;
-      for (const k of ['cap', 'brim', 'badge', 'cvest', 'stripe', 'belt', 'holster', 'radio']) M[k].setMatrixAt(i, cop ? a[k].matrixWorld : this.zero);
-      M.pistol.setMatrixAt(i, cop && p.pose === 'aimGun' ? a.pistol.matrixWorld : this.zero);
-      if (cop) M.hairS.setMatrixAt(i, this.zero);
+      for (const k of ['badge', 'stripe', 'radio']) M[k].setMatrixAt(i, cop ? a[k].matrixWorld : this.zero);
+      const capOn = cop || p.app.capColor, vestOn = cop || p.app.vestColor, gunOn = cop || p.app.gun;
+      M.cap.setMatrixAt(i, capOn ? a.cap.matrixWorld : this.zero); M.brim.setMatrixAt(i, capOn ? a.brim.matrixWorld : this.zero);
+      M.cvest.setMatrixAt(i, vestOn ? a.cvest.matrixWorld : this.zero);
+      M.belt.setMatrixAt(i, gunOn ? a.belt.matrixWorld : this.zero); M.holster.setMatrixAt(i, gunOn ? a.holster.matrixWorld : this.zero);
+      M.pistol.setMatrixAt(i, gunOn && p.pose === 'aimGun' ? a.pistol.matrixWorld : this.zero);
+      if (capOn || p.app.mask) M.hairS.setMatrixAt(i, this.zero);
+      M.mask.setMatrixAt(i, p.app.mask ? a.mask.matrixWorld : this.zero); M.mband.setMatrixAt(i, p.app.mask ? a.mband.matrixWorld : this.zero); M.meyes.setMatrixAt(i, p.app.mask ? a.meyes.matrixWorld : this.zero);
+      M.bandana.setMatrixAt(i, p.app.bandana ? a.bandana.matrixWorld : this.zero);
+      M.knife.setMatrixAt(i, p.app.knife && p.state !== 'dead' ? a.knife.matrixWorld : this.zero);
       M.helmet.setMatrixAt(i, sol ? a.helmet.matrixWorld : this.zero); M.vest.setMatrixAt(i, sol ? a.vest.matrixWorld : this.zero); M.rifle.setMatrixAt(i, sol ? a.rifle.matrixWorld : this.zero);
       if (sol) M.hairS.setMatrixAt(i, this.zero);
       M.bag.setMatrixAt(i, p.suitcase && p.pose !== 'sit' ? a.bag.matrixWorld : this.zero);
