@@ -439,6 +439,7 @@ export class Vehicle {
       w.spin.rotation.x = this.wheelSpin;
       if (w.front) w.pivot.rotation.y = -this.steer;
     }
+    if (this.parts.steerWheel) this.parts.steerWheel.rotation.y = this.steer * 4;   // the steering wheel turns with the front wheels
     if (this.isTwoWheel) { for (const w of this.parts.wheels) w.pivot.rotation.z = this.roll; }
     if (this.parts.door) {
       this.doorAngle = damp(this.doorAngle, this.doorTarget, 9, dt || 0.016);

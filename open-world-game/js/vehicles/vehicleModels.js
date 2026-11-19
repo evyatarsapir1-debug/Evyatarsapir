@@ -22,7 +22,53 @@ export const shared = {
   white: new THREE.MeshStandardMaterial({ color: 0xffffff }),
   wheel: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.35 }),
   lod: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.35 }),
+  cabin: new THREE.MeshStandardMaterial({ color: 0x232427, roughness: 0.75 }),            // dashboard / trim plastic
+  leather: new THREE.MeshStandardMaterial({ color: 0x3a3632, roughness: 0.55 }),           // seats
+  stitch: new THREE.MeshStandardMaterial({ color: 0x5a524a, roughness: 0.6 }),
+  gauge: new THREE.MeshStandardMaterial({ color: 0x0c1014, emissive: 0x2a6fa8, emissiveIntensity: 0.6, roughness: 0.3 }),
+  screen: new THREE.MeshStandardMaterial({ color: 0x0a0d12, emissive: 0x3a7bd5, emissiveIntensity: 0.45, roughness: 0.2 }),
 };
+// Car interior seen through the windows and the open door: dashboard with gauges and a screen, a steering wheel on
+// its column (turns with the steering), front seats with headrests, rear bench, centre console with gear lever,
+// rear-view mirror. Seats sit on the floor line (top of the lower body).
+function carInterior(parts, body, o) {
+  const { W, clear, lowH, cabZ, cabL, cabH, rear } = o, y = clear + lowH, S = shared;
+  const fz = cabZ + cabL * 0.02;
+  for (const sx of [-1, 1]) {
+    const x = sx * W * 0.22;
+    m(box(0.46, 0.12, 0.48), S.leather, body, x, y + 0.02, fz, false);                         // cushion
+    m(box(0.46, 0.58, 0.12), S.leather, body, x, y + 0.33, fz - 0.27, false).rotation.x = -0.12; // backrest
+    m(box(0.26, 0.17, 0.09), S.leather, body, x, y + 0.72, fz - 0.33, false);                    // headrest
+    m(box(0.03, 0.5, 0.125), S.stitch, body, x, y + 0.33, fz - 0.265, false).rotation.x = -0.12; // centre seam
+  }
+  if (rear) {
+    const rz = cabZ - cabL * 0.3;
+    m(box(W * 0.78, 0.12, 0.46), S.leather, body, 0, y + 0.02, rz, false);
+    m(box(W * 0.78, 0.5, 0.12), S.leather, body, 0, y + 0.3, rz - 0.26, false).rotation.x = -0.15;
+    for (const sx of [-1, 0, 1]) m(box(0.22, 0.14, 0.08), S.leather, body, sx * W * 0.26, y + 0.62, rz - 0.31, false);
+  }
+  // dashboard, instruments, centre screen, vents
+  const dz = cabZ + cabL * 0.44;
+  m(box(W * 0.86, 0.2, 0.42), S.cabin, body, 0, y + 0.18, dz, false);
+  m(box(W * 0.86, 0.05, 0.3), S.cabin, body, 0, y + 0.3, dz + 0.06, false).rotation.x = 0.25;
+  m(box(0.3, 0.1, 0.02), S.gauge, body, W * 0.22, y + 0.32, dz - 0.2, false).rotation.x = -0.35;
+  m(box(0.24, 0.14, 0.02), S.screen, body, 0, y + 0.3, dz - 0.21, false).rotation.x = -0.3;
+  for (const sx of [-1, 1]) m(box(0.1, 0.04, 0.02), S.dark, body, sx * W * 0.36, y + 0.24, dz - 0.215, false);
+  // centre console + gear lever
+  m(box(0.2, 0.18, cabL * 0.32), S.cabin, body, 0, y + 0.05, fz + 0.08, false);
+  m(new THREE.CylinderGeometry(0.012, 0.012, 0.14, 6), S.chrome, body, 0, y + 0.2, fz + 0.18, false);
+  m(new THREE.SphereGeometry(0.03, 8, 6), S.dark, body, 0, y + 0.28, fz + 0.18, false);
+  // rear-view mirror
+  m(box(0.22, 0.06, 0.02), S.dark, body, 0, y + cabH * 0.78, cabZ + cabL * 0.4, false);
+  // steering wheel on a column (a group, so it can turn and is not merged with the body)
+  const col = new THREE.Group(); col.position.set(W * 0.22, y + 0.3, cabZ + cabL * 0.3); col.rotation.x = -1.15; body.add(col);
+  m(new THREE.CylinderGeometry(0.025, 0.03, 0.24, 8), S.cabin, col, 0, -0.12, 0, false);
+  const wheel = new THREE.Group(); col.add(wheel);
+  m(new THREE.TorusGeometry(0.17, 0.02, 8, 24), S.cabin, wheel, 0, 0, 0, false).rotation.x = Math.PI / 2;
+  m(new THREE.CylinderGeometry(0.05, 0.05, 0.04, 12), S.cabin, wheel, 0, 0.005, 0, false);
+  for (const a of [Math.PI / 2, -Math.PI / 2, Math.PI]) { const sp = m(box(0.15, 0.015, 0.03), S.cabin, wheel, Math.cos(a) * 0.09, 0, Math.sin(a) * 0.09, false); sp.rotation.y = -a; }
+  parts.steerWheel = wheel;
+}
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 // rounded body panels (softer, car-like edges); the BufferGeometry stays indexed so parts can be merged
 const rbox = (w, h, d, r) => { const g = new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2 - 0.01, h / 2 - 0.01, d / 2 - 0.01)); return g.index ? g : mergeVertices(g); };
@@ -285,6 +331,7 @@ export function buildVehicleModel(type, color) {
         m(box(W * 0.86, cabH * 0.55, 0.05), shared.glass, body, 0, clear + lowH + cabH * 0.27, cabZ + cabL * 0.45, false).rotation.x = -0.35;
         m(box(W * 0.8, 0.5, 0.5), shared.seat, body, 0, clear + lowH + 0.05, cabZ - cabL * 0.05);
         m(box(W * 0.84, 0.08, 0.08), paint, body, 0, clear + lowH + cabH * 0.55, cabZ - cabL * 0.35);
+        carInterior(parts, body, { W, clear, lowH, cabZ, cabL, cabH, rear: false });
       } else {
         const cab = m(rbox(W * 0.88, cabH * 0.92, cabL, 0.18), shared.glass, body, 0, clear + lowH + cabH * 0.46, cabZ, false);
         parts.glassParts.push(cab);
@@ -293,6 +340,7 @@ export function buildVehicleModel(type, color) {
           m(box(0.06, cabH * 0.92, 0.08), paint, body, sx * W * 0.43, clear + lowH + cabH * 0.46, cabZ + sz * cabL * 0.47);
         }
         if (T.van) for (const sx of [-1, 1]) m(box(0.04, cabH * 0.75, cabL * 0.55), paint, body, sx * W * 0.445, clear + lowH + cabH * 0.42, cabZ - cabL * 0.2);
+        carInterior(parts, body, { W, clear, lowH, cabZ, cabL, cabH, rear: !sporty && !T.pickup && cabL > 1.9 });
       }
       if (T.pickup) {
         // open cargo bed behind the cab
@@ -320,6 +368,8 @@ export function buildVehicleModel(type, color) {
       const dw = m(box(0.04, cabH * 0.8, dl * 0.95), shared.glass, hinge, 0.0, lowH + cabH * 0.42, -dl / 2, false);
       parts.glassParts.push(dw);
       m(box(0.05, 0.04, 0.18), shared.chrome, hinge, 0.04, lowH * 0.75, -dl * 0.8);
+      m(box(0.02, lowH * 0.8, dl * 0.92), shared.cabin, hinge, -0.025, lowH * 0.52, -dl / 2, false);      // inner door panel
+      m(box(0.05, 0.04, dl * 0.5), shared.leather, hinge, -0.045, lowH * 0.78, -dl * 0.45, false);   // armrest
       parts.door = hinge;
       // lights
       for (const sx of [-1, 1]) {

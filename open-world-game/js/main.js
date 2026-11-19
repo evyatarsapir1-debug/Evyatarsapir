@@ -456,6 +456,7 @@ class Game {
     this.lastDistrict = null;
     this.missions.start();
     this.phone._badge();
+    this.chars._hud();
     this.input.endFrame();
   }
 

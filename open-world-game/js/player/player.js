@@ -309,17 +309,17 @@ export class Player {
       v.doorTarget = 1;
       this.facing = dampAngle(this.facing, v.heading + Math.PI / 2 * 0 - Math.PI / 2, 10, dt);
       this.model.animate(dt, { speed: 0, grounded: true, mode: 'foot', doorReach: true });
-      if (s.t > 0.35) {
+      if (s.t > (s.jack ? 0.6 : 0.35)) {
         if (s.jack) { s.phase = 'yank'; s.t = 0; world.onYank?.(v, s.jack); }
         else { s.phase = 'sit'; s.t = 0; }
       }
     } else if (s.phase === 'yank') {
       // grab the driver and throw them out: reach in, then a hard pull back with a step
-      const k = Math.min(1, s.t / 0.9);
+      const k = Math.min(1, s.t / 1.1);
       const pull = k < 0.35 ? 0 : Math.sin(Math.min(1, (k - 0.35) / 0.4) * Math.PI / 2);
       this.facing = dampAngle(this.facing, v.heading - Math.PI / 2 + pull * 0.9, 10, dt);
       this.model.animate(dt, { speed: 0, grounded: true, mode: 'foot', doorReach: k < 0.55, attack: k > 0.45 && k < 0.8 ? { type: 'jabL', t: (k - 0.45) * 1.2, m: { dur: 0.42 } } : null });
-      if (s.t > 0.9) { s.phase = 'sit'; s.t = 0; s.fromX = this.x; s.fromZ = this.z; s.fromY = this.y; v.jacking = false; }
+      if (s.t > 1.1) { s.phase = 'sit'; s.t = 0; s.fromX = this.x; s.fromZ = this.z; s.fromY = this.y; v.jacking = false; }
     } else if (s.phase === 'board') {
       // through the passenger door straight into the cockpit (no floating up the side of the jet)
       this.facing = v.heading;

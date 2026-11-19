@@ -79,9 +79,17 @@ export class Characters {
 
   // ------------------------------------------------------------------ the character wheel
   _ui() {
-    const btn = document.createElement('button'); btn.id = 'charBtn'; btn.type = 'button'; btn.setAttribute('aria-label', 'החלף דמות'); btn.textContent = '👥';
-    document.getElementById('hud').appendChild(btn);
-    btn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.toggle(); });
+    // the switch dial, bottom-left: a ring with the three characters on it; tap one to switch, the middle opens
+    // the full character wheel
+    const dial = document.createElement('div'); dial.id = 'charDial'; dial.setAttribute('aria-label', 'החלפת דמות');
+    dial.innerHTML = '<div class="cd-ring"></div>' + PROTAGONISTS.map((P, i) => `<button type="button" class="cd-dot cd-${i}" data-char="${P.id}" aria-label="${P.name}"><img alt=""><b>${P.name}</b></button>`).join('') + '<button type="button" class="cd-mid" aria-label="כל הדמויות">⇄</button>';
+    document.getElementById('hud').appendChild(dial); this.dial = dial;
+    dial.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const d = e.target.closest('[data-char]');
+      if (d) { if (d.dataset.char !== this.active) this.pick(d.dataset.char); return; }
+      if (e.target.closest('.cd-mid')) this.toggle();
+    });
     const w = document.createElement('div'); w.id = 'charWheel'; document.body.appendChild(w); this.wheel = w;
     w.addEventListener('pointerdown', (e) => {
       const c = e.target.closest('[data-char]'); e.preventDefault(); e.stopPropagation();
@@ -90,12 +98,19 @@ export class Characters {
     });
     const fl = document.createElement('div'); fl.id = 'switchFlash'; document.body.appendChild(fl); this.flash = fl;
   }
-  _hud() { const b = document.getElementById('charBtn'); if (b) b.title = this.current.name; }
+  _hud() {
+    if (!this.dial) return;
+    if (!this.pics) { try { this._portraits(); } catch { /* cards work without pictures */ } }
+    this.dial.querySelectorAll('.cd-dot').forEach((b) => {
+      const id = b.dataset.char; b.classList.toggle('on', id === this.active);
+      const img = b.querySelector('img'); if (this.pics?.[id] && img.getAttribute('src') !== this.pics[id]) img.src = this.pics[id];
+    });
+  }
   toggle() { this.wheel.classList.contains('show') ? this.close() : this.open(); }
   open() {
     const g = this.game; if (g.state !== 'playing' || this.sw) return;
     this.snapshot();
-    this._portraits();
+    this._portraits(); this._hud();
     const block = this.why();
     this.wheel.innerHTML = `<div class="cw-box"><h3>החלפת דמות</h3><div class="cw-row">${PROTAGONISTS.map((P, i) => {
       const d = this.data[P.id], me = P.id === this.active, where = WG.districtAt(d.x, d.z) || '';
@@ -108,6 +123,7 @@ export class Characters {
   pick(id) {
     if (id === this.active || !BY_ID[id]) return;
     const block = this.why(); if (block) { this.game.toast(block, 2.5); return; }
+    if (this.game.state !== 'playing' && this.game.state !== 'charwheel') return;
     this.close(); this.switchTo(id);
   }
   // keys 1-3 while the wheel is open

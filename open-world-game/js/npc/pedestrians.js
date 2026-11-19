@@ -377,7 +377,7 @@ export class Pedestrians {
     v.object.updateMatrixWorld();
     const w = v.seatWorld(new THREE.Vector3());
     const dp = v.doorPoint();
-    p.state = 'pulled'; p.timer = 0.55; p.pull = { x0: w.x, y0: w.y, z0: w.z, x1: dp.x, z1: dp.z };
+    p.state = 'pulled'; p.timer = 0.8; p.pull = { x0: w.x, y0: w.y, z0: w.z, x1: dp.x, z1: dp.z };
     const ox = dp.x - v.x, oz = dp.z - v.z, L = Math.hypot(ox, oz) || 1;
     p.throwDir = [ox / L, oz / L];
     p.from = [from.x, from.z];
@@ -398,7 +398,7 @@ export class Pedestrians {
     if (p.state === 'pulled') {
       // dragged out through the door
       if (p.sayT > 0) p.sayT -= dt;
-      const k = clamp(1 - p.timer / 0.55, 0, 1), e = k * k * (3 - 2 * k), P = p.pull;
+      const k = clamp(1 - p.timer / 0.8, 0, 1), e = k * k * (3 - 2 * k), P = p.pull;
       const gy = heightAt(P.x1, P.z1, P.y0 + 0.5);
       p.x = P.x0 + (P.x1 - P.x0) * e; p.z = P.z0 + (P.z1 - P.z0) * e; p.y = P.y0 + (gy - P.y0) * e + Math.sin(k * Math.PI) * 0.35;
       p.yaw = dampAngle(p.yaw, Math.atan2(p.from[0] - p.x, p.from[1] - p.z), 6, dt);
@@ -407,7 +407,7 @@ export class Pedestrians {
         // thrown: flies a couple of meters, tumbles and rolls on the asphalt
         const [tx, tz] = p.throwDir;
         p.state = 'thrown'; p.car = null;
-        p.vx = tx * 5.2 + (Math.random() - 0.5) * 1.5; p.vz = tz * 5.2 + (Math.random() - 0.5) * 1.5; p.vy = 3.6;
+        p.vx = tx * 6.4 + (Math.random() - 0.5) * 1.5; p.vz = tz * 6.4 + (Math.random() - 0.5) * 1.5; p.vy = 4.0;
         p.fallYaw = Math.atan2(-tx, -tz); p.tumble = 0; p.spin = 7 + Math.random() * 3; p.bounced = 0; p.timer = 3.2;
       }
       return;
