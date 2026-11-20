@@ -381,6 +381,16 @@ export class Pedestrians {
     v.driverPed = p;
     return p;
   }
+  // a bullet through the window hits the driver: hurt, and on the last hit he slumps out of the car (no gore)
+  shootDriver(v, from) {
+    const p = v.driverPed; if (!p || p.state !== 'driving') return;
+    p.hp -= 4; p.hitT = 0.3;
+    if (p.hp > 0) { this.say(p, this.rng.pick(['אאוץ׳!', 'יורים עליי!', 'עצור!']), 1.4, true); return; }
+    const dp = v.doorPoint();
+    p.state = 'dead'; p.timer = 45; p.defeated = true; p.car = null; p.x = dp.x; p.z = dp.z; p.y = heightAt(dp.x, dp.z, v.y + 0.5); p.fallYaw = v.heading + Math.PI / 2; p.vx = p.vz = 0;
+    v.driverPed = null; if (v.driver === 'ai' || v.driver === 'police') { v.driver = null; v.noDriver = true; } if (v.ai) { v.ai.cruise = 0; v.ai.baseCruise = 0; }
+    this._colors();
+  }
   // carjacking: the player pulls this driver out and throws them onto the road
   yank(p, v, from) {
     if (!p) return;

@@ -496,6 +496,7 @@ class Game {
   // carjacking: the car leaves traffic / airport service and becomes a normal vehicle the player can keep
   jackCar(v) {
     this.police.crime(v.T.police ? 'copHit' : 'carjack', v.x, v.z);
+    if (v.T.police || v.driver === 'police') { this.police.cars = this.police.cars.filter((c) => c !== v); v.siren = false; this.police.setWanted(Math.max(2, this.police.level), v.x, v.z); this.toast('🚓 גנבת ניידת משטרה! ★★', 2.5); }
     this.traffic.release(v);
     const i = this.airport.service.indexOf(v);
     if (i >= 0) this.airport.service.splice(i, 1);
@@ -950,6 +951,7 @@ class Game {
       player: p, econ: this.econ, input, camera: this.camera, vehicles: all,
       peds: this.peds.peds.filter((q) => q.state !== 'inside' && !q.car && q.state !== 'pulled' && q.state !== 'thrown'),
       scare: (ped, src, hit) => this.peds.scare(ped, src, hit), hurtPlayer: (n) => this.hurt(n, 'פיצוץ'),
+      hitDriver: (veh) => this.peds.shootDriver(veh, p),
       hitPed: (ped, dmg) => { const r = this.peds.hit(ped, p, dmg, true); if (r === 'dead') this.combat._drop(ped); if (r) this.police.crime(ped.app.cop ? 'copHit' : r === 'dead' ? 'kill' : 'assault', ped.x, ped.z); },
       onShot: (W) => { this.audio.gunshot?.(W.kind); this.gangs.onShot(p.x, p.z); }, onCrime: (k, x, z) => this.police.crime(k, x, z),
       onRecoil: (k) => { this.rig.pitch -= k; },

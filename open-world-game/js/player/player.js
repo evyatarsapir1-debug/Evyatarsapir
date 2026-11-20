@@ -187,8 +187,8 @@ export class Player {
   _findJackable(vehicles) {
     let best = null, bd = 2.6;
     for (const v of vehicles) {
-      if (v.driver !== 'ai' || !v.driverPed || v.driverPed.state !== 'driving' || v.isAir) continue;
-      if (Math.abs(v.speed) > 7 || Math.abs(v.y - this.y) > 1.6) continue;
+      if ((v.driver !== 'ai' && v.driver !== 'police') || !v.driverPed || v.driverPed.state !== 'driving' || v.isAir) continue;
+      if (Math.abs(v.speed) > (v.driver === 'police' ? 2.5 : 7) || Math.abs(v.y - this.y) > 1.6) continue;   // a patrol car only when it has stopped
       if (Math.abs(v.x - this.x) > 12 || Math.abs(v.z - this.z) > 12) continue;
       const dp = v.doorPoint();
       const d = Math.min(Math.hypot(dp.x - this.x, dp.z - this.z), Math.hypot(v.x - this.x, v.z - this.z) - Math.max(v.T.W, v.T.L) / 2 + 0.6);

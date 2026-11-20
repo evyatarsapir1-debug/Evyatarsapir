@@ -669,7 +669,7 @@ const la = await g(() => {
   return { clothes: n['חנות בגדים'] || 0, weapons: n['חנות נשקים'] || 0, ice: n['גלידת שקיעה'] || 0, falafel: n['פלאפל הכיכר'] || 0, title: document.title, d: __wg.districtAt(470, 470) };
 });
 check('city is called Los Antos', la.title === 'לוס אנטוס', la.title);
-check('Los Antos: 8 clothes, 6 weapons, 4 ice-cream and 5 falafel shops', la.clothes === 8 && la.weapons === 6 && la.ice === 4 && la.falafel === 5, JSON.stringify(la));
+check('Los Antos: 8 clothes, 6 weapons, 2 ice-cream and 4 falafel shops (fewer, more open space)', la.clothes === 8 && la.weapons === 6 && la.ice === 2 && la.falafel === 4, JSON.stringify(la));
 
 // ---------------------------------------------------------------- crashes, rider thrown off a motorbike, reversing with the brake
 const crash = await g(() => {
@@ -794,13 +794,13 @@ const esc = await g(() => {
   for (const c of game.police.cars.slice()) if (Math.hypot(c.x - P.x, c.z - P.z) < 80) game.police._remove(c);
   for (const q of game.peds.peds) if (q.app.cop && q.copChase && Math.hypot(q.x - P.x, q.z - P.z) < 40) { q.copChase = false; q.state = 'walk'; }
   let blinkAt = -1, t = 0;
-  while (game.police.level > 0 && t < 75 * 30) { step(1); t++; if (blinkAt < 0 && document.getElementById('wanted').classList.contains('blink')) blinkAt = t / 30; }
+  while (game.police.level > 0 && t < 115 * 30) { step(1); t++; if (blinkAt < 0 && document.getElementById('wanted').classList.contains('blink')) blinkAt = t / 30; }
   const leaving = (game.police.gone || []).length;
   step(30 * 16);
   return { chased, blinkAt, escapedAt: t / 30, level: game.police.level, leaving, left: (game.police.gone || []).length + game.police.cars.length, hud: document.getElementById('wanted').innerHTML, atStation: Math.hypot(P.x - 750, P.z - 112) < 10 };
 });
 check('escape: stars blink as soon as the police lose sight of you', esc.blinkAt > 0 && esc.blinkAt < 4, JSON.stringify(esc));
-check('escape: after 50 s out of their sight (or out of their reach) the stars disappear (not arrested)', esc.level === 0 && !esc.atStation && esc.escapedAt > 30 && esc.escapedAt < 56 && esc.hud === '', JSON.stringify(esc));
+check('escape: after 90 s out of their sight (or out of their reach) the stars disappear (not arrested)', esc.level === 0 && !esc.atStation && esc.escapedAt > 60 && esc.escapedAt < 96 && esc.hud === '', JSON.stringify(esc));
 check('escape: the patrol cars switch off their sirens and drive away, then are gone', esc.left === 0);
 
 // ---------------------------------------------------------------- pursuit along the streets
@@ -962,7 +962,8 @@ const bank = await g(() => {
     const S = H.stage();
     if (S.type === 'escape') { game.police.clear(); step(3); continue; }
     const t = H.targets().find((q) => !q.taken); if (!t) { step(5); continue; }
-    go(t.pt, t.y); press(); step(Math.ceil((S.type === 'vault' && !H.active.hasKey ? 2 : S.dur) * 30) + 3);
+    if (S.type === 'vault' && !H.active.hasKey) { go(I.start.pt, I.start.y); H.onExplosion({ x: t.pt[0], y: t.y + 1, z: t.pt[1] }); step(30 * 3); game.econ.health = 100; continue; }   // no button: a grenade / sticky bomb on the door blows it
+    go(t.pt, t.y); press(); step(Math.ceil(S.dur * 30) + 3);
     if (S.type === 'unlock') step(30 * 6);
     if (S.type === 'vault') { go(I.start.pt, I.start.y); step(30 * 8); game.econ.health = 100; }   // charge set: step back from the blast
   }

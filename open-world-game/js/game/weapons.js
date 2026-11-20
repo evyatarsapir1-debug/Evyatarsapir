@@ -273,6 +273,21 @@ export class WeaponSystem {
     this._impact(to, _d, false);
     audio?.gunshot?.(kind === 'rifle' ? 'rifle' : 'pistol');
   }
+  // a car window shatters: the glass turns to a few loose shards falling out, the frame stays (game effect)
+  _shatter(v, p) {
+    if (!v.glassBroken) {
+      v.glassBroken = true;
+      let gm = v._glassMat;
+      if (!gm) { gm = v._glassMat = new THREE.MeshStandardMaterial({ color: 0x2c3c4a, metalness: 0.5, roughness: 0.06, transparent: true, opacity: 0.36 }); v.parts.body.traverse((o) => { if (o.isMesh && o.material?.transparent && o.material.opacity < 0.9 && o.material.metalness >= 0.5) o.material = gm; }); }
+      gm.userData.op0 = gm.userData.op0 ?? gm.opacity; gm.userData.broken = true; gm.opacity = 0.07;
+      for (let i = 0; i < 16; i++) {
+        const s = new THREE.Mesh(new THREE.BoxGeometry(0.03 + Math.random() * 0.05, 0.004, 0.03 + Math.random() * 0.05), new THREE.MeshStandardMaterial({ color: 0xcfe6f2, transparent: true, opacity: 0.7, metalness: 0.4, roughness: 0.1 }));
+        s.position.copy(p); this.scene.add(s);
+        this.casings.push({ obj: s, t: 4, v: new THREE.Vector3((Math.random() - 0.5) * 3, Math.random() * 2, (Math.random() - 0.5) * 3), spin: new THREE.Vector3(Math.random() * 10, Math.random() * 10, 0), debris: true });
+      }
+    }
+    this._spark(p, 0xe8f6ff, 0.05, 0.08);
+  }
   _spark(p, color, size, life) {
     const m = this.fireMat.clone(); m.color.setHex(color);
     const s = new THREE.Mesh(this.sphere, m);
@@ -414,7 +429,11 @@ export class WeaponSystem {
             ctx.onShake?.(W.kind === 'long' ? 0.18 : W.kind === 'rifle' ? 0.06 : 0.1);
             ctx.onRecoil?.(W.kind === 'long' ? 0.05 : W.kind === 'pistol' ? 0.025 : 0.012);
             if (W.explosive) this.explode(r.point, W.explosive, W.damage, ctx);
-            else if (r.vehicle) { r.vehicle.addDamage(W.damage, -_d.x, -_d.z); if (r.vehicle.damage >= 100) r.vehicle.wreck?.(); }
+            else if (r.vehicle) {
+              r.vehicle.addDamage(W.damage, -_d.x, -_d.z); if (r.vehicle.damage >= 100) r.vehicle.wreck?.();
+              const v = r.vehicle;
+              if (r.point.y > v.y + v.T.H * 0.55 && !v.isAir) { this._shatter(v, r.point); if (v.driverPed) ctx.hitDriver?.(v); }   // through the window
+            }
             if (r.ped) ctx.hitPed?.(r.ped, W.pedDmg || 4);
             for (const ped of ctx.peds) if (ped !== r.ped && Math.hypot(ped.x - player.x, ped.z - player.z) < 35) ctx.scare?.(ped, origin, false);
           }

@@ -207,7 +207,7 @@ export class Police {
       const sp = c.speed;
       const ctl = { throttle: sp < vWant - 1 ? (Math.abs(e) > 1.4 ? 0.5 : 1) : sp > vWant + 2 ? -0.8 : 0.15, steer: Math.max(-1, Math.min(1, -e * 2.2)), handbrake: false };
       if (close && Math.abs(sp) < 1.5) ctl.throttle = 0;
-      if (c.wrecked) { ctl.throttle = 0; c.siren = false; }
+      if (c.wrecked || c.noDriver) { ctl.throttle = 0; ctl.steer = 0; }
       c.update(dt, ctl, g.statics, ctx.vehicles);
       // stuck against something: back up and try again; a car that stays stuck out of sight is replaced by another unit
       c.stuck = Math.abs(c.speed) < 1 && !close ? c.stuck + dt : (c.stuck > 1.5 && c.stuck < 3.6 ? c.stuck + dt : 0);
@@ -215,7 +215,7 @@ export class Police {
       if (c.stuck > 3.6 && c.stuck < 4) c.route = null;
       if (c.stuck > 10 && dP > 60 && !sees) this._remove(c);
       // officers get out when the car is next to you and you are on foot
-      if ((dP < 26 || (dP < 42 && Math.abs(c.speed) < 1.5 && sees)) && hunting && (close || Math.abs(c.speed) < 2) && P.state === 'foot' && !c.deployed && !c.wrecked) { c.deployed = true; g.peds.addCop?.(c.x + 2, c.z, true); }
+      if ((dP < 26 || (dP < 42 && Math.abs(c.speed) < 1.5 && sees)) && hunting && (close || Math.abs(c.speed) < 2) && (P.state === 'foot' || Math.abs(P.vehicle?.speed || 0) < 5) && !c.deployed && !c.wrecked) { c.deployed = true; g.peds.addCop?.(c.x + 2, c.z, true); if (dP < 40) g.peds.addCop?.(c.x - 2, c.z, true); }
     }
     for (const p of g.peds.peds) if (p.app.cop && p.copChase && p.state !== 'dead' && Math.hypot(p.x - pos.x, p.z - pos.z) < 25) reached = true;
     for (const p of g.peds.peds) if (p.app.cop && p.copChase && p.state !== 'dead' && this._sees(p.x, p.z, p.y, pos, 45)) seen = true;
@@ -232,9 +232,9 @@ export class Police {
     this.shootT -= dt;
     if (stars >= 3 && seen && this.shootT <= 0) {
       this.shootT = 1.6 - stars * 0.15;
-      const shooter = this.cars.find((c) => !c.wrecked && Math.hypot(c.x - pos.x, c.z - pos.z) < 45 && this._los(c.x, c.z, pos.x, pos.z)) || g.peds.peds.find((p) => p.app.cop && p.copChase && Math.hypot(p.x - pos.x, p.z - pos.z) < 35 && this._los(p.x, p.z, pos.x, pos.z));
+      const shooter = g.peds.peds.find((p) => p.app.cop && p.copChase && p.state !== 'dead' && p.pose === 'aimGun' && Math.hypot(p.x - pos.x, p.z - pos.z) < 35 && this._los(p.x, p.z, pos.x, pos.z));   // only officers on foot, never from inside a car
       if (shooter) {
-        const from = new THREE.Vector3(shooter.x, (shooter.y || 0) + 1.4, shooter.z), to = new THREE.Vector3(pos.x + (Math.random() - 0.5) * 2, pos.y + 1.2, pos.z + (Math.random() - 0.5) * 2);
+        const from = new THREE.Vector3(shooter.x + Math.sin(shooter.yaw) * 0.55, (shooter.y || 0) + 1.38, shooter.z + Math.cos(shooter.yaw) * 0.55), to = new THREE.Vector3(pos.x + (Math.random() - 0.5) * 2, pos.y + 1.2, pos.z + (Math.random() - 0.5) * 2);
         g.weapons.npcShot(from, to, 'pistol', g.audio);
         if (Math.random() < 0.45) g.hurt(P.state === 'driving' ? 3 : 6, 'משטרה');
       }
@@ -247,7 +247,7 @@ export class Police {
     if (this.unseen > this.escapeTime) this.clear('התחמקת! הכוכבים נעלמו — המשטרה הפסיקה לחפש אותך.');
     else if (this.noReach > this.escapeTime) this.clear('המשטרה לא הצליחה להגיע אליך — הם עזבו. הכוכבים נעלמו.');
   }
-  get escapeTime() { return 50; }   // seconds out of sight (or out of reach) before the police give up
+  get escapeTime() { return 90; }   // a minute and a half out of sight (or out of reach) and the police give up
 
   // cars that gave up: siren off, drive away from you, then disappear out of the way
   _leaving(dt, ctx, pos) {

@@ -21,7 +21,6 @@ export const HEISTS = {
       { type: 'hold', text: 'עלה במעלית לקומת ההנהלה והשבת את מצלמות האבטחה', where: 'security', dur: 3.5, busy: 'משבית את המצלמות', done: 'המצלמות כבויות — אף אחד לא רואה אותך.' },
       { type: 'vault', text: 'פתח את הכספת — קח את המפתח מהמאבטח או מהפקיד, או פוצץ את הדלת', dur: 2.4, done: 'הכספת פתוחה!' },
       { type: 'loot', text: 'אסוף את השלל מהכספת', from: 'vault', dur: 2.6 },
-      { type: 'escape', text: 'ברח הביתה, לווילה — המשטרה בדרך!', dest: () => ({ x: VILLA.door.x, z: VILLA.door.z - 1, r: 8, name: 'הבית שלי' }) },
     ],
   },
   harbor: {
@@ -30,7 +29,6 @@ export const HEISTS = {
     stages: [
       { type: 'vault', text: 'פתח את הכספת — קח את המפתח מהמאבטח או מהפקיד, או פוצץ את הדלת', dur: 2.4, done: 'הכספת פתוחה!' },
       { type: 'loot', text: 'אסוף את השלל מהכספת', from: 'vault', dur: 3 },
-      { type: 'escape', text: 'ברח לסירה שמחכה בחוף', dest: () => ({ x: 1052, z: 640, r: 10, name: 'הסירה בחוף' }) },
     ],
   },
   local: {
@@ -41,7 +39,6 @@ export const HEISTS = {
       { type: 'loot', text: 'רוקן את מגירות הקופאים', from: 'drawers', dur: 1.4, share: 0.35 },
       { type: 'vault', text: 'פתח את הכספת — קח את המפתח מהמאבטח או מהפקיד, או פוצץ את הדלת', dur: 2.4, done: 'הכספת פתוחה!' },
       { type: 'loot', text: 'אסוף את השלל מהכספת', from: 'vault', dur: 2.2, share: 0.65 },
-      { type: 'escape', text: 'היעלם מהמשטרה (עד שהכוכבים נעלמים)', lose: true },
     ],
   },
   gold: {
@@ -51,7 +48,6 @@ export const HEISTS = {
       { type: 'hold', text: 'עלה במעלית לקומת האבטחה והשבת את המערכות', where: 'security', dur: 4, busy: 'משבית את מערכות האבטחה', done: 'מערכות האבטחה כבויות. עכשיו לקומת האוצר.' },
       { type: 'vault', text: 'פתח את הכספת — קח את המפתח מהמאבטח או מהפקיד, או פוצץ את הדלת', dur: 2.4, done: 'הכספת פתוחה!' },
       { type: 'loot', text: 'אסוף את הזהב והמזומן', from: 'vault', dur: 3.2 },
-      { type: 'escape', text: 'ברח לנקודת האיסוף בנמל', dest: () => ({ x: 100, z: 852, r: 12, name: 'נקודת האיסוף בנמל' }) },
     ],
   },
 };
@@ -101,9 +97,9 @@ export class Heists {
     }
     for (const t of this.targets()) {
       if (t.taken) continue;
-      if (S.type === 'vault' && near(t.pt, t.y, 1.9)) return A.hasKey
-        ? { text: '🔑 פתח את הכספת', action: () => { A.busy = { t: 0, dur: S.dur, target: t, mode: 'key' }; } }
-        : { text: '🧨 הצמד מטען פריצה לדלת (אין לך מפתח)', action: () => { A.busy = { t: 0, dur: 2, target: t, mode: 'blast' }; } };
+      // the vault: with the key there is an "open" button; without it you blow the door yourself (throw / stick a
+      // grenade or a sticky bomb on it) - no button for that
+      if (S.type === 'vault') { if (A.hasKey && near(t.pt, t.y, 1.9)) return { text: '🔑 פתח עם מפתח', action: () => { A.busy = { t: 0, dur: S.dur, target: t, mode: 'key' }; } }; continue; }
       if (near(t.pt, t.y, 1.9)) return { text: S.type === 'loot' ? 'אסוף את השלל' : S.busy || S.text, action: () => { A.busy = { t: 0, dur: S.dur, target: t }; } };
     }
     return null;
@@ -189,9 +185,10 @@ export class Heists {
   _success() {
     const A = this.active, H = HEISTS[A.id], k = BANKS.find((q) => q.id === A.id);
     this.active = null;
-    const pay = k.loot;
+    const pay = k.loot, rest = Math.max(0, pay - (A.paid || 0));
     this.records[A.id] = { count: (this.records[A.id]?.count || 0) + 1, last: Date.now() };
-    this.game.econ.earn(pay, `שוד: ${k.name}`);
+    if (rest) this.game.econ.earn(rest, `שוד: ${k.name}`);
+    this.game.toast('🏃 הכסף אצלך — עכשיו ברח לפני שהמשטרה תגיע!', 3.5);
     this._siren(false); this._bag(false); this.game.gps.clear();
     this.game.phone?.notify?.('חשבון הבנק שלך', `הופקדו ${fmt(pay)} — ${H.title}. יתרה: ${fmt(this.game.econ.money)}`);
     this._reward(pay, H.title);
@@ -225,9 +222,11 @@ export class Heists {
             done.target.taken = true;
             if (done.target.key) (this.taken[A.id] ||= new Set()).add(done.target.key);
             const total = HEISTS[A.id].stages.filter((q) => q.type === 'loot').reduce((n, q) => n + (q.share || 1), 0);
-            A.loot += BANKS.find((q) => q.id === A.id).loot * (S.share || 1) / total / this.targets().length;
+            const part = Math.round(BANKS.find((q) => q.id === A.id).loot * (S.share || 1) / total / this.targets().length);
+            A.loot += part; A.paid = (A.paid || 0) + part;
+            g.econ.earn(part, 'שלל מהבנק'); g.toast(`💰 +${fmt(part)}`, 1.4);   // the money is yours the moment it is in the bag
             this._bag(true); g.audio.coin?.(); g.audio.mech?.('in');
-            if (this.targets().every((q) => q.taken)) return this._next('יש! כל השלל בתיק — עכשיו לברוח!');
+            if (this.targets().every((q) => q.taken)) { if (HEISTS[A.id].stages.slice(A.stage + 1).some((q) => q.type === 'loot')) return this._next('יש! הכספת ריקה'); return this._next(); }
             this._gps(); this._hudRender(true);
           }
           if (S.type === 'unlock' || (S.type === 'vault' && done.mode === 'key')) { this._openVault('unlock'); A.wait = { kind: 'opening' }; }
@@ -402,21 +401,10 @@ export class Heists {
     this.sir = { o, l, g };
   }
   _alarmLights(dt) {
-    const g = this.game, A = this.active, on = !!A?.alarm;
-    const pos = g.playerPos();
-    const inBank = on && Math.abs(pos.x - A.b.x) < A.b.w / 2 + 1 && Math.abs(pos.z - A.b.z) < A.b.d / 2 + 1;
-    if (this.sir) { const d = Math.hypot(pos.x - A.b.x, pos.z - A.b.z); this.sir.g.gain.value = Math.max(0, 0.07 * (1 - d / 160)); }
-    const flash = on && Math.floor(g.time * 3) % 2 === 0;
-    document.getElementById('alarmFlash')?.classList.toggle('on', inBank && flash);
-    for (const L of g.interiors.loaded.values()) {
-      const I = L.spec.bank; if (!I) continue;
-      if (!L.alarmMeshes) {
-        L.alarmMat = new THREE.MeshStandardMaterial({ color: 0x550000, emissive: 0xff1010, emissiveIntensity: 0.1 });
-        L.alarmMeshes = I.alarms.map((a) => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), L.alarmMat); m.position.set(a.pt[0], a.y, a.pt[1]); L.group.add(m); return m; });
-      }
-      const mine = on && A.b === L.b;
-      L.alarmMat.emissiveIntensity = mine ? (flash ? 6 : 0.2) : 0.1;
-    }
+    // only the siren sound (no flashing red lights)
+    const g = this.game, A = this.active;
+    if (this.sir && A) { const pos = g.playerPos(), d = Math.hypot(pos.x - A.b.x, pos.z - A.b.z); this.sir.g.gain.value = Math.max(0, 0.07 * (1 - d / 160)); }
+    document.getElementById('alarmFlash')?.classList.remove('on');
   }
 
   // cash stacks, gold bars and till money are real objects: what you take disappears into your bag

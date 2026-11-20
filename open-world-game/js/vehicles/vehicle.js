@@ -377,10 +377,36 @@ export class Vehicle {
     tmpColor.copy(this.parts.baseColor).lerp(DAMAGE_TINT, this.damage / 300);
     this.parts.paint.color.copy(tmpColor);
     if (this.damage > 60) for (const l of this.parts.lights) l.visible = false;
+    this._dent(amount, nx, nz);
+  }
+  // crumple the painted body where it was hit: vertices near the impact point are pushed in (with a little
+  // random crinkle), more for harder hits, up to a limit. Undone by a repair.
+  _dent(amount, nx, nz) {
+    const d = this.parts.dims; if (!d) return;
+    const c = Math.cos(-this.heading), s = Math.sin(-this.heading);
+    const wx = -nx, wz = -nz, lx = wx * c + wz * s, lz = -wx * s + wz * c, L = Math.hypot(lx, lz) || 1;   // towards the obstacle, in the car's own frame
+    const ux = lx / L, uz = lz / L;
+    const px = ux * d.W / 2, pz = uz * d.L / 2, py = d.clear + d.lowH * 0.6, R = 1.25, push = Math.min(0.16, amount / 160);
+    this._dentSum = (this._dentSum || 0) + push; if (this._dentSum > 0.9) return;   // crushed enough
+    this.parts.body.traverse((o) => {
+      if (!o.isMesh || o.material !== this.parts.paint || !o.geometry?.attributes?.position) return;
+      const g = o.geometry, pos = g.attributes.position;
+      if (!g.userData.orig) g.userData.orig = pos.array.slice();
+      let moved = false;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), dd = Math.hypot(x - px, (y - py) * 1.3, z - pz);
+        if (dd > R) continue;
+        const k = (1 - dd / R) ** 2 * push, j = (Math.sin(x * 37 + z * 53) * 0.5 + 0.5) * 0.35 + 0.65;
+        pos.setXYZ(i, x - ux * k * j, y - k * 0.25 * j, z - uz * k * j); moved = true;
+      }
+      if (moved) { pos.needsUpdate = true; g.computeVertexNormals(); }
+    });
   }
 
   repair() {
-    this.damage = 0; this.wrecked = false;
+    this.damage = 0; this.wrecked = false; this.glassBroken = false; this._dentSum = 0;
+    this.parts.body.traverse((o) => { const g = o.geometry; if (g?.userData?.orig) { g.attributes.position.array.set(g.userData.orig); g.attributes.position.needsUpdate = true; g.computeVertexNormals(); } });
+    if (this._glassMat && this._glassMat.userData.broken) { this._glassMat.opacity = this._glassMat.userData.op0; this._glassMat.userData.broken = false; }
     this.parts.paint.color.copy(this.parts.baseColor);
     for (const l of this.parts.lights) l.visible = true;
     const P = this.parts.panels;

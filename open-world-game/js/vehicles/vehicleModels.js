@@ -10,7 +10,7 @@ import { fighterGeometry, FIGHTER_MAT, FIGHTER_FY, afterburner } from './fighter
 export const shared = {
   tire: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 }),
   rim: new THREE.MeshStandardMaterial({ color: 0xbfc5ca, metalness: 0.8, roughness: 0.3 }),
-  glass: new THREE.MeshStandardMaterial({ color: 0x1c2a36, metalness: 0.6, roughness: 0.08, transparent: true, opacity: 0.55 }),
+  glass: new THREE.MeshStandardMaterial({ color: 0x2c3c4a, metalness: 0.5, roughness: 0.06, transparent: true, opacity: 0.36 }),   // clear enough to see who is inside
   dark: new THREE.MeshStandardMaterial({ color: 0x202224, roughness: 0.7 }),
   chrome: new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9, roughness: 0.2 }),
   head: new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff5d0, emissiveIntensity: 0.4 }),
