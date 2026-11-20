@@ -172,7 +172,7 @@ export class MiniMap {
       if (sx > 0 && sy > 0 && sx < c.width && sy < c.height) { g.strokeStyle = '#fff'; g.lineWidth = 3; g.strokeText(t, sx, sy); g.fillText(t, sx, sy); }
     };
     label('לוס אנטוס', 500, 470); label('מפרץ לוס אנטוס', 1500, 250);
-    label('בסיס צבאי', -500, -500); label('בל־ריב (צרפת)', 5500, 470); label('הים', 500, -350); label('הים', 500, 1350);
+    label('בסיס צבאי', -500, -500); label('בל־ריב (צרפת)', 5000, 470); label('הים', 500, -350); label('הים', 500, 1350);
     const LM = this.landmarks || [];
     drawLandmarks(g, LM.filter((L) => !L.minor), (x, z) => W2(x, z), 15 * devicePixelRatio, true);
     drawLandmarks(g, LM.filter((L) => L.minor), (x, z) => W2(x, z), 12 * devicePixelRatio, view.r < 450);

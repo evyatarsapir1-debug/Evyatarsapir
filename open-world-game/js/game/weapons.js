@@ -254,6 +254,16 @@ export class WeaponSystem {
     this.fx.push({ obj: s, t: 0.6, life: 0.6, grow: 0.9, rise: 0.4, type: 'smoke' });
   }
 
+  // a shot fired by someone else (police, soldiers, gangs): the same look as yours - muzzle flash + light at the
+  // gun, a tracer streak, an impact puff where it lands, and the gunshot sound. Game effect only.
+  npcShot(from, to, kind = 'pistol', audio) {
+    this._tracer(from, to, 0xffd9a0);
+    this._spark(from, 0xffc060, kind === 'rifle' ? 0.12 : 0.09, 0.06);
+    this.flash.position.copy(from); this.flash.intensity = Math.max(this.flash.intensity, 14); this._flashT = Math.max(this._flashT || 0, 0.06);
+    _d.subVectors(to, from).normalize();
+    this._impact(to, _d, false);
+    audio?.gunshot?.(kind === 'rifle' ? 'rifle' : 'pistol');
+  }
   _spark(p, color, size, life) {
     const m = this.fireMat.clone(); m.color.setHex(color);
     const s = new THREE.Mesh(this.sphere, m);

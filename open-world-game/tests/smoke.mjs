@@ -654,13 +654,13 @@ check('fighter: brake held when stopped = taxi backwards', strike.planeRev < -2,
 check('fighter: easy landing on the runway without damage, rolls to a stop', strike.landed && strike.landDamage < 20 && strike.stoppedSpeed < 2 && strike.onFoot === 'foot', JSON.stringify(strike));
 const fr = await g(async () => {
   const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
-  game.teleport(5405, 360, Math.PI, 0.3); step(60);
-  let french = 0, shops = 0, terminal = false, tower = false, jet = false; for (let i = 50; i < 60; i++) for (let j = 0; j < 10; j++) { const cd = __wg.cellData(i, j); for (const b of cd.buildings) { if (b.french) french++; if (b.interior === 'shop') shops++; if (b.sign === 'נמל התעופה בל־ריב') terminal = true; if (b.sign === 'מגדל פיקוח' && i >= 50) tower = true; } if (cd.parking.some((q) => q.type === 'jet')) jet = true; }
-  let sea = 0; for (let x = 1100; x < 5000; x += 100) if (__wg.cellKind(Math.floor(x / 100), 5) === 'Q') sea++;
-  const iron = __wg.cellData(55, 4).props.some((p) => p.kind === 'ironTower');
-  return { french, shops, sea, iron, terminal, tower, jet, d: __wg.districtAt(5405, 360), runway: __wg.cellData(55, 9).apron.some((a) => a.name === 'runway'), landing: !!game.flight && (await import('./js/game/flight.js')).RUNWAYS.some((r) => r.id === 'belle') };
+  game.teleport(4905, 360, Math.PI, 0.3); step(60);
+  let french = 0, shops = 0, terminal = false, tower = false, jet = false; for (let i = 45; i < 55; i++) for (let j = 0; j < 10; j++) { const cd = __wg.cellData(i, j); for (const b of cd.buildings) { if (b.french) french++; if (b.interior === 'shop') shops++; if (b.sign === 'נמל התעופה בל־ריב') terminal = true; if (b.sign === 'מגדל פיקוח' && i >= 45) tower = true; } if (cd.parking.some((q) => q.type === 'jet')) jet = true; }
+  let sea = 0; for (let x = 1100; x < 4500; x += 100) if (__wg.cellKind(Math.floor(x / 100), 5) === 'Q') sea++;
+  const iron = __wg.cellData(50, 4).props.some((p) => p.kind === 'ironTower');
+  return { french, shops, sea, iron, terminal, tower, jet, d: __wg.districtAt(4905, 360), runway: __wg.cellData(50, 9).apron.some((a) => a.name === 'runway'), landing: !!game.flight && (await import('./js/game/flight.js')).RUNWAYS.some((r) => r.id === 'belle') };
 });
-check('France (Belle-Rive) ~4 km across the sea: Paris-style buildings, shops, iron tower', fr.french > 40 && fr.shops > 10 && fr.iron && fr.sea >= 25 && fr.d.includes('בל־ריב'), JSON.stringify(fr));
+check('France (Belle-Rive) ~3.5 km across the sea: Paris-style buildings, shops, iron tower', fr.french > 40 && fr.shops > 10 && fr.iron && fr.sea >= 25 && fr.d.includes('בל־ריב'), JSON.stringify(fr));
 check('Belle-Rive airport: runway with landing assist, terminal, control tower, a parked airliner to fly home', fr.runway && fr.terminal && fr.tower && fr.jet && fr.landing, JSON.stringify(fr));
 
 // ---------------------------------------------------------------- Los Antos: name and shop counts
@@ -1133,7 +1133,7 @@ const nav = await g(() => {
   const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
   const P = game.player; if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
   game.teleport(-300, 612, 0, 0.3); step(5);
-  game.gps.set({ x: 5500, z: 958, name: 'בל־ריב' }, game.playerPos()); step(25);
+  game.gps.set({ x: 5000, z: 958, name: 'בל־ריב' }, game.playerPos()); step(25);
   const onFoot = getComputedStyle(document.getElementById('gpsHud')).display;
   const v = game.spawnVehicleNear('boat', 1060, 640) || game.spawnVehicleNear('heli', -300, 640);
   P.state = 'driving'; P.vehicle = v; v.driver = 'player'; P.ignoreVehicle = v; P._attach(v); step(25);

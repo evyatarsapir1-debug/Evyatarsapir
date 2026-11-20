@@ -168,6 +168,7 @@ export class Vehicle {
     const thr = this.driver ? (ctl.throttle || 0) : 0;
     const lift = this.driver ? (ctl.lift || 0) : 0;
     // flown by you: a lower top speed and softer responses so it stays easy to control
+    const overWater = heightAt(this.x, this.z, this.y + 0.5) < WATER_Y - 0.5;   // out at sea: no landing behaviour, keep flying
     const mine = this.driver === 'player', VMAX = mine ? (T.fighter ? 90 : 70) : T.maxSpeed;
     let v = this.speed;
     // throttle lever (0..100%): gas moves it up, brake moves it down; the engines spool towards it
@@ -178,7 +179,7 @@ export class Vehicle {
       if (thr > 0) { this._gas = true; if (!onGround) { this.throttleSet = 1; this.thrust = 1; } }
       else if (this._gas) { this._gas = false; this.throttleSet = Math.min(this.throttleSet, 0.25); }
       const agl = this.y - ground;
-      if (onGround || thr !== 0 || agl < 25) this.holdSpeed = null;
+      if (onGround || thr !== 0 || (agl < 25 && !overWater)) this.holdSpeed = null;
       else if (this.holdSpeed == null) this.holdSpeed = this.speed;
     } else this.holdSpeed = null;
     this.airbrake = thr < 0 || !!this.forceAirbrake;
@@ -221,7 +222,7 @@ export class Vehicle {
       const agl = this.y - ground;
       if (agl < 25 && L > 0.6) targetVy = Math.max(targetVy, -1.6 - agl * 0.3);
       // landing approach: engine low and the stick not pulled back -> settle gently onto the ground
-      if (agl < 30 && this.throttleSet < 0.4 && lift <= 0) targetVy = Math.min(targetVy, -1.0 - agl * 0.06);
+      if (agl < 30 && this.throttleSet < 0.4 && lift <= 0 && !overWater) targetVy = Math.min(targetVy, -1.0 - agl * 0.06);
       // easy landing: close to the ground the wings level out and the nose flares a little by itself
       if (agl < 18 && this.vy < 0.5) {
         this.roll = damp(this.roll, 0, 3, dt);
@@ -250,7 +251,7 @@ export class Vehicle {
     }
     this.airborne = this.y > g2 + 0.3;
     this.inWater = !this.airborne && g2 <= WATER_Y - 0.15 && heightAt(this.x, this.z, this.y + 0.5) < WATER_Y - 0.5;
-    if (this.inWater) { this.speed *= Math.exp(-1.5 * dt); this.y = WATER_Y - 1.2; }
+    if (this.inWater) this.speed *= Math.exp(-0.3 * dt);   // touched the sea: it floats on the surface and can power up and take off again (never stuck)
     this.roofY = -100;
     this._collide(statics, others);
     this.sync(dt);

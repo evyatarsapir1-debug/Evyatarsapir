@@ -95,10 +95,28 @@ export class Police {
     return null;
   }
 
+  _returnFire(dt, P, pos) {
+    const g = this.game;
+    // ---- officers / soldiers you attacked shoot back at once, each with his own rhythm (game damage only)
+    for (const q of g.peds.peds) {
+      if (!(q.angryT > 0) || q.state === 'dead') continue;
+      q.angryT -= dt; q.shotT = (q.shotT ?? 0.4) - dt;
+      if (q.pose !== 'aimGun' || q.shotT > 0) continue;
+      const d = Math.hypot(q.x - pos.x, q.z - pos.z); if (d > 40 || !this._los(q.x, q.z, pos.x, pos.z)) continue;
+      q.shotT = (q.app.soldier ? 0.35 : 0.6) + Math.random() * 0.4;
+      const from = new THREE.Vector3(q.x + Math.sin(q.yaw) * 0.55, q.y + 1.38, q.z + Math.cos(q.yaw) * 0.55);
+      const hit = Math.random() < (d < 12 ? 0.45 : 0.28);
+      const to = hit ? new THREE.Vector3(pos.x, pos.y + 1.1, pos.z) : new THREE.Vector3(pos.x + (Math.random() - 0.5) * 3, pos.y + 0.3 + Math.random() * 1.5, pos.z + (Math.random() - 0.5) * 3);
+      g.weapons.npcShot(from, to, q.app.soldier ? 'rifle' : 'pistol', g.audio);
+      if (hit) g.hurt(P.state === 'driving' ? 3 : q.app.soldier ? 8 : 6, q.app.soldier ? 'חייל' : 'משטרה');
+    }
+  }
+
   update(dt, ctx) {
     const g = this.game, P = g.player, pos = g.playerPos(), stars = Math.floor(this.level);
     this._leaving(dt, ctx, pos);
     this._hud(stars, dt);
+    this._returnFire(dt, P, pos);
     if (!stars) { if (this.cars.length) this.clear(); return; }
     const want = Math.min(1 + stars, 5);
     if (!this.lastKnown) this.lastKnown = { x: pos.x, z: pos.z };
@@ -217,7 +235,7 @@ export class Police {
       const shooter = this.cars.find((c) => !c.wrecked && Math.hypot(c.x - pos.x, c.z - pos.z) < 45 && this._los(c.x, c.z, pos.x, pos.z)) || g.peds.peds.find((p) => p.app.cop && p.copChase && Math.hypot(p.x - pos.x, p.z - pos.z) < 35 && this._los(p.x, p.z, pos.x, pos.z));
       if (shooter) {
         const from = new THREE.Vector3(shooter.x, (shooter.y || 0) + 1.4, shooter.z), to = new THREE.Vector3(pos.x + (Math.random() - 0.5) * 2, pos.y + 1.2, pos.z + (Math.random() - 0.5) * 2);
-        g.weapons._tracer(from, to, 0xffd9a0); g.audio.gunshot?.('pistol');
+        g.weapons.npcShot(from, to, 'pistol', g.audio);
         if (Math.random() < 0.45) g.hurt(P.state === 'driving' ? 3 : 6, 'משטרה');
       }
     }

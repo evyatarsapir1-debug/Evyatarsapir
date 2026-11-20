@@ -851,7 +851,7 @@ export class Pedestrians {
       return 'knock';
     }
     // police officers never run away: hit one and he comes after you
-    if (p.app.cop && p.state !== 'knocked') { p.state = 'copChase'; p.copChase = true; p.chaseTo = null; this.say(p, this.rng.pick(['עצור! משטרה!', 'אתה עצור!', 'ידיים למעלה!']), 1.8); return 'hit'; }
+    if ((p.app.cop || p.app.soldier) && p.state !== 'knocked') { p.state = 'copChase'; p.copChase = true; p.chaseTo = null; p.gunOut = true; p.angryT = 40; if (p.app.soldier) p.app.gun = true; this.say(p, p.app.soldier ? this.rng.pick(['עצור! אש!', 'חייל מותקף!']) : this.rng.pick(['עצור! משטרה!', 'אתה עצור!', 'ידיים למעלה!']), 1.8); return 'hit'; }
     if (p.state !== 'fight' && p.state !== 'knocked') {
       // fighters fight back; some others get angry enough to fight too
       if (!p.app.long && (p.temper === 'fight' || (p.temper !== 'call' && this.rng.chance(0.3) && p.hp > 4))) {

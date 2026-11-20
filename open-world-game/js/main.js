@@ -309,7 +309,7 @@ class Game {
       { short: 'משטרה', name: 'תחנת משטרה', icon: '🚓', color: '#1f3d7a', x: 750, z: 114 },
       { short: 'בית חולים', name: 'בית חולים', icon: '🏥', color: '#c0392b', x: 150, z: 214 },
       { short: 'סוכנות רכב', name: 'סוכנות רכב — קניית רכבים', icon: '🚗', color: '#2d6a4f', ...door(find([[8, 3]], (b) => b.sign === 'סוכנות רכב')) },
-      { short: 'בל־ריב', name: 'בל־ריב, צרפת — נמל התעופה', icon: '🗼', color: '#23395b', x: 5500, z: 958 },
+      { short: 'בל־ריב', name: 'בל־ריב, צרפת — נמל התעופה', icon: '🗼', color: '#23395b', x: 5000, z: 958 },
       { short: 'בסיס צבאי', name: 'בסיס צבאי — שער הכניסה', icon: '🪖', color: '#4b5320', x: -500, z: -20 },
       { short: 'לונה פארק', name: 'לונה פארק המרינה — גלגל ענק ורכבת הרים', icon: '🎡', color: '#d81b60', x: LUNA.x - 22, z: LUNA.z - 2 },
       { short: 'חנות נשקים', name: 'חנות נשקים', icon: '🎯', color: '#5b2c6f', ...door(find([[2, 5]], (b) => b.sign === 'חנות נשקים')) },
@@ -1057,8 +1057,8 @@ class Game {
       if (v?.isPlane) {
         const F = this.flight, air = v.airborne;
         const t = F.auto ? 'בטל טייס אוטומטי' : air ? 'נחיתה מסייעת' : 'המראה אוטומטית';
-        if ($('tAssist').textContent !== t) $('tAssist').textContent = t;
-        $('tAssist').classList.toggle('on', !!F.auto); $('tStab').classList.toggle('on', F.stab);
+        if ($('tAssist')) { if ($('tAssist').textContent !== t) $('tAssist').textContent = t; $('tAssist').classList.toggle('on', !!F.auto); }
+        if ($('tStab')) $('tStab').classList.toggle('on', F.stab);
       }
       $('tExit').classList.toggle('show', !!v && !v.isHeli && p.prompt?.key === 'vehicle');
       $('tExitHeli').classList.toggle('show', !!v && v.isHeli && p.prompt?.key === 'vehicle');
