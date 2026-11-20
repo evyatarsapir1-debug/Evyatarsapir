@@ -102,7 +102,7 @@ export class CharacterModel {
     torso.scale.set(1.18, 1, 0.75);
     // open shirt: white undershirt showing down the front, collar and placket
     this.shirtOpen = this._pivot(spine, 0, 0, 0);
-    const vee = this._mesh(sculpt(new THREE.PlaneGeometry(0.11, 0.4, 1, 6), (v) => { v.x *= 0.5 + (v.y + 0.2) * 1.6; v.z = 0.006; }), M.under, this.shirtOpen, 0, 0.25, 0.123);
+    const vee = this._mesh(sculpt(new THREE.PlaneGeometry(0.11, 0.4, 1, 6), (v) => { v.x *= 0.5 + (v.y + 0.2) * 1.6; v.z = 0.006; }), M.under, this.shirtOpen, 0, 0.27, 0.132);
     vee.rotation.x = -0.05;
     for (const sx of [-1, 1]) {
       const col = this._mesh(new THREE.BoxGeometry(0.075, 0.03, 0.06), M.top, this.shirtOpen, sx * 0.065, 0.5, 0.06); col.rotation.set(0.5, sx * 0.4, sx * 0.5);
@@ -138,7 +138,7 @@ export class CharacterModel {
     this.vest.visible = false;
     this.chest = torso;
     const neck = this.neck = this._pivot(spine, 0, 0.5, 0);
-    this._mesh(cap(0.05, 0.06), M.skin, neck, 0, 0.03, 0);
+    this.neckMesh = this._mesh(cap(0.05, 0.06), M.skin, neck, 0, 0.03, 0);
     const head = this.head = this._pivot(neck, 0, 0.14, 0.01);
     // head: cranium, jaw and chin, cheekbones, ears, nose, lips, eyes with whites + iris, brows
     const skull = this._mesh(sculpt(new THREE.SphereGeometry(0.115, 24, 18), (v) => {
@@ -228,6 +228,107 @@ export class CharacterModel {
     for (const sx of [-1, 1]) { const l = this._mesh(new THREE.BoxGeometry(0.05, 0.2, 0.012), M.top, this.suit, sx * 0.058, 0.41, 0.112); l.rotation.z = sx * 0.32; l.rotation.x = -0.1; }
     for (const y of [0.25, 0.18]) this._mesh(new THREE.SphereGeometry(0.009, 6, 4), new THREE.MeshStandardMaterial({ color: 0x222222 }), this.suit, 0, y, 0.113);
     this.suit.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+    this._buildSkin();
+    this.suit.position.z = 0.025; this.jacketBits.position.z = 0.016; this.hoodieBits.position.z = 0.012;   // sit on the new chest surface
+  }
+
+  // One continuous body (torso, neck, arms, legs) skinned to the rig, instead of separate capsules and ball joints:
+  // the surface flows from the chest into the shoulders and bends smoothly at the elbows and knees, like a real body.
+  // Clothes are painted onto it per region (sleeve length, trousers / shorts) and updated in setAppearance.
+  _buildSkin() {
+    const root = this.root; root.updateMatrixWorld(true);
+    const A = this.arms, L = this.legs, wp = (o) => o.getWorldPosition(new THREE.Vector3());
+    const bones = [this.hips, this.spine, this.neck, A[0].sh, A[0].elbow, A[1].sh, A[1].elbow, L[0].hip, L[0].knee, L[1].hip, L[1].knee];
+    const pos = [], idx = [], si = [], sw = [], reg = [];
+    const ss = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const N = 20;
+    // a tube through rings: each ring = { c: centre, rx, rz, front (chest bulge), w: [[bone, weight] x2], r: region }
+    const tube = (rings, capTop, capBottom) => {
+      const base = pos.length / 3;
+      for (const R of rings) for (let k = 0; k < N; k++) {
+        const a = (k / N) * Math.PI * 2, sn = Math.sin(a), cs = Math.cos(a);
+        const z = R.rz * sn * (sn > 0 ? (R.front || 1) : (R.back || 1));
+        pos.push(R.c.x + R.rx * cs, R.c.y, R.c.z + z);
+        si.push(R.w[0][0], R.w[1][0], 0, 0); sw.push(R.w[0][1], R.w[1][1], 0, 0); reg.push(R.r);
+      }
+      for (let i = 0; i < rings.length - 1; i++) for (let k = 0; k < N; k++) {
+        const a = base + i * N + k, b = base + i * N + (k + 1) % N, c = a + N, d = b + N;
+        idx.push(a, c, b, b, c, d);
+      }
+      const cap = (ri, up) => {
+        const R = rings[ri], ci = pos.length / 3; pos.push(R.c.x, R.c.y + (up ? 0.01 : -0.01), R.c.z); si.push(R.w[0][0], R.w[1][0], 0, 0); sw.push(R.w[0][1], R.w[1][1], 0, 0); reg.push(R.r);
+        for (let k = 0; k < N; k++) { const a = base + ri * N + k, b = base + ri * N + (k + 1) % N; up ? idx.push(ci, b, a) : idx.push(ci, a, b); }
+      };
+      if (capTop) cap(rings.length - 1, true);
+      if (capBottom) cap(0, false);
+    };
+    // torso + neck (hips -> spine -> neck), regions: 0 pelvis, 1 torso, 2 neck
+    const H = wp(this.hips).y;
+    const torsoRings = [
+      [-0.11, 0.155, 0.105, 1, 1, 0], [-0.04, 0.165, 0.11, 1, 1, 0], [0.04, 0.16, 0.105, 1, 1, 0], [0.047, 0.159, 0.105, 1, 1, 1], [0.14, 0.148, 0.1, 1.03, 0.95, 1],
+      [0.26, 0.158, 0.106, 1.1, 0.94, 1], [0.38, 0.185, 0.118, 1.16, 0.92, 1], [0.48, 0.2, 0.115, 1.12, 0.9, 1], [0.55, 0.17, 0.1, 1.05, 0.9, 1], [0.575, 0.13, 0.09, 1, 1, 1],
+      [0.585, 0.11, 0.085, 1, 1, 2], [0.6, 0.085, 0.075, 1, 1, 2], [0.66, 0.055, 0.055, 1, 1, 2], [0.73, 0.05, 0.05, 1, 1, 2],
+    ].map(([dy, rx, rz, front, back, r]) => {
+      const y = H + dy, wHip = 1 - ss(H + 0.02, H + 0.14, y), wNeck = ss(H + 0.56, H + 0.62, y);
+      const w = wNeck > 0 ? [[1, 1 - wNeck], [2, wNeck]] : [[0, wHip], [1, 1 - wHip]];
+      return { c: new THREE.Vector3(0, y, 0), rx, rz, front, back, w, r };
+    });
+    tube(torsoRings, true, true);
+    // arms: shoulder -> elbow -> wrist. regions: 3 upper (short sleeve), 4 mid upper arm, 5 forearm
+    for (let s = 0; s < 2; s++) {
+      const sh = wp(A[s].sh), el = wp(A[s].elbow), wr = wp(A[s].hand), bS = s ? 5 : 3, bE = s ? 6 : 4;
+      const pts = [[0, 0.064, 0.06], [0.12, 0.058, 0.056], [0.195, 0.055, 0.053], [0.205, 0.0548, 0.0528], [0.3, 0.05, 0.048], [0.46, 0.044, 0.042], [0.515, 0.0425, 0.0405], [0.525, 0.0423, 0.0403], [0.55, 0.042, 0.04], [0.68, 0.045, 0.043], [0.86, 0.037, 0.033], [1, 0.03, 0.026]];
+      tube(pts.map(([t, rx, rz]) => {
+        const c = t <= 0.52 ? sh.clone().lerp(el, t / 0.52) : el.clone().lerp(wr, (t - 0.52) / 0.48);
+        if (t === 0) c.x -= Math.sign(sh.x) * 0.035;                               // starts inside the shoulder, blends into the torso
+        const we = ss(0.44, 0.6, t), wsp = t < 0.1 ? 0.45 * (1 - t / 0.1) : 0;
+        const w = wsp > 0 ? [[bS, 1 - wsp], [1, wsp]] : [[bS, 1 - we], [bE, we]];
+        return { c, rx, rz, w, r: t < 0.2 ? 3 : t < 0.52 ? 4 : 5 };   // seam rings straddle 0.2 / 0.52
+      }), false, true);
+    }
+    // legs: hip -> knee -> ankle. regions: 6 thigh, 7 knee, 8 shin
+    for (let s = 0; s < 2; s++) {
+      const hp = wp(L[s].hip), kn = wp(L[s].knee), an = kn.clone().add(new THREE.Vector3(0, -0.4, 0)), bH = s ? 9 : 7, bK = s ? 10 : 8;
+      const pts = [[-0.08, 0.1, 0.1, 1], [0, 0.098, 0.096, 1], [0.18, 0.088, 0.088, 1.04], [0.38, 0.068, 0.068, 1], [0.415, 0.0665, 0.0665, 1], [0.425, 0.066, 0.066, 1], [0.49, 0.06, 0.06, 1], [0.6, 0.062, 0.066, 0.95], [0.615, 0.0622, 0.0662, 0.95], [0.625, 0.0623, 0.0664, 0.94], [0.72, 0.064, 0.07, 0.9], [0.88, 0.046, 0.046, 1], [1, 0.04, 0.042, 1]];
+      tube(pts.map(([t, rx, rz, f]) => {
+        const c = t <= 0.5 ? hp.clone().lerp(kn, Math.max(0, t) / 0.5) : kn.clone().lerp(an, (t - 0.5) / 0.5);
+        if (t < 0) c.y += 0.07;
+        const wk = ss(0.42, 0.58, t), wh = t < 0.06 ? 0.4 * (1 - Math.max(0, t) / 0.06) : 0;
+        const w = wh > 0 ? [[bH, 1 - wh], [0, wh]] : [[bH, 1 - wk], [bK, wk]];
+        return { c, rx, rz, front: f, back: 2 - f, w, r: t < 0.42 ? 6 : t < 0.62 ? 7 : 8 };
+      }), false, true);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(pos.length), 3));
+    g.setIndex(idx); g.computeVertexNormals();
+    this.skinRegions = reg;
+    this.skinMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72 });
+    const mesh = new THREE.SkinnedMesh(g, this.skinMat);
+    mesh.castShadow = true; mesh.frustumCulled = false;
+    root.add(mesh); root.updateMatrixWorld(true);
+    mesh.bind(new THREE.Skeleton(bones), mesh.matrixWorld);
+    this.skin = mesh;
+    // the old separate pieces are replaced by the continuous body
+    for (const o of [this.torso, this.pelvis, this.neckMesh]) o.visible = false;
+    for (const a of A) { a.upper.visible = false; a.lower.visible = false; a.delt.visible = false; }
+    for (const l of L) { l.upper.visible = false; l.lower.visible = false; }
+  }
+  // paint the clothes onto the continuous body
+  _paintSkin(app) {
+    if (!this.skin) return;
+    const M = this.mats, top = app.top, b = app.bottom;
+    const sleeveLong = ['jacket', 'hoodie', 'suit', 'longsleeve'].includes(top), sleeveShort = top !== 'tank';
+    const cols = {
+      0: M.bottom.color, 1: M.top.color, 2: M.skin.color,
+      3: sleeveShort ? M.top.color : M.skin.color, 4: sleeveLong ? M.top.color : M.skin.color, 5: sleeveLong ? M.top.color : M.skin.color,
+      6: b === 'skirt' ? M.skin.color : M.bottom.color, 7: b === 'jeans' || b === 'pants' || b === 'capri' ? M.bottom.color : M.skin.color, 8: b === 'jeans' || b === 'pants' ? M.bottom.color : M.skin.color,
+    };
+    const c = this.skin.geometry.attributes.color, R = this.skinRegions;
+    for (let i = 0; i < R.length; i++) { const k = cols[R[i]]; c.setXYZ(i, k.r, k.g, k.b); }
+    c.needsUpdate = true;
   }
 
   _hair(style) {
@@ -383,6 +484,7 @@ export class CharacterModel {
       a.sleeve.visible = top === 'shirt';
     }
     this.shirtOpen.visible = top === 'shirt';
+    this._paintSkin(app);
     this.topDark.color.copy(M.top.color).multiplyScalar(0.72);
     this.jacketBits.visible = top === 'jacket'; this.hoodieBits.visible = top === 'hoodie'; this.tankBits.visible = top === 'tank';
     for (const a of this.arms) { a.cuff.material = this.topDark; a.cuff.visible = top === 'jacket' || top === 'hoodie' || top === 'longsleeve'; }

@@ -513,7 +513,7 @@ const tryon = await g(() => {
   game.shop.close();
   return { hats, shoes, preview, paidForPreview, bought, afterClose, inWardrobe, state: game.state };
 });
-check('clothes store: hats ₪60/₪100 and shoes ₪120/₪250', tryon.hats.length >= 6 && tryon.hats.every((p) => p === 60 || p === 100) && new Set(tryon.hats).size === 2 && tryon.shoes.length >= 6 && tryon.shoes.every((p) => p === 120 || p === 250) && new Set(tryon.shoes).size === 2, JSON.stringify({ hats: tryon.hats, shoes: tryon.shoes }));
+check('clothes store: hats ₪60/₪100 (balaclava ₪150) and shoes ₪120/₪250', tryon.hats.length >= 6 && tryon.hats.every((p) => p === 60 || p === 100 || p === 150) && new Set(tryon.hats).size === 3 && tryon.shoes.length >= 6 && tryon.shoes.every((p) => p === 120 || p === 250) && new Set(tryon.shoes).size === 2, JSON.stringify({ hats: tryon.hats, shoes: tryon.shoes }));
 check('clothes store: tap an item to try it on (free), buy keeps it, it is in the home wardrobe', tryon.preview === 'fedora' && tryon.paidForPreview === 0 && tryon.bought === 'cap' && tryon.afterClose === 'cap' && tryon.inWardrobe && tryon.state === 'playing', JSON.stringify(tryon));
 
 // ---------------------------------------------------------------- food goes into the bag, eat it from the bag
