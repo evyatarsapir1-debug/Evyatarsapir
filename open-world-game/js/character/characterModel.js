@@ -6,8 +6,8 @@ const _ikP = new THREE.Vector3();
 
 export const SKIN_TONES = [0xf6d7c3, 0xe9b98f, 0xc98e62, 0xa86f48, 0x7b4a2c, 0x4f2f1d];
 export const HAIR_COLORS = [0x1b1410, 0x3b2416, 0x6b4325, 0xa8743b, 0xd9b26a, 0xb5402a, 0x9a9a9a, 0x2a3f8f];
-export const HAIR_STYLES = ['short', 'buzz', 'long', 'ponytail', 'curly', 'mohawk', 'bun', 'bald'];
-export const HAIR_NAMES = { short: 'קצר', buzz: 'מגולח', long: 'ארוך', ponytail: 'קוקו', curly: 'מתולתל', mohawk: 'מוהיקן', bun: 'פקעת', bald: 'קרחת' };
+export const HAIR_STYLES = ['short', 'buzz', 'long', 'ponytail', 'curly', 'mohawk', 'bun', 'bald', 'horseshoe', 'quiff'];
+export const HAIR_NAMES = { short: 'קצר', buzz: 'מגולח', long: 'ארוך', ponytail: 'קוקו', curly: 'מתולתל', mohawk: 'מוהיקן', bun: 'פקעת', bald: 'קרחת', horseshoe: 'קרחת עם שיער בצדדים', quiff: 'שופע למעלה' };
 export const TOP_STYLES = ['tshirt', 'longsleeve', 'jacket', 'tank', 'hoodie', 'suit', 'shirt'];
 export const TOP_NAMES = { tshirt: 'חולצה קצרה', longsleeve: 'חולצה ארוכה', jacket: 'ז׳קט', tank: 'גופייה', hoodie: 'קפוצ׳ון', suit: 'חליפה', shirt: 'חולצה מכופתרת פתוחה' };
 export const BOTTOM_STYLES = ['jeans', 'shorts', 'skirt', 'pants', 'capri'];
@@ -16,8 +16,8 @@ export const HAT_STYLES = ['none', 'cap', 'beanie', 'fedora', 'bucket', 'balacla
 export const HAT_NAMES = { none: 'בלי כובע', cap: 'כובע מצחייה', beanie: 'כובע גרב', fedora: 'כובע לבד', bucket: 'כובע טמבל', balaclava: 'כובע גרב עם חורים לעיניים' };
 export const SHOE_STYLES = ['sneaker', 'boot', 'formal', 'sandal'];
 export const SHOE_NAMES = { sneaker: 'נעלי ספורט', boot: 'מגפונים', formal: 'נעלי עור', sandal: 'כפכפים' };
-export const BEARD_STYLES = ['none', 'stubble', 'mustache', 'goatee', 'full'];
-export const BEARD_NAMES = { none: 'מגולח', stubble: 'זיפים', mustache: 'שפם', goatee: 'זקנקן', full: 'זקן מלא' };
+export const BEARD_STYLES = ['none', 'stubble', 'mustache', 'goatee', 'french', 'short', 'scruffy', 'full'];
+export const BEARD_NAMES = { none: 'מגולח', stubble: 'זיפים', mustache: 'שפם', goatee: 'זקנקן', french: 'זקן צרפתי', short: 'זקן קצר מסודר', scruffy: 'זקן מוזנח', full: 'זקן מלא' };
 export const GLASSES_STYLES = ['none', 'sun', 'clear'];
 export const GLASSES_NAMES = { none: 'בלי משקפיים', sun: 'משקפי שמש', clear: 'משקפי ראייה' };
 export const SHOE_COLORS = [0xf2f2f2, 0x1d1d1f, 0xc0392b, 0x2e86c1, 0x6e4b3a, 0x95a5a6, 0xf1c40f, 0x27ae60, 0xd35480];
@@ -125,7 +125,7 @@ export class CharacterModel {
       for (const sx of [-1, 1]) { const c = this._mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.14, 5), cord, this.hoodieBits, sx * 0.03, 0.38, 0.132); c.rotation.x = -0.15; } }
     // tank top: bare shoulders and a scooped neckline (skin) with straps over the shoulders
     this.tankBits = this._pivot(spine, 0, 0, 0);
-    { for (const sx of [-1, 1]) { this._mesh(new THREE.BoxGeometry(0.1, 0.05, 0.19), M.skin, this.tankBits, sx * 0.135, 0.465, 0.0); this._mesh(new THREE.BoxGeometry(0.04, 0.03, 0.2), M.top, this.tankBits, sx * 0.075, 0.49, 0.0); }
+    { for (const sx of [-1, 1]) { this._mesh(new THREE.BoxGeometry(0.075, 0.022, 0.15), M.skin, this.tankBits, sx * 0.14, 0.458, 0.0); this._mesh(new THREE.BoxGeometry(0.04, 0.03, 0.2), M.top, this.tankBits, sx * 0.075, 0.49, 0.0); }
       const nk = this._mesh(new THREE.SphereGeometry(0.07, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.skin, this.tankBits, 0, 0.47, 0.1); nk.rotation.x = Math.PI / 2; nk.scale.set(1.1, 0.4, 1); }
     for (const b of [this.jacketBits, this.hoodieBits, this.tankBits]) b.traverse((o) => { if (o.isMesh) o.castShadow = false; });
     // protective vest (worn over the clothes when bought)
@@ -257,6 +257,18 @@ export class CharacterModel {
         add(capGeo, 0, 0.0, 0, 0.92, 0.98, 0.98);
         add(new THREE.BoxGeometry(0.035, 0.08, 0.22), 0, 0.12, -0.01);
         break;
+      case 'horseshoe': {
+        // bald on top, a band of hair round the sides and the back (the face stays clear)
+        const band = new THREE.SphereGeometry(0.121, 18, 8, Math.PI / 2 + 0.95, Math.PI * 2 - 1.9, Math.PI * 0.36, Math.PI * 0.24);
+        add(band, 0, 0.004, -0.004, 0.97, 1.06, 1.05);
+        break;
+      }
+      case 'quiff':
+        // short sides, full and voluminous on top, swept up at the front
+        add(capGeo, 0, 0.006, -0.004, 0.94, 1.0, 1.02);
+        add(new THREE.SphereGeometry(0.1, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), 0, 0.055, 0.012, 0.9, 0.75, 1.05);
+        add(new THREE.SphereGeometry(0.05, 12, 8), 0, 0.112, 0.06, 1.5, 0.75, 0.9);
+        break;
       case 'bun':
         add(capGeo, 0, 0.012, -0.005, 0.95, 1.06, 1.05);
         add(new THREE.SphereGeometry(0.055, 10, 8), 0, 0.1, -0.09);
@@ -269,18 +281,27 @@ export class CharacterModel {
     const g = this.beardGroup, M = this.mats;
     while (g.children.length) { const c = g.children.pop(); c.geometry.dispose(); }
     if (!style || style === 'none') return;
-    const jaw = () => this._mesh(new THREE.SphereGeometry(0.119, 20, 12, Math.PI / 2 - 1.35, 2.7, Math.PI * 0.52, Math.PI * 0.34), M.beard, g, 0, 0.004, 0.004);
-    const stache = () => { const m = this._mesh(new THREE.CapsuleGeometry(0.011, 0.04, 2, 8), M.beard, g, 0, -0.043, 0.108); m.rotation.z = Math.PI / 2; return m; };
-    if (style === 'stubble') { const j = jaw(); j.scale.set(0.93, 1.1, 1.01); }
-    if (style === 'full') { const j = jaw(); j.scale.set(0.97, 1.16, 1.06); stache(); const c = this._mesh(new THREE.SphereGeometry(0.04, 12, 8), M.beard, g, 0, -0.1, 0.07); c.scale.set(1.2, 0.8, 0.9); }
+    // the jaw shell starts below the mouth line, so it never covers the lips, nose, cheeks or eyes
+    const jaw = (top = 0.68, w = 2.7) => this._mesh(new THREE.SphereGeometry(0.119, 22, 10, Math.PI / 2 - w / 2, w, Math.PI * top, Math.PI * (0.93 - top)), M.beard, g, 0, 0.004, 0.004);
+    const stache = (wd = 0.04) => { const m = this._mesh(new THREE.CapsuleGeometry(0.009, wd, 2, 8), M.beard, g, 0, -0.043, 0.11); m.rotation.z = Math.PI / 2; return m; };
+    const sideburns = (len = 0.06) => { for (const sx of [-1, 1]) { const b = this._mesh(new THREE.BoxGeometry(0.012, len, 0.03), M.beard, g, sx * 0.104, -0.02 - len / 4, 0.02); b.rotation.z = sx * 0.12; } };
+    const chin = (s = 1) => { const c = this._mesh(new THREE.SphereGeometry(0.026, 10, 8), M.beard, g, 0, -0.096, 0.093); c.scale.set(1.1 * s, 1.1 * s, 0.7); return c; };
+    if (style === 'stubble') { const j = jaw(0.68, 2.6); j.scale.set(0.93, 1.1, 1.01); }
     if (style === 'mustache') stache();
-    if (style === 'goatee') { stache(); const c = this._mesh(new THREE.SphereGeometry(0.028, 10, 8), M.beard, g, 0, -0.09, 0.09); c.scale.set(1, 1.2, 0.7); }
+    if (style === 'goatee') { stache(); chin(); }
+    if (style === 'french') {   // moustache + a neat goatee joined round the mouth, cheeks clean
+      stache(0.044); chin(1.05);
+      for (const sx of [-1, 1]) { const l = this._mesh(new THREE.BoxGeometry(0.008, 0.045, 0.012), M.beard, g, sx * 0.03, -0.068, 0.103); l.rotation.z = sx * 0.12; }
+    }
+    if (style === 'short') { const j = jaw(0.7, 2.9); j.scale.set(0.96, 1.12, 1.04); stache(0.042); sideburns(0.05); }
+    if (style === 'scruffy') { const j = jaw(0.67, 3.0); j.scale.set(0.99, 1.17, 1.08); stache(0.046); sideburns(0.07); chin(1.25).scale.z = 0.9; }
+    if (style === 'full') { const j = jaw(0.66, 3.0); j.scale.set(0.99, 1.2, 1.09); stache(0.048); sideburns(0.08); const c = this._mesh(new THREE.SphereGeometry(0.04, 12, 8), M.beard, g, 0, -0.11, 0.07); c.scale.set(1.2, 0.85, 0.9); }
   }
   _glasses(style) {
     const g = this.glassesGroup, M = this.mats;
     while (g.children.length) { const c = g.children.pop(); c.geometry.dispose(); }
     if (!style || style === 'none') return;
-    M.lens.color.setHex(style === 'sun' ? 0x0e1114 : 0xdfe9ef); M.lens.opacity = style === 'sun' ? 0.92 : 0.25;
+    M.lens.color.setHex(style === 'sun' ? 0x2a1e14 : 0xdfe9ef); M.lens.opacity = style === 'sun' ? 0.55 : 0.25;   // tinted, the eyes still show
     for (const sx of [-1, 1]) {
       this._mesh(new THREE.BoxGeometry(0.044, 0.03, 0.004), M.lens, g, sx * 0.041, 0.022, 0.112);
       this._mesh(new THREE.BoxGeometry(0.048, 0.005, 0.006), M.frame, g, sx * 0.041, 0.038, 0.112);
@@ -343,7 +364,7 @@ export class CharacterModel {
     M.shoes.color.setHex(SHOE_COLORS[app.shoes] ?? SHOE_COLORS[0]);
     this._hair(app.hairStyle);
     M.lip.color.copy(M.skin.color).multiplyScalar(0.78).lerp(new THREE.Color(0xa8504a), 0.25);
-    M.beard.color.setHex(HAIR_COLORS[app.hairColor] ?? HAIR_COLORS[0]); M.beard.opacity = app.beard === 'stubble' ? 0.55 : 1;
+    M.beard.color.setHex(HAIR_COLORS[app.hairColor] ?? HAIR_COLORS[0]); M.beard.opacity = app.beard === 'stubble' ? 0.55 : app.beard === 'scruffy' ? 0.92 : 1;
     if (this._beardKey !== app.beard) { this._beardKey = app.beard; this._beard(app.beard); }
     if (this._glassKey !== app.glasses) { this._glassKey = app.glasses; this._glasses(app.glasses); }
     M.under.color.setHex(CLOTH_COLORS[app.underColor ?? 0] ?? 0xf4f4f2);

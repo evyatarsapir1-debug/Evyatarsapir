@@ -40,6 +40,7 @@ function catalogue(kind, ctx) {
       const TEES = [[1, 'שחורה'], [12, 'ורודה'], [9, 'אפורה'], [4, 'ירוקה'], [3, 'כחולה'], [0, 'לבנה'], [2, 'אדומה']];
       for (const [c, nm] of TEES) out.push({ id: `tee-${c}`, name: `חולצה קצרה ${nm}`, swatch: CLOTH_COLORS[c], price: 120, patch: { top: 'tshirt', topColor: c } });
       for (const [c, nm] of TEES) out.push({ id: `long-${c}`, name: `חולצה ארוכה ${nm}`, desc: 'עם שרוולים ארוכים', swatch: CLOTH_COLORS[c], price: 180, patch: { top: 'longsleeve', topColor: c } });
+      out.push({ id: 'bermuda-white', name: 'מכנס ברמודה לבן', desc: 'קצר עד הברך', swatch: CLOTH_COLORS[0], price: 150, patch: { bottom: 'shorts', bottomColor: 0 } });
       // --- shorts: 120 and 80
       for (const c of [14, 17, 1]) out.push({ id: `sh120-${c}`, name: 'מכנס קצר — ברמודה', swatch: CLOTH_COLORS[c], price: 120, patch: { bottom: 'shorts', bottomColor: c } });
       for (const c of [3, 8, 9]) out.push({ id: `sh80-${c}`, name: 'מכנס קצר — ספורט', swatch: CLOTH_COLORS[c], price: 80, patch: { bottom: 'shorts', bottomColor: c } });

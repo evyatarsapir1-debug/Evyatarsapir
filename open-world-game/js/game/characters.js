@@ -8,11 +8,11 @@ import { fmt } from './economy.js';
 
 export const PROTAGONISTS = [
   { id: 'miguel', name: 'מיגל', role: 'סוחר רכבים לשעבר, ממציא את עצמו מחדש בעיר',
-    app: { name: 'מיגל', skin: 3, hairStyle: 'buzz', hairColor: 0, beard: 'stubble', glasses: 'sun', top: 'shirt', topColor: 14, underColor: 0, bottom: 'capri', bottomColor: 18, shoes: 4, shoeStyle: 'sandal', height: 1.08, build: 1.04 } },
+    app: { v: 2, name: 'מיגל', skin: 3, hairStyle: 'buzz', hairColor: 0, beard: 'french', glasses: 'sun', top: 'shirt', topColor: 14, underColor: 0, bottom: 'capri', bottomColor: 18, shoes: 4, shoeStyle: 'sandal', height: 1.08, build: 1.04 } },
   { id: 'tavor', name: 'טבור', role: 'מכונאי קשוח מהנמל, חם מזג ונאמן',
-    app: { name: 'טבור', skin: 1, hairStyle: 'bald', hairColor: 2, beard: 'full', glasses: 'none', top: 'tank', topColor: 18, bottom: 'pants', bottomColor: 16, shoes: 1, shoeStyle: 'boot', height: 1.12, build: 1.18 } },
+    app: { v: 2, name: 'טבור', skin: 1, hairStyle: 'horseshoe', hairColor: 2, beard: 'scruffy', glasses: 'none', top: 'tank', topColor: 18, bottom: 'pants', bottomColor: 16, shoes: 1, shoeStyle: 'boot', height: 1.12, build: 1.18 } },
   { id: 'jason', name: 'ג׳ייסון', role: 'נהג מירוצים צעיר מהשכונה, מהיר ושאפתן',
-    app: { name: 'ג׳ייסון', skin: 4, hairStyle: 'curly', hairColor: 0, beard: 'goatee', glasses: 'none', top: 'hoodie', topColor: 17, bottom: 'jeans', bottomColor: 10, shoes: 0, shoeStyle: 'sneaker', height: 1.07, build: 0.98 } },
+    app: { v: 2, name: 'ג׳ייסון', skin: 4, hairStyle: 'quiff', hairColor: 0, beard: 'short', glasses: 'none', top: 'hoodie', topColor: 17, bottom: 'jeans', bottomColor: 10, shoes: 0, shoeStyle: 'sneaker', height: 1.07, build: 0.98 } },
 ];
 const BY_ID = Object.fromEntries(PROTAGONISTS.map((p) => [p.id, p]));
 // where each one starts: Miguel at home, Tavor by the harbour warehouses, Jason at the beach cafe
@@ -46,6 +46,7 @@ export class Characters {
   load(o, start) {
     if (!o || !o.data) { this.reset(start); this.data.miguel.app = { ...this.game.player.model.app, name: 'מיגל' }; return; }
     this.active = BY_ID[o.active] ? o.active : 'miguel'; this.data = o.data;
+    for (const P of PROTAGONISTS) { const d = this.data[P.id]; if (d?.app && (d.app.v || 1) < 2) { Object.assign(d.app, { v: 2, hairStyle: P.app.hairStyle, beard: P.app.beard, glasses: P.app.glasses }); if (P.id === this.active) this.game.player.model.setAppearance(d.app); } }
     for (const P of PROTAGONISTS) if (!this.data[P.id]) { const s = this._spot(P.id, start); this.data[P.id] = { app: { ...P.app }, x: s.x, z: s.z, facing: s.facing, money: 5000, health: 100, weapons: {}, equipped: null, wardrobe: [] }; }
   }
   // the live game state of the character you are playing goes back into his record
