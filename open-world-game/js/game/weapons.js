@@ -11,7 +11,7 @@ export const WEAPONS = {
   nz: { name: 'רובה צלפים', kind: 'long', price: 7500, ammoPack: 12, ammoPrice: 140, rate: 0.9, damage: 34, pedDmg: 8, range: 260, color: 0x2f3b2a, hold: 'rifle', mag: 5, reloadT: 2.3 },
   hp: { name: 'מטול', kind: 'heavy', price: 14000, ammoPack: 6, ammoPrice: 600, rate: 0.7, damage: 60, range: 160, explosive: 6, color: 0x5a6148, hold: 'heavy', mag: 1, reloadT: 2.4 },
   gr: { name: 'רימון', kind: 'grenade', price: 50, ammoPack: 1, ammoPrice: 50, rate: 1.2, explosive: 7, damage: 70, thrown: true, color: 0x4f5a3c, hold: 'hand' },
-  fc: { name: 'פצצה דו־צדדית', kind: 'charge', price: 80, ammoPack: 1, ammoPrice: 80, rate: 1, explosive: 8, damage: 80, placed: true, fuse: 5, color: 0xb59a6a, hold: 'hand' },   // sticks where you put it, goes off by itself after 5 s
+  fc: { name: 'פצצה דו־צדדית', kind: 'charge', price: 80, ammoPack: 1, ammoPrice: 80, rate: 1, explosive: 8, damage: 80, thrown: true, sticky: true, fuse: 5, color: 0xb59a6a, hold: 'hand' },   // sticks where you put it, goes off by itself after 5 s
 };
 export const WEAPON_ORDER = ['p7', 'x4', 'nz', 'hp', 'gr', 'fc'];
 
@@ -44,6 +44,15 @@ export class WeaponSystem {
     this.sparkGeo = new THREE.BoxGeometry(0.012, 0.012, 0.06);
     this.casings = []; this.holes = []; this.sparks = [];
     this.burning = [];
+    // realistic fire: a soft flame sprite texture (additive), a pool of orange lights for burning cars
+    this.flameTex = (() => {
+      const c = document.createElement('canvas'); c.width = 64; c.height = 128; const x = c.getContext('2d');
+      const g = x.createRadialGradient(32, 92, 2, 32, 80, 60);
+      g.addColorStop(0, 'rgba(255,250,220,1)'); g.addColorStop(0.2, 'rgba(255,200,80,0.95)'); g.addColorStop(0.5, 'rgba(255,110,20,0.6)'); g.addColorStop(1, 'rgba(120,20,0,0)');
+      x.fillStyle = g; x.beginPath(); x.moveTo(32, 2); x.bezierCurveTo(60, 50, 64, 100, 32, 126); x.bezierCurveTo(0, 100, 4, 50, 32, 2); x.fill();
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+    })();
+    this.fireLights = [0, 1].map(() => { const l = new THREE.PointLight(0xff7a2a, 0, 16, 1.6); scene.add(l); return l; });
   }
 
   // brass shell flying out of the right side of the gun
@@ -272,8 +281,24 @@ export class WeaponSystem {
     this.fx.push({ obj: s, t: life, life, grow: size * 2, type: 'spark' });
   }
 
+  _flame(p, size, life, vx = 0, vy = 1.2, vz = 0) {
+    const m = new THREE.SpriteMaterial({ map: this.flameTex, color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const s = new THREE.Sprite(m); s.position.copy(p); s.scale.set(size * 0.6, size, 1); this.scene.add(s);
+    this.fx.push({ obj: s, t: life, life, size, vel: new THREE.Vector3(vx, vy, vz), type: 'flame' });
+  }
   explode(p, radius, damage, ctx) {
     this._spark(p, 0xffb040, radius * 0.3, 0.5);
+    // fireball: a burst of flames rolling outwards and up, burning debris, a scorch mark
+    for (let i = 0; i < 14; i++) { const a = Math.random() * Math.PI * 2, r = Math.random() * radius * 0.35; this._flame(new THREE.Vector3(p.x + Math.cos(a) * r, p.y + 0.2 + Math.random() * 1.2, p.z + Math.sin(a) * r), radius * (0.55 + Math.random() * 0.45), 0.6 + Math.random() * 0.5, Math.cos(a) * 3, 2.5 + Math.random() * 3, Math.sin(a) * 3); }
+    for (let i = 0; i < 9; i++) {
+      const d = new THREE.Mesh(new THREE.BoxGeometry(0.12 + Math.random() * 0.2, 0.06 + Math.random() * 0.1, 0.1 + Math.random() * 0.2), new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.9 }));
+      d.position.copy(p).add(new THREE.Vector3(0, 0.4, 0)); d.castShadow = true; this.scene.add(d);
+      const a = Math.random() * Math.PI * 2, sp = 5 + Math.random() * 7;
+      this.casings.push({ obj: d, t: 6, v: new THREE.Vector3(Math.cos(a) * sp, 5 + Math.random() * 6, Math.sin(a) * sp), spin: new THREE.Vector3(Math.random() * 12, Math.random() * 12, 0), debris: true });
+    }
+    const sc = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.4, 20), new THREE.MeshBasicMaterial({ color: 0x0c0a08, transparent: true, opacity: 0.55, depthWrite: false }));
+    sc.rotation.x = -Math.PI / 2; sc.position.set(p.x, heightAt(p.x, p.z, p.y + 0.5) + 0.03, p.z); this.scene.add(sc);
+    this.fx.push({ obj: sc, t: 40, life: 40, type: 'scorch' });
     for (let i = 0; i < 7; i++) {
       const s = new THREE.Mesh(this.sphere, this.smokeMat.clone());
       s.position.set(p.x + (Math.random() - 0.5) * radius * 0.5, p.y + Math.random(), p.z + (Math.random() - 0.5) * radius * 0.5);
@@ -459,9 +484,27 @@ export class WeaponSystem {
       if (this.pendingThrow.t <= 0) {
         const { W, dir } = this.pendingThrow; this.pendingThrow = null;
         const hand = new THREE.Vector3(); player.model.arms[1].hand.getWorldPosition(hand);
-        const s = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshStandardMaterial({ color: 0x4f5a3c, roughness: 0.6 }));
-        s.scale.set(1, 1.25, 1); s.position.copy(hand); this.scene.add(s);
-        this.projectiles.push({ obj: s, v: new THREE.Vector3(dir.x * 15, Math.max(4.5, dir.y * 14 + 5.5), dir.z * 15), fuse: 2.2, W, spin: 8 });
+        let vel = new THREE.Vector3(dir.x * 15, Math.max(4.5, dir.y * 14 + 5.5), dir.z * 15);
+        // aimed throw: a car (or person) near the crosshair within 25 m gets exactly the arc that lands on it
+        { const hx = Math.hypot(dir.x, dir.z) || 1, ux = dir.x / hx, uz = dir.z / hx; let best = null, bs = 0.32;
+          for (const t of [...ctx.vehicles.filter((v) => !v.isAir || !v.airborne), ...ctx.peds.filter((q) => q.state !== 'dead' && !q.car)]) {
+            const dx = t.x - hand.x, dz = t.z - hand.z, d = Math.hypot(dx, dz); if (d < 1.5 || d > 25) continue;
+            const off = Math.abs(Math.atan2(dx * uz - dz * ux, dx * ux + dz * uz)); if (off < bs) { bs = off; best = { x: t.x, z: t.z, y: (t.y || 0) + (t.T ? t.T.H * 0.75 : 1.0), d }; } }
+          if (best) { const T = 0.45 + best.d * 0.035; vel = new THREE.Vector3((best.x - hand.x) / T, (best.y - hand.y + 9 * T * T) / T, (best.z - hand.z) / T); } }
+        if (W.sticky) {
+          // sticky two-sided bomb: flies and sticks to the first thing it hits (car, wall or ground), then 5 s
+          const s = new THREE.Group();
+          s.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.06), new THREE.MeshStandardMaterial({ color: 0xb59a6a, roughness: 0.8 })));
+          s.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.065), new THREE.MeshStandardMaterial({ color: 0xc0392b })));
+          const led = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.07), new THREE.MeshBasicMaterial({ color: 0xff2a2a })); led.position.y = 0.05; s.add(led);
+          s.position.copy(hand); this.scene.add(s);
+          this.charges.push({ obj: s, t: W.fuse || 5, W, led, stuck: null, flying: { v: vel } });
+          ctx.message?.('הפצצה נזרקה — 5 שניות!');
+        } else {
+          const s = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshStandardMaterial({ color: 0x4f5a3c, roughness: 0.6 }));
+          s.scale.set(1, 1.25, 1); s.position.copy(hand); this.scene.add(s);
+          this.projectiles.push({ obj: s, v: vel, fuse: 2.2, W, spin: 8 });
+        }
         if (this.gun) this.gun.visible = false; this._regrow = 0.5;
       }
     }
@@ -471,6 +514,7 @@ export class WeaponSystem {
       const pr = this.projectiles[i];
       pr.v.y -= 18 * dt;
       pr.obj.position.addScaledVector(pr.v, dt);
+      for (const v of ctx.vehicles) { const q = pr.obj.position; if (Math.abs(v.x - q.x) > 4 || Math.abs(v.z - q.z) > 5) continue; if (q.y > v.y && q.y < v.y + v.T.H && segmentVsBox(q.x - pr.v.x * dt, q.y, q.z - pr.v.z * dt, q.x, q.y, q.z, v.collider, 0.05) < 1) { pr.v.x *= -0.35; pr.v.z *= -0.35; pr.obj.position.addScaledVector(pr.v, dt * 2); } else if (q.y > v.y + v.T.H - 0.15 && q.y < v.y + v.T.H + 0.2 && verticalOverlap(q.y - 0.3, q.y, v.collider) && segmentVsBox(q.x, q.y + 0.3, q.z, q.x, q.y - 0.3, q.z, v.collider, 0.05) < 1 && pr.v.y < 0) { pr.v.y = Math.abs(pr.v.y) * 0.3; pr.v.x *= 0.6; pr.v.z *= 0.6; } }
       if (pr.spin) { pr.obj.rotation.x += pr.spin * dt; pr.obj.rotation.z += pr.spin * 0.6 * dt; }
       const g = heightAt(pr.obj.position.x, pr.obj.position.z, pr.obj.position.y + 0.3);
       if (pr.obj.position.y < g + 0.09) { pr.obj.position.y = g + 0.09; pr.v.y = Math.abs(pr.v.y) * 0.35; pr.v.x *= 0.6; pr.v.z *= 0.6; }
@@ -480,6 +524,23 @@ export class WeaponSystem {
     // sticky charges: count down (blinking light, a small timer on screen), then go off
     for (let i = this.charges.length - 1; i >= 0; i--) {
       const c = this.charges[i]; c.t -= dt;
+      if (c.flying) {
+        const o = c.obj.position, a = o.clone();
+        c.flying.v.y -= 18 * dt; o.addScaledVector(c.flying.v, dt); c.obj.rotation.x += 9 * dt; c.obj.rotation.y += 5 * dt;
+        let hitT = 1, hitV = null, hitStatic = false;
+        for (const v of ctx.vehicles) { if (Math.abs(v.x - o.x) > 8 || Math.abs(v.z - o.z) > 8) continue; const t = segmentVsBox(a.x, a.y, a.z, o.x, o.y, o.z, v.collider, 0.05); if (t < hitT) { hitT = t; hitV = v; } }
+        this.statics.query(Math.min(a.x, o.x) - 0.5, Math.min(a.z, o.z) - 0.5, Math.max(a.x, o.x) + 0.5, Math.max(a.z, o.z) + 0.5, _q);
+        for (const s of _q) { if (s.off || s.tag === 'water') continue; const t = segmentVsBox(a.x, a.y, a.z, o.x, o.y, o.z, s, 0.02); if (t < hitT) { hitT = t; hitV = null; hitStatic = true; } }
+        const gy = heightAt(o.x, o.z, o.y + 0.3);
+        if (hitT < 1 || o.y < gy + 0.04) {
+          if (hitT < 1) o.lerpVectors(a, o, hitT);
+          else o.y = gy + 0.04;
+          c.obj.rotation.set(hitT < 1 && !hitV ? 0 : -Math.PI / 2, Math.atan2(c.flying.v.x, c.flying.v.z), 0);
+          if (hitV) c.stuck = { v: hitV, ox: o.x - hitV.x, oy: o.y - hitV.y, oz: o.z - hitV.z, h: hitV.heading };
+          c.flying = null; this._spark(o.clone(), 0xffffff, 0.05, 0.08);
+          ctx.message?.(hitV ? 'הפצצה נדבקה לרכב!' : hitStatic ? 'הפצצה נדבקה לקיר!' : 'הפצצה נדבקה לרצפה!');
+        }
+      }
       if (c.stuck) { const v = c.stuck.v, da = v.heading - c.stuck.h, cs = Math.cos(da), sn = Math.sin(da); c.obj.position.set(v.x + c.stuck.ox * cs + c.stuck.oz * sn, v.y + c.stuck.oy, v.z - c.stuck.ox * sn + c.stuck.oz * cs); c.obj.rotation.y += 0; }
       c.led.visible = (c.t % (c.t < 1.5 ? 0.25 : 0.6)) < (c.t < 1.5 ? 0.12 : 0.3);
       if (c.t <= 0) { this.scene.remove(c.obj); this.explode(c.obj.position.clone(), c.W.explosive, c.W.damage, ctx); this.charges.splice(i, 1); }
@@ -500,20 +561,32 @@ export class WeaponSystem {
     for (let i = this.fx.length - 1; i >= 0; i--) {
       const f = this.fx[i]; f.t -= dt;
       const k = 1 - f.t / f.life;
-      f.obj.scale.setScalar(Math.max(0.01, f.obj.scale.x + f.grow * dt));
-      f.obj.material.opacity = (f.type === 'smoke' ? 0.55 : 1) * (1 - k);
+      if (f.type === 'flame') {
+        // a tongue of fire: rises, slows, flickers, turns from white-yellow to deep red and fades
+        f.obj.position.addScaledVector(f.vel, dt); f.vel.multiplyScalar(Math.pow(0.15, dt));
+        const sz = f.size * (0.55 + k * 0.9) * (0.88 + Math.random() * 0.24);
+        f.obj.scale.set(sz * 0.62, sz, 1);
+        f.obj.material.opacity = k < 0.12 ? k / 0.12 : Math.max(0, 1 - (k - 0.12) / 0.88);
+        f.obj.material.color.setRGB(1, 1 - k * 0.55, 1 - k * 0.95);
+      } else if (f.type === 'scorch') f.obj.material.opacity = 0.55 * Math.min(1, f.t / 6);
+      else {
+        f.obj.scale.setScalar(Math.max(0.01, f.obj.scale.x + f.grow * dt));
+        f.obj.material.opacity = (f.type === 'smoke' ? 0.55 : 1) * (1 - k);
+      }
       if (f.rise) f.obj.position.y += f.rise * dt;
       if (f.t <= 0) { this.scene.remove(f.obj); this.fx.splice(i, 1); }
     }
-    // wrecked vehicles burning
+    // wrecked vehicles burning: the two nearest fires light up their surroundings (flickering orange glow)
+    { const near = this.burning.filter((b) => b.t > 6 && !b.v.removed).sort((a, c) => ctx.camera.position.distanceTo(a.v.object.position) - ctx.camera.position.distanceTo(c.v.object.position));
+      this.fireLights.forEach((l, k) => { const b = near[k]; if (!b) { l.intensity = 0; return; } l.position.set(b.v.x, b.v.y + b.v.T.H + 0.6, b.v.z); l.intensity = 9 + Math.sin(performance.now() * 0.023 + k) * 2.5 + Math.random() * 2; }); }
     for (let i = this.burning.length - 1; i >= 0; i--) {
       const b = this.burning[i]; b.t -= dt;
       if (b.t <= 0 || b.v.removed) { this.burning.splice(i, 1); continue; }
       b.acc = (b.acc || 0) + dt;
-      if (b.acc > 0.12) {
+      if (b.acc > 0.07) {
         b.acc = 0;
         const p = new THREE.Vector3(b.v.x + (Math.random() - 0.5) * b.v.T.W * 0.6, b.v.y + b.v.T.H * 0.7, b.v.z + (Math.random() - 0.5) * b.v.T.L * 0.5);
-        if (b.t > 6) this._spark(p, Math.random() < 0.5 ? 0xff7a1a : 0xffb83a, 0.35 + Math.random() * 0.3, 0.35);
+        if (b.t > 6) { this._flame(p, 1.5 + Math.random() * 1.3, 0.55 + Math.random() * 0.4, (Math.random() - 0.5) * 0.4, 1.5 + Math.random(), (Math.random() - 0.5) * 0.4); if (Math.random() < 0.3) this._spark(p, 0xffb83a, 0.12, 0.25); }
         const sm = new THREE.Mesh(this.sphere, this.smokeMat.clone()); sm.material.color.setHex(0x222222);
         sm.position.copy(p); sm.scale.setScalar(0.5); this.scene.add(sm);
         this.fx.push({ obj: sm, t: 3, life: 3, grow: 1.4, rise: 2.5, type: 'smoke' });

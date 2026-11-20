@@ -1167,6 +1167,22 @@ const talk = await g(() => {
 check('people talk back out loud when you get in their face (own voice, varied lines)', talk.bump?.length >= 1, JSON.stringify(talk));
 check('pointing a weapon at someone: they react by character - this one calls the police (1 star)', talk.q2 === 'callHelp' && talk.stars >= 1 && talk.said.length >= 2, JSON.stringify(talk));
 
+// ---------------------------------------------------------------- thrown sticky bomb sticks to a car, blows it up, it burns
+const sticky = await g(() => {
+  const game = __game, P = game.player, I = game.input, step = (n, f) => { for (let i = 0; i < n; i++) { if (game.police.level) game.police.clear(); f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { I.pressed.add('vehicle'); step(60); }
+  game.econ.health = 100; game.teleport(530, 545, 0, 0.3); step(10);
+  const car = game.spawnVehicleNear('sedan', 530, 553); car.x = 530; car.z = 553; car.heading = Math.PI / 2; car.speed = 0; car.sync();
+  P.x = 530; P.z = 545; P.facing = 0; game.rig.yaw = 0; game.rig.pitch = 0.05;
+  game.econ.weapons.fc = { ammo: 1 }; game.equip('fc'); step(20, () => { game.rig.yaw = 0; });
+  I.pressed.add('fire'); let stuck = false, timer = false;
+  step(30 * 6, () => { P.facing = 0; game.rig.yaw = 0; const q = game.weapons.charges[0]; if (q?.stuck?.v === car) stuck = true; if (document.getElementById('bombTimer').classList.contains('show')) timer = true; });
+  const res = { stuck, timer, wrecked: !!car.wrecked, burning: game.weapons.burning.some((b) => b.v === car), flames: game.weapons.fx.filter((f) => f.type === 'flame').length };
+  game.equip(null); game.econ.health = 100; game.police.clear();
+  return res;
+});
+check('sticky bomb: thrown, sticks to the car, 5 s timer, the car blows up and burns with real flames', sticky.stuck && sticky.timer && sticky.wrecked && sticky.burning && sticky.flames > 0, JSON.stringify(sticky));
+
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);
 await g(() => __game.save());
