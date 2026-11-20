@@ -55,6 +55,7 @@ function catalogue(kind, ctx) {
       for (const c of [8, 14]) out.push({ id: `bkt-${c}`, name: 'כובע טמבל', swatch: CLOTH_COLORS[c], price: 60, patch: { hat: 'bucket', hatColor: c } });
       for (const c of [2, 9, 5]) out.push({ id: `bea-${c}`, name: 'כובע גרב', swatch: CLOTH_COLORS[c], price: 100, patch: { hat: 'beanie', hatColor: c } });
       for (const c of [1, 16, 14]) out.push({ id: `fed-${c}`, name: 'כובע לבד אלגנטי', swatch: CLOTH_COLORS[c], price: 100, patch: { hat: 'fedora', hatColor: c } });
+      for (const c of [1, 16, 4]) out.push({ id: `bala-${c}`, name: 'כובע גרב עם חורים לעיניים', desc: 'מכסה את כל הפנים', swatch: CLOTH_COLORS[c], price: 150, patch: { hat: 'balaclava', hatColor: c } });
       out.push({ id: 'nohat', name: 'בלי כובע', price: 0, label: 'להוריד', patch: { hat: 'none' } });
       for (const it of out) {
         const wearIt = wear(it.patch, it.name);

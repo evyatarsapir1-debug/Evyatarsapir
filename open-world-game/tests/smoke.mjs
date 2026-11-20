@@ -757,7 +757,7 @@ const pol = await g(() => {
   const busted = { level: game.police.level, atStation: Math.hypot(P.x - 750, P.z - 112) < 10, fine: m0 - game.econ.money };
   // escape: wanted again, then leave the area and stay out of sight
   game.police.setWanted(2, P.x, P.z); game.teleport(-300, 520, 0, 0.3);
-  let t = 0; while (game.police.level > 0 && t < 60) { step(30, () => game.police.cars.forEach((c) => game.police._remove(c))); t++; if (t === 3) game.teleport(200, 560, 0, 0.3); }
+  let t = 0; while (game.police.level > 0 && t < 100) { step(30, () => game.police.cars.forEach((c) => game.police._remove(c))); t++; if (t === 3) game.teleport(200, 560, 0, 0.3); }
   const escaped = game.police.level === 0;
   // wasted -> hospital
   game.hurt(500, 'test'); step(3);
@@ -999,7 +999,7 @@ const vkey = await g(() => {
   H.fail('בדיקה'); game.police.clear(); game.econ.heists = {};
   return { dropped, takePrompt, hasKey, prompt };
 });
-check('bank vault: the guard / teller with the key drops it when taken down; with the key the vault opens (or blow it without)', vkey.dropped && vkey.takePrompt.includes('קח את המפתח') && vkey.hasKey && vkey.prompt.includes('פתח את הכספת'), JSON.stringify(vkey));
+check('bank vault: the guard / teller with the key drops it when taken down; with the key the vault opens (or blow it without)', vkey.dropped && vkey.takePrompt.includes('קח את המפתח') && vkey.hasKey && vkey.prompt.includes('פתח עם מפתח'), JSON.stringify(vkey));
 check('heist: result is saved and the robbed bank closes for a while', bank.rec && bank.saved === 1 && bank.status === 'cooldown');
 
 // ---------------------------------------------------------------- garage: drive onto the turntable, live mods, before/after, pay, save

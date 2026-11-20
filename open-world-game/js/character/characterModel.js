@@ -12,8 +12,8 @@ export const TOP_STYLES = ['tshirt', 'longsleeve', 'jacket', 'tank', 'hoodie', '
 export const TOP_NAMES = { tshirt: 'חולצה קצרה', longsleeve: 'חולצה ארוכה', jacket: 'ז׳קט', tank: 'גופייה', hoodie: 'קפוצ׳ון', suit: 'חליפה', shirt: 'חולצה מכופתרת פתוחה' };
 export const BOTTOM_STYLES = ['jeans', 'shorts', 'skirt', 'pants', 'capri'];
 export const BOTTOM_NAMES = { jeans: 'ג׳ינס', shorts: 'מכנס קצר', skirt: 'חצאית', pants: 'מכנס בד', capri: 'מכנס מקופל' };
-export const HAT_STYLES = ['none', 'cap', 'beanie', 'fedora', 'bucket'];
-export const HAT_NAMES = { none: 'בלי כובע', cap: 'כובע מצחייה', beanie: 'כובע גרב', fedora: 'כובע לבד', bucket: 'כובע טמבל' };
+export const HAT_STYLES = ['none', 'cap', 'beanie', 'fedora', 'bucket', 'balaclava'];
+export const HAT_NAMES = { none: 'בלי כובע', cap: 'כובע מצחייה', beanie: 'כובע גרב', fedora: 'כובע לבד', bucket: 'כובע טמבל', balaclava: 'כובע גרב עם חורים לעיניים' };
 export const SHOE_STYLES = ['sneaker', 'boot', 'formal', 'sandal'];
 export const SHOE_NAMES = { sneaker: 'נעלי ספורט', boot: 'מגפונים', formal: 'נעלי עור', sandal: 'כפכפים' };
 export const BEARD_STYLES = ['none', 'stubble', 'mustache', 'goatee', 'full'];
@@ -109,6 +109,25 @@ export class CharacterModel {
       const edge = this._mesh(new THREE.BoxGeometry(0.014, 0.36, 0.012), M.top, this.shirtOpen, sx * 0.05, 0.27, 0.126); edge.rotation.z = -sx * 0.1;
     }
     this.shirtOpen.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+    // garment details so each top reads as what it is
+    this.topDark = new THREE.MeshStandardMaterial({ roughness: 0.85 });
+    const metal = new THREE.MeshStandardMaterial({ color: 0xb8bcc2, metalness: 0.8, roughness: 0.3 });
+    const cord = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.8 });
+    // jacket: stand-up collar, zip down the front, two pockets, hem band
+    this.jacketBits = this._pivot(spine, 0, 0, 0);
+    { const col = this._mesh(new THREE.CylinderGeometry(0.068, 0.078, 0.06, 16, 1, true), M.top, this.jacketBits, 0, 0.5, 0.0); col.scale.set(1.15, 1, 1);
+      this._mesh(new THREE.BoxGeometry(0.012, 0.42, 0.01), metal, this.jacketBits, 0, 0.26, 0.128);
+      for (const sx of [-1, 1]) { this._mesh(new THREE.BoxGeometry(0.075, 0.06, 0.012), this.topDark, this.jacketBits, sx * 0.085, 0.1, 0.114); this._mesh(new THREE.BoxGeometry(0.075, 0.008, 0.014), metal, this.jacketBits, sx * 0.085, 0.13, 0.115); }
+      const hem = this._mesh(new THREE.CylinderGeometry(0.152, 0.152, 0.045, 18, 1, true), this.topDark, this.jacketBits, 0, -0.01, 0); hem.scale.set(1.17, 1, 0.8); }
+    // hoodie: kangaroo pocket + drawstrings
+    this.hoodieBits = this._pivot(spine, 0, 0, 0);
+    { this._mesh(new THREE.BoxGeometry(0.2, 0.1, 0.014), this.topDark, this.hoodieBits, 0, 0.1, 0.113);
+      for (const sx of [-1, 1]) { const c = this._mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.14, 5), cord, this.hoodieBits, sx * 0.03, 0.38, 0.132); c.rotation.x = -0.15; } }
+    // tank top: bare shoulders and a scooped neckline (skin) with straps over the shoulders
+    this.tankBits = this._pivot(spine, 0, 0, 0);
+    { for (const sx of [-1, 1]) { this._mesh(new THREE.BoxGeometry(0.1, 0.05, 0.19), M.skin, this.tankBits, sx * 0.135, 0.465, 0.0); this._mesh(new THREE.BoxGeometry(0.04, 0.03, 0.2), M.top, this.tankBits, sx * 0.075, 0.49, 0.0); }
+      const nk = this._mesh(new THREE.SphereGeometry(0.07, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.skin, this.tankBits, 0, 0.47, 0.1); nk.rotation.x = Math.PI / 2; nk.scale.set(1.1, 0.4, 1); }
+    for (const b of [this.jacketBits, this.hoodieBits, this.tankBits]) b.traverse((o) => { if (o.isMesh) o.castShadow = false; });
     // protective vest (worn over the clothes when bought)
     this.vestMat = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.75 });
     this.vest = this._pivot(spine, 0, 0, 0);
@@ -168,7 +187,8 @@ export class CharacterModel {
       }
       const thumb = this._mesh(new THREE.CapsuleGeometry(0.01, 0.04, 2, 6), M.skin, elbow, -s * 0.012, -0.29, 0.05); thumb.rotation.set(0.6, 0, -s * 0.4);
       fingers.add(thumb); thumb.position.set(-s * 0.012, 0.045, 0.042);
-      this.arms.push({ sh, upper, elbow, lower, hand, fingers, delt, sleeve, s });
+      const cuff = this._mesh(new THREE.CylinderGeometry(0.04, 0.042, 0.04, 12), this.topDark || M.top, elbow, 0, -0.225, 0);
+      this.arms.push({ sh, upper, elbow, lower, hand, fingers, delt, sleeve, cuff, s });
       if (s === 1) {
         // food held while eating (shape changes with what you eat)
         this.food = this._pivot(elbow, 0, -0.3, 0.07);
@@ -288,6 +308,21 @@ export class CharacterModel {
         add(new THREE.CylinderGeometry(0.098, 0.118, 0.13, 18), M.hat, 0, 0.13, -0.005).scale.set(0.95, 1, 1.05);
         add(new THREE.CylinderGeometry(0.119, 0.12, 0.028, 18), M.hatBand, 0, 0.08, -0.005).scale.set(0.96, 1, 1.06);
         break;
+      case 'balaclava': {
+        const knit = sculpt(new THREE.SphereGeometry(0.128, 22, 16), (v) => {
+          if (v.y < 0) { const k = 1 + v.y * 2.0; v.x *= Math.max(0.66, k); if (v.z < 0) v.z *= Math.max(0.74, k); }
+          if (v.y < -0.07 && v.z > 0.02) v.z += 0.014;
+        });
+        const m = add(knit, M.hat, 0, -0.004, 0.002); m.scale.set(0.95, 1.1, 1.04);
+        // eye slit: a skin-coloured band with the eyes in front of the knit
+        const band = add(new THREE.BoxGeometry(0.092, 0.034, 0.012), this.mats.skin, 0, 0.022, 0.126);
+        for (const sx of [-1, 1]) add(new THREE.SphereGeometry(0.012, 10, 8), this.mats.eye, sx * 0.034, 0.022, 0.133);
+        const rim = add(new THREE.TorusGeometry(0.05, 0.006, 6, 18), M.hat, 0, 0.022, 0.125); rim.scale.set(1.05, 0.42, 1);
+        // mouth hole
+        add(new THREE.BoxGeometry(0.04, 0.016, 0.01), this.mats.lip, 0, -0.058, 0.124);
+        void band;
+        break;
+      }
       case 'bucket':
         add(new THREE.CylinderGeometry(0.115, 0.128, 0.11, 18), M.hat, 0, 0.1, -0.005).scale.set(0.95, 1, 1.05);
         add(new THREE.CylinderGeometry(0.13, 0.19, 0.05, 20, 1, true), M.hat, 0, 0.03, -0.005);
@@ -314,7 +349,8 @@ export class CharacterModel {
     M.under.color.setHex(CLOTH_COLORS[app.underColor ?? 0] ?? 0xf4f4f2);
     M.hat.color.setHex(CLOTH_COLORS[app.hatColor] ?? 0x1d1d1f);
     if (this._hatKey !== app.hat) { this._hatKey = app.hat; this._hat(app.hat); }
-    this.hairGroup.visible = !(app.hat === 'beanie' || app.hat === 'bucket') || app.hairStyle === 'long' || app.hairStyle === 'ponytail';
+    this.hairGroup.visible = app.hat !== 'balaclava' && (!(app.hat === 'beanie' || app.hat === 'bucket') || app.hairStyle === 'long' || app.hairStyle === 'ponytail');
+    this.beardGroup.visible = app.hat !== 'balaclava'; this.glassesGroup.visible = app.hat !== 'balaclava';
     const shoeStyle = app.shoeStyle || 'sneaker';
     M.sole.color.setHex(shoeStyle === 'sneaker' ? 0xf4f4f4 : 0x2a1d14);
     M.shoes.roughness = shoeStyle === 'formal' ? 0.3 : 0.6;
@@ -326,6 +362,9 @@ export class CharacterModel {
       a.sleeve.visible = top === 'shirt';
     }
     this.shirtOpen.visible = top === 'shirt';
+    this.topDark.color.copy(M.top.color).multiplyScalar(0.72);
+    this.jacketBits.visible = top === 'jacket'; this.hoodieBits.visible = top === 'hoodie'; this.tankBits.visible = top === 'tank';
+    for (const a of this.arms) { a.cuff.material = this.topDark; a.cuff.visible = top === 'jacket' || top === 'hoodie' || top === 'longsleeve'; }
     this.hood.visible = top === 'hoodie';
     this.suit.visible = top === 'suit';
     this.tieMat.color.setHex(app.topColor === 2 || app.topColor === 15 ? 0x1d1d1f : app.topColor === 1 || app.topColor === 17 ? 0x7b1e2b : 0x2b4a7a);
@@ -343,7 +382,8 @@ export class CharacterModel {
     if (shoeStyle === 'sandal') M.sole.color.setHex(0x2a2522);
     const h = clamp(app.height || 1, 0.85, 1.15), w = clamp(app.build || 1, 0.8, 1.25);
     this.body.scale.set(w, h, w);
-    this.torso.scale.set(1.18 * w, 1, 0.75 * (0.9 + w * 0.1));
+    const bulk = app.top === 'jacket' || app.top === 'hoodie' ? 1.06 : 1;   // a jacket / hoodie is thicker than a shirt
+    this.torso.scale.set(1.18 * w * bulk, 1, 0.75 * (0.9 + w * 0.1) * bulk);
   }
 
   // Left-arm IK (post-process after animate): bends the left shoulder (pitch + side) and elbow until the hand

@@ -514,11 +514,13 @@ class Game {
   }
   openShop(kind, name) {
     this.state = 'shop'; this.shop.show(kind, name);
+    document.body.classList.add('shopping');   // nothing on screen hides the character while you look at clothes
     // fitting room: the character turns around to face you so you can see what you try on
     if (this.shop.tryOn) { this._fit = { facing: this.player.facing, yaw: this.player.facing + Math.PI }; this.player.facing += Math.PI; }
   }
   closeShop() {
     if (this.state !== 'shop') return;
+    document.body.classList.remove('shopping');
     if (this._fit) { this.player.facing = this._fit.facing; this.player.object.rotation.y = this.player.facing; this._fit = null; }
     this.state = 'playing'; this.input.endFrame(); this.clock.getDelta();
   }
