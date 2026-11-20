@@ -417,6 +417,10 @@ body.touch #heistHud div.done, body.touch #heistHud div:not(.cur):not(.loot) { d
   background: linear-gradient(180deg, #14171cf2, #0d0f13f2); border: 1px solid #ffffff1a; border-radius: 16px; color: #eef1f4;
   box-shadow: 0 18px 50px #0009; font: 14px system-ui, sans-serif; backdrop-filter: blur(8px); }
 #tunePanel.show { display: flex; }
+/* the panel scrolls (touch / wheel) whenever it does not fit; the buy / exit row stays pinned at the bottom */
+#tunePanel { overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
+#tunePanel .tn-foot, #tunePanel .tn-work { position: sticky; bottom: -14px; z-index: 2; padding: 8px 0 6px; margin-top: auto; background: linear-gradient(180deg, #0d0f1300, #0d0f13 30%); }
+.tn-opts { touch-action: pan-y; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; flex-shrink: 0; }
 .tn-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .tn-head b { font-size: 18px; color: #ffb347; }
 .tn-head span { opacity: .7; font-size: 12px; flex: 1; }
@@ -448,6 +452,19 @@ body.touch #heistHud div.done, body.touch #heistHud div:not(.cur):not(.loot) { d
 @media (max-width: 700px) {
   #tunePanel { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; height: 46vh; padding: 10px; gap: 7px; }
   .tn-cats { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 64px; overflow-x: auto; }
+}
+/* short screens (a phone held sideways): categories become one row you swipe sideways, the options get the room */
+@media (max-height: 560px) {
+  #tunePanel { top: 8px; bottom: 8px; padding: 10px; gap: 7px; width: min(400px, 48vw); }
+  .tn-head b { font-size: 15px; }
+  .tn-cats { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 66px; overflow-x: auto; overflow-y: hidden; touch-action: pan-x; flex-shrink: 0; padding-bottom: 4px; }
+  .tn-cat { padding: 5px 2px; font-size: 10.5px; }
+  .tn-cat span { font-size: 15px; }
+  .tn-opts { flex: 1 1 auto; min-height: 60px; max-height: none; overflow-y: auto; flex-shrink: 1; }
+  .tn-opt { padding: 7px 9px; }
+  .tn-btn { padding: 9px 6px; }
+  .tn-hint { display: none; }
+  #tunePanel .tn-foot, #tunePanel .tn-work { bottom: -10px; }
 }
 body.tuning #hud > *:not(#toast), body.tuning #touch > *:not(#joystick) { display: none !important; }
 

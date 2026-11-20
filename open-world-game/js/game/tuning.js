@@ -79,11 +79,17 @@ function rimGeo(r, w, style, color, tire) {
   const tw = tire === 'offroad' ? w * 1.25 : tire === 'sport' ? w * 1.1 : w;
   const rr = tire === 'sport' ? r * 0.74 : tire === 'offroad' ? r * 0.56 : r * 0.62;       // rim radius
   const tr = tire === 'offroad' ? r * 1.06 : r;
-  b.addGeometry(new THREE.CylinderGeometry(tr, tr, tw, 24), _rz, 0x181818);                      // tyre
+  // tyre: tread + sidewalls, open in the middle so the brake disc and caliper show through the spokes
+  b.addGeometry(new THREE.CylinderGeometry(tr, tr, tw, 24, 1, true), _rz, 0x181818);
+  for (const sx of [-1, 1]) {
+    b.addGeometry(new THREE.RingGeometry(rr * 0.98, tr, 24, 1), new THREE.Matrix4().multiplyMatrices(T(sx * tw / 2, 0, 0), new THREE.Matrix4().makeRotationY(sx * Math.PI / 2)), 0x1c1c1c);
+    b.addGeometry(new THREE.CylinderGeometry(rr * 0.98, rr * 0.98, 0.01, 20), new THREE.Matrix4().multiplyMatrices(T(sx * (tw / 2 - 0.1), 0, 0), _rz), 0x15171a);   // dark wheel well behind
+    b.addGeometry(new THREE.CylinderGeometry(rr * 0.78, rr * 0.78, 0.016, 22), new THREE.Matrix4().multiplyMatrices(T(sx * (tw / 2 - 0.075), 0, 0), _rz), 0x8d9196);  // brake disc
+  }
   if (tire === 'offroad') for (let i = 0; i < 18; i++) { const a = (i / 18) * Math.PI * 2; b.addGeometry(new THREE.BoxGeometry(tw * 1.02, 0.05, 0.09), new THREE.Matrix4().makeRotationX(a).multiply(T(0, tr - 0.01, 0)), 0x222222); }
   if (tire === 'whitewall') for (const sx of [-1, 1]) b.addGeometry(new THREE.CylinderGeometry(r * 0.82, r * 0.82, 0.006, 24), new THREE.Matrix4().multiplyMatrices(T(sx * (tw / 2 + 0.002), 0, 0), _rz), 0xf2f2f2);
   const dark = 0x2a2d30, c = color;
-  b.addGeometry(new THREE.CylinderGeometry(rr, rr, tw + 0.006, 20), _rz, dark);                 // rim barrel
+  b.addGeometry(new THREE.CylinderGeometry(rr, rr, tw + 0.006, 20, 1, true), _rz, dark);         // rim barrel (open: you see in)
   for (const sx of [-1, 1]) {
     const face = (geo, m4, col = c) => b.addGeometry(geo, new THREE.Matrix4().multiplyMatrices(T(sx * (tw / 2 + 0.006), 0, 0), m4), col);
     const spoke = (a, len, wd, off = 0.32, th = 0.02) => face(new THREE.BoxGeometry(th, rr * len, rr * wd), new THREE.Matrix4().makeRotationX(a).multiply(T(0, rr * off, 0)));
@@ -134,7 +140,7 @@ export function applyMods(v) {
   // rims + tyres
   for (const w of P.wheels) { const mesh = w.spin.children[0]; if (mesh) mesh.geometry = rimGeo(d.r, d.wheelW, m.rim, m.rimColor, m.tire); }
   // ride height
-  P.body.position.y = m.height * 0.045 + (m.tire === 'offroad' ? 0.04 : 0);
+  P.body.position.y = m.height * 0.065 + (m.tire === 'offroad' ? 0.04 : 0);
   // lights (own materials so other cars are not affected)
   if (!v._headMat) { v._headMat = shared.head.clone(); v._tailMat = shared.tail.clone(); P.body.traverse((o) => { if (o.material === shared.head) o.material = v._headMat; if (o.material === shared.tail) o.material = v._tailMat; }); }
   const L = m.lights;
@@ -150,13 +156,25 @@ export function applyMods(v) {
   const add = (geo, mat, x, y, z, rx = 0, rz = 0) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.rotation.set(rx, 0, rz); o.castShadow = true; k.add(o); return o; };
   const B = (w, h, dd) => new THREE.BoxGeometry(w, h, dd), Cy = (r, h) => new THREE.CylinderGeometry(r, r, h, 12);
   const top = d.clear + d.lowH, zr = -d.L / 2, zf = d.L / 2;
-  if (m.spoiler === 1) add(B(d.W * 0.9, 0.05, 0.16), P.paint, 0, top + 0.03, zr + 0.13, 0.12);
+  if (m.spoiler === 1) add(B(d.W * 0.86, 0.05, 0.18), P.paint, 0, top - 0.05, zr + 0.16, 0.18);
   if (m.spoiler === 2) { for (const sx of [-1, 1]) add(B(0.05, 0.22, 0.08), CARBON, sx * d.W * 0.32, top + 0.11, zr + 0.3); add(B(d.W * 0.92, 0.04, 0.32), CARBON, 0, top + 0.24, zr + 0.3, -0.08); }
   if (m.spoiler === 3) { for (const sx of [-1, 1]) { add(B(0.05, 0.44, 0.1), CARBON, sx * d.W * 0.3, top + 0.22, zr + 0.32); add(B(0.03, 0.2, 0.48), CARBON, sx * d.W * 0.51, top + 0.46, zr + 0.3); } add(B(d.W * 1.02, 0.05, 0.42), CARBON, 0, top + 0.45, zr + 0.3, -0.1); }
   if (m.front === 1) { add(B(d.W * 1.02, 0.03, 0.24), CARBON, 0, d.clear + 0.03, zf + 0.08); for (const sx of [-1, 1]) add(B(0.18, 0.02, 0.1), CARBON, sx * d.W * 0.47, d.clear + d.lowH * 0.3, zf + 0.04, 0, sx * 0.3); }
   if (m.front === 2) { for (const sx of [-1, 1]) add(Cy(0.04, d.lowH * 0.95), CARBON, sx * 0.42, d.clear + d.lowH * 0.45, zf + 0.24); for (const yy of [0.72, 0.28]) add(Cy(0.035, d.W * 0.78), CARBON, 0, d.clear + d.lowH * yy, zf + 0.24, 0, Math.PI / 2); add(B(d.W * 0.5, 0.04, 0.3), CHROME, 0, d.clear + 0.02, zf + 0.1); }
   if (m.rear === 1) { add(B(d.W * 0.82, 0.04, 0.3), CARBON, 0, d.clear + 0.04, zr - 0.06); for (let i = -2; i <= 2; i++) add(B(0.02, 0.12, 0.28), CARBON, i * d.W * 0.14, d.clear + 0.1, zr - 0.06); }
   if (m.rear === 2) for (const sx of [-1, 1]) for (const o of [0.24, 0.34]) add(Cy(0.05, 0.2), CHROME, sx * d.W * o, d.clear + 0.12, zr - 0.08, Math.PI / 2);
+  // brakes: big painted calipers that show through the rims (red / yellow / blue by level)
+  for (const w of P.wheels) {
+    if (w.caliper) { w.pivot.remove(w.caliper); w.caliper = null; }
+    if (!m.brakes) continue;
+    const side = Math.sign(w.pivot.position.x) || 1, cal = new THREE.Mesh(new THREE.BoxGeometry(0.06, d.r * 0.5, d.r * 0.42), new THREE.MeshStandardMaterial({ color: [0, 0xd62020, 0xf2c230, 0x2e86ff][m.brakes], roughness: 0.4, metalness: 0.3 }));
+    const tw = d.wheelW * (m.tire === 'offroad' ? 1.25 : m.tire === 'sport' ? 1.1 : 1);
+    cal.position.set(side * (tw / 2 - 0.035), d.r * 0.3, -d.r * 0.2); w.pivot.add(cal); w.caliper = cal;
+  }
+  // turbo: an intake scoop on the bonnet; engine levels 2+: twin vents beside it
+  const hoodY = d.clear + d.lowH - 0.04;
+  if (m.turbo) { add(B(d.W * 0.34, 0.09, d.L * 0.16), CARBON, 0, hoodY + 0.04, zf - d.L * 0.24, -0.06); add(B(d.W * 0.26, 0.05, 0.02), new THREE.MeshStandardMaterial({ color: 0x050505 }), 0, hoodY + 0.06, zf - d.L * 0.16); }
+  if (m.engine >= 2) for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) add(B(0.16, 0.02, 0.03), CARBON, sx * d.W * 0.3, hoodY + 0.012, zf - d.L * 0.2 - i * 0.07);
   if (m.neon != null) {
     const nm = new THREE.MeshBasicMaterial({ color: m.neon, map: neonGlow(), transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
     const pl = add(new THREE.PlaneGeometry(d.W * 1.7, d.L * 1.15), nm, 0, -P.body.position.y + 0.09, 0, -Math.PI / 2); pl.castShadow = false;
@@ -385,15 +403,25 @@ export class Tuning {
   // ------------------------------------------------------------------ UI
   _buildUi() {
     const el = document.createElement('div'); el.id = 'tunePanel'; document.body.appendChild(el); this.ui = el;
-    el.addEventListener('pointerdown', (e) => {
-      const t = e.target.closest('[data-cat],[data-opt],[data-act]'); if (!t) return;
-      e.preventDefault(); e.stopPropagation();
+    // a tap (finger lifted without moving) chooses; a swipe scrolls the panel / the category row instead
+    let down = null;
+    const act = (t) => {
       if (t.dataset.cat) this.setCat(t.dataset.cat);
       else if (t.dataset.opt !== undefined) { const c = categories(this.s.v).find((q) => q.id === this.s.cat); const o = c.opts[+t.dataset.opt]; this.pick(c.id, o.value); }
       else if (t.dataset.act === 'buy') this.buy();
       else if (t.dataset.act === 'before') this.toggleBefore();
       else if (t.dataset.act === 'exit') this.close();
+    };
+    el.addEventListener('pointerdown', (e) => { e.stopPropagation(); const t = e.target.closest('[data-cat],[data-opt],[data-act]'); down = t ? { t, x: e.clientX, y: e.clientY, id: e.pointerId } : null; });
+    el.addEventListener('pointermove', (e) => { if (down && down.id === e.pointerId && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) down = null; });
+    el.addEventListener('pointercancel', () => { down = null; });   // the browser took the gesture over as a scroll
+    el.addEventListener('pointerup', (e) => {
+      const d = down; down = null; if (!d || d.id !== e.pointerId) return;
+      const t = e.target.closest('[data-cat],[data-opt],[data-act]');
+      if (t !== d.t || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10 || t.disabled) return;
+      e.preventDefault(); act(t);
     });
+    el.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
   }
   _renderUi() {
     const s = this.s; if (!s) return;
@@ -407,11 +435,16 @@ export class Tuning {
     }).join('');
     const pickOpt = cat.opts.find((o) => o.value === s.pickValue);
     const canBuy = pickOpt && !(cat.id !== 'repair' && cat.id !== 'own' && s.cur[cat.id] === s.pickValue);
+    const keep = { p: this.ui.scrollTop, c: this.ui.querySelector('.tn-cats')?.scrollLeft || 0, o: this.ui.querySelector('.tn-opts')?.scrollTop || 0, cat: this._uiCat };
     this.ui.innerHTML = `<div class="tn-head"><b>🔧 מוסך לוס אנטוס</b><span>${s.v.T.name}${s.v.owned ? ' · שלך' : ' · לא רשום על שמך'}</span><em>${fmt(g.econ.money)}</em></div>
       <div class="tn-cats">${cats.map((c) => `<button type="button" class="tn-cat${c.id === s.cat ? ' on' : ''}" data-cat="${c.id}"><span>${c.icon}</span>${c.name}</button>`).join('')}</div>
       <div class="tn-opts">${opts}</div>
       ${s.work ? `<div class="tn-work"><span>🔧 המכונאי עובד על הרכב…</span><i><b></b></i></div>` : `<div class="tn-foot"><button type="button" class="tn-btn buy" data-act="buy" ${canBuy ? '' : 'disabled'}>${canBuy ? `קנה — ${pickOpt.price ? fmt(pickOpt.price) : 'חינם'}` : 'בחר שדרוג'}</button><button type="button" class="tn-btn${s.before ? ' on' : ''}" data-act="before">${s.before ? 'אחרי ▶' : '◀ לפני'}</button><button type="button" class="tn-btn exit" data-act="exit">סיום</button></div>`}
       <div class="tn-hint">${s.before ? 'מוצג: הרכב כפי שנכנס למוסך' : 'גרור כדי להסתובב סביב הרכב · גלגלת / צביטה לזום'}</div>`;
     this._uiMoney = g.econ.money;
+    // keep where the player had scrolled to (the menu is rebuilt on every choice); a new category starts its list at the top
+    const cs = this.ui.querySelector('.tn-cats'), os = this.ui.querySelector('.tn-opts');
+    this.ui.scrollTop = keep.p; if (cs) cs.scrollLeft = keep.c; if (os) os.scrollTop = keep.cat === s.cat ? keep.o : 0;
+    this._uiCat = s.cat;
   }
 }
