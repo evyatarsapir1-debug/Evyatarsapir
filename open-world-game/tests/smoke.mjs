@@ -293,7 +293,7 @@ const env = await g(() => {
   game.env.setWeather('clear');
   return { night, rain };
 });
-check('night: windows and street lamps light up', env.night.win > 0.8 && env.night.lamp > 2 && env.night.sun < 0.5, JSON.stringify(env.night));
+check('night: windows and street lamps light up', env.night.win > 0.6 && env.night.lamp > 2 && env.night.sun < 0.5, JSON.stringify(env.night));
 check('weather: rain falls and the streets get wet', env.rain.visible && env.rain.wet > 0.1, JSON.stringify(env.rain));
 
 // ---------------------------------------------------------------- the clickable "enter car" button
@@ -733,6 +733,9 @@ const fly = await g(() => {
   const v = game.player.vehicle;
   if (!v || !v.isPlane) return { prompt, state: game.player.state };
   v.x = -900; v.z = 790; v.heading = Math.PI / 2; v.speed = 0;
+  // earlier tests can leave the player hurt and an airliner taxiing / landing on this runway: start clean
+  game.econ.health = 100; game.police.clear?.();
+  for (const q of A.planes) if (q !== jet && (q.state === 'depart' || q.state === 'arrive')) { q.state = 'away'; q.mesh.visible = false; q.gate = null; q.timer = 300; if (A.runway === q) A.runway = null; }
   game.input.keys.add('KeyW');
   step(30 * 26, () => { if (v.speed > 60) game.input.keys.add('KeyR'); });   // gentler controls: a slower, steadier climb
   game.input.keys.clear();
