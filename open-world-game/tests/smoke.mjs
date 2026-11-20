@@ -652,15 +652,16 @@ const strike = await g(() => {
 check('fighter: fires missiles that blow up a car (wrecked + burning)', strike.fired >= 1 && strike.destroyed && strike.burning, JSON.stringify(strike));
 check('fighter: brake held when stopped = taxi backwards', strike.planeRev < -2, `speed ${strike.planeRev?.toFixed(1)}`);
 check('fighter: easy landing on the runway without damage, rolls to a stop', strike.landed && strike.landDamage < 20 && strike.stoppedSpeed < 2 && strike.onFoot === 'foot', JSON.stringify(strike));
-const fr = await g(() => {
+const fr = await g(async () => {
   const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
-  game.teleport(4405, 360, Math.PI, 0.3); step(60);
-  let french = 0, shops = 0; for (let i = 40; i < 50; i++) for (let j = 0; j < 10; j++) for (const b of __wg.cellData(i, j).buildings) { if (b.french) french++; if (b.interior === 'shop') shops++; }
-  let sea = 0; for (let x = 1100; x < 4000; x += 100) if (__wg.cellKind(Math.floor(x / 100), 5) === 'Q') sea++;
-  const tower = __wg.cellData(45, 4).props.some((p) => p.kind === 'ironTower');
-  return { french, shops, sea, tower, d: __wg.districtAt(4405, 360), peds: game.peds.peds.length, runway: __wg.cellData(45, 9).apron.some((a) => a.name === 'runway'), dist: 4000 - 1000 };
+  game.teleport(5405, 360, Math.PI, 0.3); step(60);
+  let french = 0, shops = 0, terminal = false, tower = false, jet = false; for (let i = 50; i < 60; i++) for (let j = 0; j < 10; j++) { const cd = __wg.cellData(i, j); for (const b of cd.buildings) { if (b.french) french++; if (b.interior === 'shop') shops++; if (b.sign === 'נמל התעופה בל־ריב') terminal = true; if (b.sign === 'מגדל פיקוח' && i >= 50) tower = true; } if (cd.parking.some((q) => q.type === 'jet')) jet = true; }
+  let sea = 0; for (let x = 1100; x < 5000; x += 100) if (__wg.cellKind(Math.floor(x / 100), 5) === 'Q') sea++;
+  const iron = __wg.cellData(55, 4).props.some((p) => p.kind === 'ironTower');
+  return { french, shops, sea, iron, terminal, tower, jet, d: __wg.districtAt(5405, 360), runway: __wg.cellData(55, 9).apron.some((a) => a.name === 'runway'), landing: !!game.flight && (await import('./js/game/flight.js')).RUNWAYS.some((r) => r.id === 'belle') };
 });
-check('France (Belle-Rive) ~3 km across the sea: Paris-style buildings, shops, iron tower, airstrip', fr.french > 40 && fr.shops > 10 && fr.tower && fr.runway && fr.d.includes('בל־ריב'), JSON.stringify(fr));
+check('France (Belle-Rive) ~4 km across the sea: Paris-style buildings, shops, iron tower', fr.french > 40 && fr.shops > 10 && fr.iron && fr.sea > 30 && fr.d.includes('בל־ריב'), JSON.stringify(fr));
+check('Belle-Rive airport: runway with landing assist, terminal, control tower, a parked airliner to fly home', fr.runway && fr.terminal && fr.tower && fr.jet && fr.landing, JSON.stringify(fr));
 
 // ---------------------------------------------------------------- Los Antos: name and shop counts
 const la = await g(() => {
@@ -1128,6 +1129,21 @@ const ui = await g(async () => {
 });
 check('character switch: the 👥 button on the right opens the character window (no dial at the bottom)', ui.btn && ui.right && !ui.dial, JSON.stringify(ui));
 check('no navigation strip at the top (route only on the map); no character picker in the lobby', ui.nav === 'none' && !ui.lobbyChar, JSON.stringify(ui));
+const nav = await g(() => {
+  const game = __game, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const P = game.player; if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.teleport(-300, 612, 0, 0.3); step(5);
+  game.gps.set({ x: 5500, z: 958, name: 'בל־ריב' }, game.playerPos()); step(25);
+  const onFoot = getComputedStyle(document.getElementById('gpsHud')).display;
+  const v = game.spawnVehicleNear('boat', 1060, 640) || game.spawnVehicleNear('heli', -300, 640);
+  P.state = 'driving'; P.vehicle = v; v.driver = 'player'; P.ignoreVehicle = v; P._attach(v); step(25);
+  const inBoat = getComputedStyle(document.getElementById('gpsHud')).display;
+  game.gps.set({ x: 530, z: 545, name: 'בית' }, game.playerPos()); step(25);
+  const local = getComputedStyle(document.getElementById('gpsHud')).display;
+  game.gps.clear(); v.speed = 0; game.input.pressed.add('vehicle'); step(60);
+  return { onFoot, inBoat, local, type: v.typeKey };
+});
+check('navigation strip only when flying / sailing to another country', nav.onFoot === 'none' && nav.inBoat !== 'none' && nav.local === 'none', JSON.stringify(nav));
 check('villa: no ceiling over the stairwell (the stairs go up through an opening)', ui.ceil === 2, JSON.stringify(ui));
 
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });

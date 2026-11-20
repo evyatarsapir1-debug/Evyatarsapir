@@ -14,6 +14,7 @@ import { clamp, damp } from '../core/mathx.js';
 export const RUNWAYS = [
   { id: 'air', name: 'מסלול נמל התעופה', x0: -960, x1: -60, z: 790, w: 56, side: 1 },
   { id: 'base', name: 'מסלול הבסיס הצבאי', x0: -920, x1: -80, z: -720, w: 40, side: -1 },
+  { id: 'belle', name: 'מסלול נמל התעופה בל־ריב', x0: 5060, x1: 5940, z: 921, w: 32, side: 1 },
 ];
 const GLIDE = 0.056;                 // ~3.2° glide path
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));

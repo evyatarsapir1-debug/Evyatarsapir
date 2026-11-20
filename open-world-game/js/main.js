@@ -309,7 +309,7 @@ class Game {
       { short: 'משטרה', name: 'תחנת משטרה', icon: '🚓', color: '#1f3d7a', x: 750, z: 114 },
       { short: 'בית חולים', name: 'בית חולים', icon: '🏥', color: '#c0392b', x: 150, z: 214 },
       { short: 'סוכנות רכב', name: 'סוכנות רכב — קניית רכבים', icon: '🚗', color: '#2d6a4f', ...door(find([[8, 3]], (b) => b.sign === 'סוכנות רכב')) },
-      { short: 'בל־ריב', name: 'בל־ריב, צרפת — שדה התעופה', icon: '🗼', color: '#23395b', x: 4500, z: 918 },
+      { short: 'בל־ריב', name: 'בל־ריב, צרפת — נמל התעופה', icon: '🗼', color: '#23395b', x: 5500, z: 958 },
       { short: 'בסיס צבאי', name: 'בסיס צבאי — שער הכניסה', icon: '🪖', color: '#4b5320', x: -500, z: -20 },
       { short: 'לונה פארק', name: 'לונה פארק המרינה — גלגל ענק ורכבת הרים', icon: '🎡', color: '#d81b60', x: LUNA.x - 22, z: LUNA.z - 2 },
       { short: 'חנות נשקים', name: 'חנות נשקים', icon: '🎯', color: '#5b2c6f', ...door(find([[2, 5]], (b) => b.sign === 'חנות נשקים')) },
@@ -1077,6 +1077,9 @@ class Game {
       const ob = $('objective'), st = this.missions.objective();
       ob.textContent = st ? st.text : ''; ob.classList.toggle('show', !!st);
       const gh = $('gpsHud');
+      // the distance + arrow strip at the top only when flying / sailing to another country (France)
+      const abroad = this.gps.dest && WG.regionInfo(Math.floor(this.gps.dest.x / 1000), Math.floor(this.gps.dest.z / 1000)).type === 'france';
+      document.body.classList.toggle('navstrip', !!(abroad && v && (v.isAir || v.isBoat)));
       if (this.gps.dest) {
         const M = this.missions, px = v ? v.x : p.x, pz = v ? v.z : p.z;
         const rem = this.gps.remaining(px, pz);

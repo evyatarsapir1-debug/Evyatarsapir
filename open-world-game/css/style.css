@@ -476,7 +476,7 @@ body.switching canvas { filter: saturate(.35) contrast(1.08); }
 @media (max-width: 600px) { .cw-card small, .cw-card i { display: none; } .cw-box { padding: 10px; } }
 
 /* no navigation strip at the top: the route is only the purple line on the map */
-#gpsHud { display: none !important; }
+body:not(.navstrip) #gpsHud { display: none !important; }   /* only for flights / sailing to another country */
 
 /* armour bar (vest) under the health bar, and the sticky-charge timer */
 #armorBar { display: none; height: 5px; margin-top: 3px; border-radius: 3px; background: #0006; overflow: hidden; width: 110px; border: 1px solid #fff4; }

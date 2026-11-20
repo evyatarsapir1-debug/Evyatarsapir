@@ -28,7 +28,7 @@ export function regionInfo(rx, rz) {
   let type;
   if (rx === 0 && rz === 0) type = 'azura';
   else if (rx === -1 && rz === -1) type = 'base';
-  else if (rx === 4 && rz === 0) type = 'france';
+  else if (rx === 5 && rz === 0) type = 'france';
   else if (rx === 1) type = 'bay';
   else if (rx === -1 && rz === 0) type = 'airport';
   else if ((rx === 0 || rx === -1) && rz === -1) type = 'country';
@@ -50,7 +50,7 @@ export function regionInfo(rx, rz) {
 
 // The world is the city and what belongs to it: Azura (0,0), the airport (-1,0), the bay with its beach and bridge (1,0)
 // and the marina island with the luna park (2,0). Everything else is open sea you can swim and sail in.
-export const isLandRegion = (rx, rz) => (rz === 0 && rx >= -1 && rx <= 2) || (rx === -1 && rz === -1) || (rx === 4 && rz === 0);   // + the military base, + 'Belle-Rive' (a French town across the sea)
+export const isLandRegion = (rx, rz) => (rz === 0 && rx >= -1 && rx <= 2) || (rx === -1 && rz === -1) || (rx === 5 && rz === 0);   // + the military base, + 'Belle-Rive' (a French town across the sea, 4 km east)
 const kindCache = new Map();
 export function cellKind(ix, iz) {
   const key = ix * 1000003 + iz;
@@ -230,6 +230,8 @@ export function districtAt(x, z) {
 export const AIRPORT = {
   gates: [-360, -300, -240], gateZ: 612, taxiZ: 710, runwayZ: 790, runwayW: -960, runwayE: -60,
 };
+// Belle-Rive airport (France): runway along the north of the bottom row, apron in front of the terminal
+export const BELLE = { runway: [5060, 905, 5940, 937], apron: [5180, 940, 5800, 976] };
 const AIRPORT_ITEMS = (() => {
   const b = [
     { x: -300, z: 555, w: 180, d: 50, h: 18, style: 'glass', color: 0xd0dbe3, face: 'n', sign: 'נמל התעופה לוס אנטוס', airport: true, interior: 'terminal' },
@@ -382,15 +384,19 @@ function generateCell(ix, iz) {
     d.keepOut.push([-640, 506, -20, 600]);
     if (!d.apron.length && oz < 900) addTrees(d, rng, rng.int(2, 8));
   } else if (kind === 'j') {
-    // Belle-Rive airstrip: runway + taxi apron, windsock, a small terminal; a fighter and a plane to fly back with
-    const R = [4080, 932, 4920, 968], A = [4400, 905, 4620, 930];
+    // Belle-Rive airport: a real runway with edge lights, an apron with a parked airliner (fly it home) and fighters,
+    // a long terminal with a glass front and a control tower - laid out differently from the home airport
+    const R = BELLE.runway, A = BELLE.apron;
     for (const [name, r] of [['runway', R], ['apron', A]]) {
       const x0 = Math.max(ox, r[0]), z0 = Math.max(oz, r[1]), x1 = Math.min(ox + P, r[2]), z1 = Math.min(oz + P, r[3]);
       if (x1 > x0 && z1 > z0) d.apron.push({ name, rect: [x0, z0, x1, z1] });
     }
-    for (let x = 4100; x <= 4900; x += 50) if (x >= ox && x < ox + P) for (const z of [928, 972]) PR.push({ kind: 'rlight', x, z, y: 0 });
-    if (ix === 41) PR.push({ kind: 'windsock', x: 4120, z: 985 });
-    if (ix === 45) { d.parking.push({ x: 4450, z: 918, rot: Math.PI / 2, type: 'fighter', fixed: true }, { x: 4480, z: 918, rot: Math.PI / 2, type: 'fighter', fixed: true }); B.push({ x: 4540, z: 985, w: 30, d: 14, h: 6, style: 'glass', color: 0xdfe6ea, face: 'n', sign: 'מסוף בל־ריב' }); }
+    for (let x = R[0] + 20; x <= R[2] - 20; x += 40) if (x >= ox && x < ox + P) for (const z of [R[1] - 1, R[3] + 1]) PR.push({ kind: 'rlight', x, z, y: 0 });
+    if (ix === 51) PR.push({ kind: 'windsock', x: 5130, z: 903 });
+    if (ix === 53) d.parking.push({ x: 5340, z: 957, rot: Math.PI / 2, type: 'jet', fixed: true });
+    if (ix === 55) d.parking.push({ x: 5520, z: 955, rot: Math.PI / 2, type: 'fighter', fixed: true }, { x: 5552, z: 955, rot: Math.PI / 2, type: 'fighter', fixed: true });
+    if (ix === 56) B.push({ x: 5650, z: 988, w: 150, d: 18, h: 9, style: 'glass', color: 0xf4f1ea, face: 'n', sign: 'נמל התעופה בל־ריב' });
+    if (ix === 57) B.push({ x: 5770, z: 990, w: 9, d: 9, h: 32, style: 'concrete', color: 0xe9e4da, face: 'n', sign: 'מגדל פיקוח' });
   } else if (kind === 'p') {
     d.peopleSpots = [
       { key: 'cop:0', x: ix * P + 42, z: iz * P + 16, yaw: Math.PI, state: 'guard', outfit: 'cop' },
