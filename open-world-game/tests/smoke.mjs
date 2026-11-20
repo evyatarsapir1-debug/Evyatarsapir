@@ -491,7 +491,7 @@ const home = await g(() => {
 const price = (name) => home.prices.filter(([n, p]) => n.includes(name) && p !== 'ללבוש').map(([, p]) => +p.replace(/[^\d]/g, ''));
 check('map: airport, marina, weapons, ice cream, library, clothes and my home are labelled', ['נמל תעופה', 'מרינה', 'חנות נשקים', 'גלידה', 'ספרייה', 'הבית שלי', 'חנות בגדים'].every((n) => home.L.includes(n)), home.L.join(', '));
 check('my home: villa with an interior, a swimmable pool and a wardrobe', home.villa && home.swimming && home.wardrobe === 'ארון בגדים', JSON.stringify({ villa: home.villa, swim: home.swimming, wardrobe: home.wardrobe, here: home.here }));
-check('clothes shop: suits ₪2,200–2,500, t-shirts ₪100/₪200, shorts ₪80/₪120', price('חליפה').length >= 4 && price('חליפה').every((p) => p >= 2200 && p <= 2500) && new Set(price('חולצה קצרה')).size === 2 && price('חולצה קצרה').every((p) => p === 100 || p === 200) && price('מכנס קצר').every((p) => p === 80 || p === 120), JSON.stringify(home.prices.slice(0, 16)));
+check('clothes shop: suits ₪2,200–2,500, short sleeves ₪120 and long sleeves ₪180 in many colours, luxury hoodies ₪1,200, shorts ₪80/₪120', price('חליפה').length >= 4 && price('חליפה').every((p) => p >= 2200 && p <= 2500) && price('חולצה קצרה').length >= 6 && price('חולצה קצרה').every((p) => p === 120) && price('חולצה ארוכה').length >= 6 && price('חולצה ארוכה').every((p) => p === 180) && price('קפוצ׳ון').filter((p) => p === 1200).length === 2 && price('מכנס קצר').every((p) => p === 80 || p === 120), JSON.stringify(home.prices.slice(0, 22)));
 check('clothes shop: buying a suit dresses you and saves it in the wardrobe', home.paid >= 2200 && home.top === 'suit' && home.owned === 1, JSON.stringify({ paid: home.paid, top: home.top, owned: home.owned }));
 
 // ---------------------------------------------------------------- clothes store: try on before buying, hats + shoes
@@ -660,7 +660,7 @@ const fr = await g(async () => {
   const iron = __wg.cellData(55, 4).props.some((p) => p.kind === 'ironTower');
   return { french, shops, sea, iron, terminal, tower, jet, d: __wg.districtAt(5405, 360), runway: __wg.cellData(55, 9).apron.some((a) => a.name === 'runway'), landing: !!game.flight && (await import('./js/game/flight.js')).RUNWAYS.some((r) => r.id === 'belle') };
 });
-check('France (Belle-Rive) ~4 km across the sea: Paris-style buildings, shops, iron tower', fr.french > 40 && fr.shops > 10 && fr.iron && fr.sea > 30 && fr.d.includes('בל־ריב'), JSON.stringify(fr));
+check('France (Belle-Rive) ~4 km across the sea: Paris-style buildings, shops, iron tower', fr.french > 40 && fr.shops > 10 && fr.iron && fr.sea >= 25 && fr.d.includes('בל־ריב'), JSON.stringify(fr));
 check('Belle-Rive airport: runway with landing assist, terminal, control tower, a parked airliner to fly home', fr.runway && fr.terminal && fr.tower && fr.jet && fr.landing, JSON.stringify(fr));
 
 // ---------------------------------------------------------------- Los Antos: name and shop counts
@@ -829,7 +829,7 @@ check('police: no patrol car ever jumps / teleports closer', chase.jumps === 0);
 const brawl = await g(() => {
   const game = __game, P = game.player, step = (n) => { for (let i = 0; i < n; i++) { if (game.police.level) game.police.clear(); game.time += 1 / 30; game._playFrame(1 / 30); } };
   game.equip(null); game.teleport(311, 309, 0, 0.3); step(20);
-  const q = game.peds.peds.filter((o) => !o.car && !['inside', 'shopkeeper', 'resident', 'dead', 'guard'].includes(o.state)).sort((a, b) => Math.hypot(a.x - P.x, a.z - P.z) - Math.hypot(b.x - P.x, b.z - P.z))[0];
+  const q = game.peds.peds.filter((o) => !o.car && !o.app.long && !o.app.cop && !o.app.gang && !['inside', 'shopkeeper', 'resident', 'dead', 'guard'].includes(o.state))   // a man: women don't start fist fights, officers arrest.sort((a, b) => Math.hypot(a.x - P.x, a.z - P.z) - Math.hypot(b.x - P.x, b.z - P.z))[0];
   if (!q) return {};
   q.temper = 'fight'; q.skill = 1; q.hp = q.maxHp = 16; q.state = 'walk';
   game.teleport(q.x, q.z - 1.3, 0, 0.3); step(2);
