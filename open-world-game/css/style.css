@@ -489,4 +489,4 @@ body:not(.navstrip) #gpsHud { display: none !important; }   /* only for flights 
 #bombTimer.show { display: block; }
 
 /* in a shop / fitting room: hide the game buttons and prompts so the clothes are fully visible */
-body.shopping #touch, body.shopping #prompt, body.shopping #charBtn, body.shopping #bagBtn, body.shopping #phoneBtn, body.shopping #weaponHud, body.shopping #toast { display: none !important; }
+body.shopping #touch, body.shopping #prompt, body.shopping #charBtn, body.shopping #bagBtn, body.shopping #phoneBtn, body.shopping #weaponHud, body.shopping #toast, body.shopping #stats, body.shopping #pauseBtn, body.shopping #minimap, body.shopping #here, body.shopping #objective { display: none !important; }

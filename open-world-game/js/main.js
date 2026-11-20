@@ -522,14 +522,29 @@ class Game {
     if (this.state !== 'shop') return;
     document.body.classList.remove('shopping');
     if (this._fit) { this.player.facing = this._fit.facing; this.player.object.rotation.y = this.player.facing; this._fit = null; }
+    if (this._fitCam) { this.camera.fov = this._fitCam.fov0; this.camera.updateProjectionMatrix(); this._fitCam = null; }
     this.state = 'playing'; this.input.endFrame(); this.clock.getDelta();
   }
   _fittingFrame(dt) {
     const p = this.player, f = p.facing;
     p.model.animate(dt, { speed: 0, grounded: true, mode: 'foot' });
     p.object.position.set(p.x, p.y, p.z); p.object.rotation.y = f;
-    this.camera.position.set(p.x + Math.sin(f) * 2.5, p.y + 1.3, p.z + Math.cos(f) * 2.5);
-    this.camera.lookAt(p.x, p.y + 0.95, p.z);
+    // far enough to see the whole body, head to shoes, a little from the side so the outfit has depth
+    // pick the direction with the most open space (never behind a wall), and widen the view if the room is tight
+    if (!this._fitCam) {
+      const o = new THREE.Vector3(p.x, p.y + 1.1, p.z); let best = { a: f, d: 0 };
+      for (const da of [0.32, -0.32, 0, 0.8, -0.8, 1.3, -1.3]) {
+        const a = f + da, r = this.weapons._ray(o, new THREE.Vector3(Math.sin(a), 0, Math.cos(a)), 4.2, [], [], null);
+        const d = Math.min(3.2, r.dist - 0.35); if (d > best.d + 0.25) best = { a, d };
+      }
+      this._fitCam = { a: best.a, d: Math.max(1.4, Math.min(3.2, best.d)), fov0: this.camera.fov };
+      p.facing = best.a;   // turn to face the camera: always a front view
+    }
+    const FC = this._fitCam, h = 1.95 * (this.player.model.body.scale.y || 1);
+    const want = THREE.MathUtils.radToDeg(2 * Math.atan((h * 0.62) / FC.d));   // vertical angle needed for head-to-shoes
+    if (Math.abs(this.camera.fov - Math.max(FC.fov0, Math.min(95, want))) > 0.1) { this.camera.fov = Math.max(FC.fov0, Math.min(95, want)); this.camera.updateProjectionMatrix(); }
+    this.camera.position.set(p.x + Math.sin(FC.a) * FC.d, p.y + 1.05, p.z + Math.cos(FC.a) * FC.d);
+    this.camera.lookAt(p.x, p.y + 0.92, p.z);
     const r = document.querySelector('#shopPanel .creator-panel')?.getBoundingClientRect();
     const W = innerWidth, H = innerHeight;
     let cx = W / 2;
