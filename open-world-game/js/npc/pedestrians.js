@@ -198,6 +198,7 @@ export class Pedestrians {
     // fight-system personality: how this person reacts to a brawl
     const r = this.rng.float();
     p.temper = r < 0.17 ? 'dodge' : r < 0.36 ? 'flee' : r < 0.47 ? 'freeze' : r < 0.58 ? 'call' : 'fight';
+    if (p.app.long && p.temper === 'fight') p.temper = r < 0.8 ? 'flee' : 'call';   // women don't start fist fights: they get away or call for help
     p.skill = this.rng.float(0.3, 1);   // how good a fighter: blocks, dodges and combos more often
     p.wealth = this.rng.float() < 0.2 ? 'rich' : this.rng.float() < 0.5 ? 'worker' : 'regular';
     p.hp = p.maxHp = 8;
@@ -779,6 +780,7 @@ export class Pedestrians {
   // something dangerous happened near this person (explosion, energy blast): duck / fall, then run away
   scare(p, src, hit) {
     if (p.state === 'driving' || p.state === 'pulled' || p.state === 'thrown' || p.state === 'dead') return;
+    if (p.app.cop && !hit) return;   // officers don't run from gunfire
     p.seat = null; p.fixedY = null;
     this._release(p);
     if (hit && p.state !== 'fall') {
@@ -848,9 +850,11 @@ export class Pedestrians {
       this.say(p, this.rng.pick(['אאוץ׳!', 'אוף!', 'וואו...']), 1.2);
       return 'knock';
     }
+    // police officers never run away: hit one and he comes after you
+    if (p.app.cop && p.state !== 'knocked') { p.state = 'copChase'; p.copChase = true; p.chaseTo = null; this.say(p, this.rng.pick(['עצור! משטרה!', 'אתה עצור!', 'ידיים למעלה!']), 1.8); return 'hit'; }
     if (p.state !== 'fight' && p.state !== 'knocked') {
       // fighters fight back; some others get angry enough to fight too
-      if (p.temper === 'fight' || (p.temper !== 'call' && !p.app.cop && this.rng.chance(0.3) && p.hp > 4)) {
+      if (!p.app.long && (p.temper === 'fight' || (p.temper !== 'call' && this.rng.chance(0.3) && p.hp > 4))) {
         p.state = 'fight'; p.atkCool = 0.35; this.say(p, ['רוצה מכות?!', 'בוא נראה אותך!', 'טעית בבן אדם!', 'עכשיו אתה בצרות!'][this.rng.int(0, 3)]);
         // friends nearby who like a fight join in
         let joined = 0;
@@ -865,6 +869,7 @@ export class Pedestrians {
 
   // someone saw (or felt) a fight: every personality reacts differently
   react(p, src, wasHit = false) {
+    if (p.app.cop) return;   // officers hold their ground
     if (['fight', 'down', 'dazed', 'dead', 'inside', 'driving', 'pulled', 'thrown', 'knocked', 'getup'].includes(p.state)) return;
     // people sitting at home or standing at work only react when they are hit or the fight is right next to them
     if ((p.state === 'shopkeeper' || p.state === 'resident') && !wasHit && Math.hypot(p.x - src.x, p.z - src.z) > 4) return;

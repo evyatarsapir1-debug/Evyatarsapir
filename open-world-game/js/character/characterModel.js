@@ -8,8 +8,8 @@ export const SKIN_TONES = [0xf6d7c3, 0xe9b98f, 0xc98e62, 0xa86f48, 0x7b4a2c, 0x4
 export const HAIR_COLORS = [0x1b1410, 0x3b2416, 0x6b4325, 0xa8743b, 0xd9b26a, 0xb5402a, 0x9a9a9a, 0x2a3f8f];
 export const HAIR_STYLES = ['short', 'buzz', 'long', 'ponytail', 'curly', 'mohawk', 'bun', 'bald'];
 export const HAIR_NAMES = { short: 'קצר', buzz: 'מגולח', long: 'ארוך', ponytail: 'קוקו', curly: 'מתולתל', mohawk: 'מוהיקן', bun: 'פקעת', bald: 'קרחת' };
-export const TOP_STYLES = ['tshirt', 'jacket', 'tank', 'hoodie', 'suit', 'shirt'];
-export const TOP_NAMES = { tshirt: 'חולצת טי', jacket: 'ז׳קט', tank: 'גופייה', hoodie: 'קפוצ׳ון', suit: 'חליפה', shirt: 'חולצה מכופתרת פתוחה' };
+export const TOP_STYLES = ['tshirt', 'longsleeve', 'jacket', 'tank', 'hoodie', 'suit', 'shirt'];
+export const TOP_NAMES = { tshirt: 'חולצה קצרה', longsleeve: 'חולצה ארוכה', jacket: 'ז׳קט', tank: 'גופייה', hoodie: 'קפוצ׳ון', suit: 'חליפה', shirt: 'חולצה מכופתרת פתוחה' };
 export const BOTTOM_STYLES = ['jeans', 'shorts', 'skirt', 'pants', 'capri'];
 export const BOTTOM_NAMES = { jeans: 'ג׳ינס', shorts: 'מכנס קצר', skirt: 'חצאית', pants: 'מכנס בד', capri: 'מכנס מקופל' };
 export const HAT_STYLES = ['none', 'cap', 'beanie', 'fedora', 'bucket'];
@@ -321,7 +321,7 @@ export class CharacterModel {
     const top = app.top;
     for (const a of this.arms) {
       a.upper.material = top === 'tank' ? M.skin : M.top;
-      a.lower.material = top === 'jacket' || top === 'hoodie' || top === 'suit' ? M.top : M.skin;
+      a.lower.material = top === 'jacket' || top === 'hoodie' || top === 'suit' || top === 'longsleeve' ? M.top : M.skin;
       a.delt.material = top === 'tank' ? M.skin : M.top;
       a.sleeve.visible = top === 'shirt';
     }

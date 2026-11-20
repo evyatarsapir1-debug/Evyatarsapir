@@ -238,6 +238,16 @@ function clothesStore(F, spec, C, y0, L, D, hl, cw, furn) {
     }
     solid(ta0, ta1, 1.0, 1.9, 0.8);
   }
+  // ---- the two most expensive pieces on show by the entrance: a black and a white hoodie under a spotlight
+  [[0x1d1d1f, 1.15], [0xf2f2f2, 1.8]].forEach(([c, d]) => {
+    const a = hl - 0.06;
+    box(a - 0.02, a, d - 0.3, d + 0.3, 1.7, 1.73, 0x8a9096, 'metal');
+    box(a - 0.07, a - 0.02, d - 0.22, d + 0.22, 1.0, 1.62, c);                        // body
+    for (const s2 of [-1, 1]) box(a - 0.07, a - 0.02, d + s2 * 0.3 - 0.06, d + s2 * 0.3 + 0.06, 1.05, 1.58, c);   // sleeves
+    box(a - 0.08, a - 0.03, d - 0.1, d + 0.1, 1.62, 1.75, c);                         // hood
+    box(a - 0.075, a - 0.072, d - 0.08, d + 0.08, 1.2, 1.32, c === 0x1d1d1f ? 0x3a3a3a : 0xd9d9d9);   // pocket
+  });
+  spec.lamps.push((() => { const [x, z] = F.pt(hl - 0.6, 1.5); return { x, z, y: y0 + 2.6 }; })());
   // ---- hat stands (right wall, by the window) with hats on pegs
   const ha = hl - 0.25;
   for (let d = 2.4; d < Math.min(D - 3.4, 6.5); d += 0.55) for (const hy of [1.25, 1.65]) {
@@ -455,22 +465,40 @@ function stockedShop(F, spec, C, y0, H, L, D, hl, cw, sign) {
       u += w + (type === 'books' ? 0.004 : 0.025);
     }
   };
+  // electronics on the shelves, one kind per board: boxed TVs, speakers, laptops, phones on stands. `face` = which
+  // side of the board faces the aisle (+1: the far edge, -1: the near edge)
+  const fillEquip = (u0, u1, v0, v1, y, along, face, lvl) => {
+    const kind = lvl % 4, put = (uA, uB, vA, vB, ya, yb, c, m) => along === 'd' ? box(vA, vB, uA, uB, ya, yb, c, m) : box(uA, uB, vA, vB, ya, yb, c, m);
+    const vF = face > 0 ? v1 - 0.04 : v0 + 0.04, inward = -face;   // front plane of the products
+    const step = [0.62, 0.32, 0.46, 0.22][kind];
+    for (let u = u0 + 0.06; u + step - 0.06 < u1; u += step) {
+      const w = step - 0.08;
+      if (kind === 0) { put(u, u + w, vF + inward * 0.14, vF, y, y + 0.36, 0xd9d4c8); put(u + 0.05, u + w - 0.05, vF - face * 0.002, vF + face * 0.002, y + 0.06, y + 0.3, 0x2a5fa8); }           // boxed TV with the screen printed on the box
+      else if (kind === 1) { put(u, u + w, vF + inward * 0.18, vF, y, y + 0.34, 0x1d1d1f); put(u + 0.04, u + w - 0.04, vF - face * 0.002, vF + face * 0.002, y + 0.05, y + 0.29, 0x3a3d42); }   // speaker with grille
+      else if (kind === 2) { put(u, u + w, vF + inward * 0.26, vF, y, y + 0.02, 0x9aa0a6, 'metal'); put(u, u + w, vF + inward * 0.27, vF + inward * 0.25, y + 0.02, y + 0.24, 0x2b2b2b); put(u + 0.02, u + w - 0.02, vF + inward * 0.249, vF + inward * 0.247, y + 0.04, y + 0.22, 0x3a7bd5, 'lamp'); }   // open laptop, screen on
+      else { put(u + 0.03, u + w - 0.03, vF + inward * 0.06, vF, y, y + 0.04, 0x5f646b, 'metal'); put(u + 0.05, u + w - 0.05, vF + inward * 0.04, vF + inward * 0.02, y + 0.04, y + 0.2, 0x111111); put(u + 0.06, u + w - 0.06, vF + inward * 0.019, vF + inward * 0.017, y + 0.05, y + 0.19, 0x2e9e5a, 'lamp'); }   // phone on a stand
+    }
+  };
   const levels = [0.12, 0.55, 0.98, 1.41], topY = 1.84;
-  const unit = (a0, a1, d0, d1, along) => {   // a shelving unit with four stocked boards
+  const unit = (a0, a1, d0, d1, along, face = 1) => {   // a shelving unit with four stocked boards
     box(a0, a1, d0, d1, 0, 0.1, 0x5f646b, 'metal');
-    for (const y of levels) { box(a0, a1, d0, d1, y - 0.02, y, 0xcfd3d6, 'metal'); along === 'd' ? fill(d0, d1, a0, a1, y, 'd') : fill(a0, a1, d0, d1, y, 'a'); }
+    levels.forEach((y, li) => {
+      box(a0, a1, d0, d1, y - 0.02, y, 0xcfd3d6, 'metal');
+      if (type === 'equip') along === 'd' ? fillEquip(d0, d1, a0, a1, y, 'd', face, li) : fillEquip(a0, a1, d0, d1, y, 'a', face, li);
+      else along === 'd' ? fill(d0, d1, a0, a1, y, 'd') : fill(a0, a1, d0, d1, y, 'a');
+    });
     box(a0, a1, d0, d1, topY, topY + 0.03, 0x5f646b, 'metal');
     solid(a0, a1, d0, d1, topY);
   };
   const dBack = D - 0.45, aCounter = hl - cw - 1.0;
   // left wall shelving (into the room) and back wall shelving (across, up to the counter)
   box(-hl, -hl + 0.03, 0.9, D - 0.3, 0, topY + 0.1, 0x8e959c, 'metal');
-  unit(-hl + 0.03, -hl + 0.45, 0.9, D - 0.6, 'd');
-  if (aCounter - (-hl + 0.7) > 1) unit(-hl + 0.7, aCounter, dBack, D - 0.02, 'a');
+  unit(-hl + 0.03, -hl + 0.45, 0.9, D - 0.6, 'd', 1);
+  if (aCounter - (-hl + 0.7) > 1) unit(-hl + 0.7, aCounter, dBack, D - 0.02, 'a', -1);
   // aisle gondolas, stocked on both sides
   for (let a = -hl + 2.1; a + 0.8 < aCounter - 0.4; a += 2.3) {
     const d0 = 1.9, d1 = Math.max(d0 + 1.5, D - 3.0);
-    unit(a, a + 0.38, d0, d1, 'd'); unit(a + 0.42, a + 0.8, d0, d1, 'd');
+    unit(a, a + 0.38, d0, d1, 'd', -1); unit(a + 0.42, a + 0.8, d0, d1, 'd', 1);
     box(a + 0.37, a + 0.43, d0, d1, 0, topY, 0xb8bec4, 'metal');
   }
   if (type !== 'equip') { label(-hl + 0.3, (D - 0.6) / 2, 2.15, 2.2, sign, false); return; }

@@ -92,6 +92,9 @@ export class Heists {
     const A = this.active, S = this.stage(), I = this.info(A.id);
     if (!S || A.busy || A.wait) return null;
     if (S.type === 'vault' && !A.hasKey) {
+      // the key on the floor next to the guard you took down: a "take" button
+      const k = A.keyObj;
+      if (k && near([k.position.x, k.position.z], k.userData.y0 ?? k.position.y, 1.6)) return { text: '🔑 קח את המפתח', action: () => { this.game.scene.remove(k); A.keyObj = null; A.hasKey = true; this.game.audio.mech?.('in'); this.game.toast('🔑 יש לך את מפתח הכספת! גש לדלת הכספת ולחץ ״פתח״', 3); } };
       // the key holder gave up (hands raised): take the key off him
       const h = A.keyHolder;
       if (h && h.state === 'surrender' && near([h.x, h.z], h.y, 1.8)) return { text: '🔑 קח ממנו את מפתח הכספת', action: () => { A.hasKey = true; this.game.peds.say(h, 'קח, קח! רק אל תירה', 2.2); this.game.toast('🔑 יש לך את מפתח הכספת!', 2.5); this.game.audio.mech?.('in'); } };
@@ -99,7 +102,7 @@ export class Heists {
     for (const t of this.targets()) {
       if (t.taken) continue;
       if (S.type === 'vault' && near(t.pt, t.y, 1.9)) return A.hasKey
-        ? { text: '🔑 פתח את הכספת עם המפתח', action: () => { A.busy = { t: 0, dur: S.dur, target: t, mode: 'key' }; } }
+        ? { text: '🔑 פתח את הכספת', action: () => { A.busy = { t: 0, dur: S.dur, target: t, mode: 'key' }; } }
         : { text: '🧨 הצמד מטען פריצה לדלת (אין לך מפתח)', action: () => { A.busy = { t: 0, dur: 2, target: t, mode: 'blast' }; } };
       if (near(t.pt, t.y, 1.9)) return { text: S.type === 'loot' ? 'אסוף את השלל' : S.busy || S.text, action: () => { A.busy = { t: 0, dur: S.dur, target: t }; } };
     }
@@ -333,14 +336,12 @@ export class Heists {
         const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.012, 0.13), gold); shaft.position.z = 0.11; m.add(shaft);
         for (const z of [0.15, 0.17]) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.012, 0.012), gold); t.position.set(0.02, 0, z); m.add(t); }
         m.position.set(p.x + 0.4, p.y + 0.06, p.z + 0.2); g.scene.add(m); A.keyObj = m;
-        if (Math.hypot(P.x - p.x, P.z - p.z) < 25) g.toast('🔑 נפל לו מפתח — קח אותו', 2.5);
+        if (Math.hypot(P.x - p.x, P.z - p.z) < 25) g.toast('🔑 יש עליו מפתח — גש ולחץ ״קח את המפתח״', 2.8);
       } else if (Math.hypot(P.x - p.x, P.z - p.z) < 25) g.toast('אין עליו מפתח…', 1.8);
     }
     if (A.keyObj) {
       const k = A.keyObj; k.rotation.y += dt * 2.5; k.position.y = (k.userData.y0 ??= k.position.y) + 0.05 + Math.sin(performance.now() * 0.004) * 0.03;
-      if (Math.hypot(P.x - k.position.x, P.z - k.position.z) < 1.3 && Math.abs(P.y - k.userData.y0) < 1.5) {
-        g.scene.remove(k); A.keyObj = null; A.hasKey = true; g.audio.mech?.('in'); g.toast('🔑 יש לך את מפתח הכספת! עכשיו לדלת הכספת', 3);
-      }
+
     }
     // nobody had it: tell the player once there is nobody left to search
     if (!A.noKeyTold && (A.staff || []).length && A.staff.every((p) => p.searched || p.state === 'dead') && !A.keyObj) { A.noKeyTold = true; g.toast('לאף אחד אין מפתח — תצטרך לפוצץ את דלת הכספת', 3); }

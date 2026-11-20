@@ -990,13 +990,14 @@ const vkey = await g(() => {
   kh.state = 'dead'; kh.timer = 45; step(3);
   const dropped = !!A.keyObj;
   game.teleport(A.keyObj.position.x, A.keyObj.position.z, 0, A.keyObj.position.y + 0.5); step(3);
+  const takePrompt = P.prompt?.text || ''; game.input.pressed.add('interact'); step(2);
   const hasKey = A.hasKey;
   const t = H.targets()[0]; game.teleport(t.pt[0], t.pt[1], 0, t.y + 0.6); step(3);
   const prompt = P.prompt?.text || '';
   H.fail('בדיקה'); game.police.clear(); game.econ.heists = {};
-  return { dropped, hasKey, prompt };
+  return { dropped, takePrompt, hasKey, prompt };
 });
-check('bank vault: the guard / teller with the key drops it when taken down; with the key the vault opens (or blow it without)', vkey.dropped && vkey.hasKey && vkey.prompt.includes('פתח את הכספת עם המפתח'), JSON.stringify(vkey));
+check('bank vault: the guard / teller with the key drops it when taken down; with the key the vault opens (or blow it without)', vkey.dropped && vkey.takePrompt.includes('קח את המפתח') && vkey.hasKey && vkey.prompt.includes('פתח את הכספת'), JSON.stringify(vkey));
 check('heist: result is saved and the robbed bank closes for a while', bank.rec && bank.saved === 1 && bank.status === 'cooldown');
 
 // ---------------------------------------------------------------- garage: drive onto the turntable, live mods, before/after, pay, save

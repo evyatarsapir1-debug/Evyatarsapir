@@ -34,14 +34,17 @@ function catalogue(kind, ctx) {
       // --- suits (jacket + trousers in the same colour, white shirt and tie)
       const SUITS = [['חליפה שחורה קלאסית', 1, 2500], ['חליפה כחול נייבי', 17, 2450], ['חליפה אפורה פחם', 16, 2400], ['חליפה בורדו', 15, 2350], ['חליפה בז׳ קיצית', 14, 2300], ['חליפה לבנה', 18, 2200]];
       for (const [name, c, price] of SUITS) out.push({ id: `suit-${c}`, name, desc: 'ז׳קט, מכנסיים, חולצה לבנה ועניבה', swatch: CLOTH_COLORS[c], price, patch: { top: 'suit', topColor: c, bottom: 'pants', bottomColor: c, shoes: 1 } });
-      // --- t-shirts: premium 200, basic 100
-      for (const c of [0, 1, 3, 2]) out.push({ id: `tee200-${c}`, name: 'חולצה קצרה — מותג', desc: 'כותנה איכותית', swatch: CLOTH_COLORS[c], price: 200, patch: { top: 'tshirt', topColor: c } });
-      for (const c of [4, 5, 7, 9]) out.push({ id: `tee100-${c}`, name: 'חולצה קצרה — בסיסית', swatch: CLOTH_COLORS[c], price: 100, patch: { top: 'tshirt', topColor: c } });
+      // --- hoodies: black and white, the most expensive (and the nicest) in the shop
+      for (const [c, nm] of [[1, 'קפוצ׳ון שחור — יוקרתי'], [0, 'קפוצ׳ון לבן — יוקרתי']]) out.push({ id: `hoodie-lux-${c}`, name: nm, desc: 'הכי יפה בחנות', swatch: CLOTH_COLORS[c], price: 1200, patch: { top: 'hoodie', topColor: c } });
+      // --- short sleeves and long sleeves in many colours: black, pink, grey, green, blue, white, red
+      const TEES = [[1, 'שחורה'], [12, 'ורודה'], [9, 'אפורה'], [4, 'ירוקה'], [3, 'כחולה'], [0, 'לבנה'], [2, 'אדומה']];
+      for (const [c, nm] of TEES) out.push({ id: `tee-${c}`, name: `חולצה קצרה ${nm}`, swatch: CLOTH_COLORS[c], price: 120, patch: { top: 'tshirt', topColor: c } });
+      for (const [c, nm] of TEES) out.push({ id: `long-${c}`, name: `חולצה ארוכה ${nm}`, desc: 'עם שרוולים ארוכים', swatch: CLOTH_COLORS[c], price: 180, patch: { top: 'longsleeve', topColor: c } });
       // --- shorts: 120 and 80
       for (const c of [14, 17, 1]) out.push({ id: `sh120-${c}`, name: 'מכנס קצר — ברמודה', swatch: CLOTH_COLORS[c], price: 120, patch: { bottom: 'shorts', bottomColor: c } });
       for (const c of [3, 8, 9]) out.push({ id: `sh80-${c}`, name: 'מכנס קצר — ספורט', swatch: CLOTH_COLORS[c], price: 80, patch: { bottom: 'shorts', bottomColor: c } });
       // --- the rest of the store
-      for (const st of ['jacket', 'hoodie', 'tank']) for (const c of COLOR_PICKS.slice(0, 3)) { const col = (c + TOP_STYLES.indexOf(st) * 2) % 14; out.push({ id: `top-${st}-${col}`, name: TOP_NAMES[st], swatch: CLOTH_COLORS[col], price: st === 'jacket' ? 450 : st === 'hoodie' ? 320 : 90, patch: { top: st, topColor: col } }); }
+      for (const st of ['jacket', 'tank']) for (const c of COLOR_PICKS.slice(0, 3)) { const col = (c + TOP_STYLES.indexOf(st) * 2) % 14; out.push({ id: `top-${st}-${col}`, name: TOP_NAMES[st], swatch: CLOTH_COLORS[col], price: st === 'jacket' ? 450 : st === 'hoodie' ? 320 : 90, patch: { top: st, topColor: col } }); }
       for (const st of ['jeans', 'pants', 'skirt']) for (const c of COLOR_PICKS.slice(2, 5)) { const col = (c + 5) % 14; out.push({ id: `bot-${st}-${col}`, name: BOTTOM_NAMES[st], swatch: CLOTH_COLORS[col], price: st === 'jeans' ? 260 : 180, patch: { bottom: st, bottomColor: col } }); }
       // --- shoes: ₪120 (sneakers) and ₪250 (leather / boots)
       for (const c of [0, 1, 3, 2]) out.push({ id: `snk-${c}`, name: 'נעלי ספורט', desc: 'סוליה לבנה ושרוכים', swatch: SHOE_COLORS[c], price: 120, patch: { shoes: c, shoeStyle: 'sneaker' } });
