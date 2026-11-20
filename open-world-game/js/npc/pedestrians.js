@@ -103,6 +103,15 @@ const NPC_MOVES = {
   kick: { dur: 0.62, hitAt: 0.3, reach: 1.85, dmg: 6 },
 };
 
+// what people say (spoken + bubble) - several lines per situation so nobody repeats themselves
+const LINES = {
+  close: ['היי, תיזהר!', 'תתרחק ממני!', 'מה אתה רוצה ממני?', 'אפשר קצת מקום?', 'סליחה, אתה בדרך', 'עזוב אותי בשקט'],
+  closeAngry: ['מה הבעיה שלך?', 'אתה מחפש צרות?', 'תיזהר לאן אתה הולך!', 'זוז, אחי!'],
+  aimed: ['מה אתה רוצה ממני?', 'אל תירה! בבקשה!', 'עזוב אותי בשקט!', 'אני לא מחפש צרות!', 'רגע, רגע, תירגע!', 'יש לי משפחה!'],
+  tough: ['תוריד את זה!', 'אתה לא מפחיד אותי', 'תחשוב טוב מה אתה עושה'],
+  callCops: ['הלו, משטרה? יש פה מישהו עם נשק!', 'מישהו יכול לעזור לי?!', 'אני מתקשר למשטרה!', 'הצילו! משטרה!'],
+  fear: ['הצילו!', 'יורים! תברחו!', 'מישהו יכול לעזור לי?!', 'משטרה! משטרה!', 'רוצו!'],
+};
 export class Pedestrians {
   constructor(scene) {
     this.scene = scene;
@@ -395,6 +404,7 @@ export class Pedestrians {
   _think(p, dt, time, ctx) {
     const { player, vehicles, graph, statics } = ctx;
     p.timer -= dt;
+    if (!p.car && !p.shopKey && !p.keep && !p.app.cop && !p.app.soldier && !p.app.guard && ['walk', 'wander', 'idle', 'talk'].includes(p.state)) this._reactToPlayer(p, dt, ctx);
     if (p.state === 'driving') { if (p.sayT > 0) p.sayT -= dt; this._vehicleSeat(p, dt); return; }
     if (p.state === 'pulled') {
       // dragged out through the door
@@ -790,6 +800,7 @@ export class Pedestrians {
     }
     if (p.state === 'fall' || p.state === 'flee') return;
     p.state = 'flee'; p.timer = 6; p.fleeFrom = [src.x, src.z];
+    if (Math.random() < 0.25 && !(p.sayT > 0)) this.say(p, this.line('fear'), 2, true);
   }
 
   // hit by a vehicle: slow = knocked over (gets up); fast = thrown over the bonnet and killed (stays down, no gore)
@@ -812,7 +823,51 @@ export class Pedestrians {
     }
   }
 
-  say(p, text, t = 2.2) { p.say = text; p.sayT = t; }
+  say(p, text, t = 2.2, urgent) {
+    p.say = text; p.sayT = t;
+    this.voice?.speak(p, text, urgent ?? /!/.test(text));   // spoken out loud with the person's own voice
+  }
+  // a line from a category, never the same one twice in a row
+  line(cat) {
+    const L = LINES[cat]; this._lastLine ||= {};
+    let t; do { t = L[Math.floor(Math.random() * L.length)]; } while (L.length > 1 && t === this._lastLine[cat]);
+    this._lastLine[cat] = t; return t;
+  }
+  // how a person on the street reacts to you: getting too close / bumping into them, and pointing a weapon at them.
+  // Each one reacts by their own character (temper): freeze with hands up, run, plead, call the police, or stand up to you.
+  _reactToPlayer(p, dt, ctx) {
+    const pl = ctx.player; if (!pl || pl.state !== 'foot') return false;
+    const dx = p.x - pl.x, dz = p.z - pl.z, d = Math.hypot(dx, dz);
+    if (d > 15 || Math.abs(p.y - pl.y) > 2) { p.nearT = 0; return false; }
+    // a weapon pointed at them
+    if (ctx.aiming && d < 14) {
+      const ang = Math.atan2(dx, dz), diff = Math.abs(((ang - pl.facing + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+      if (diff < 0.32 && !(p.threatT > 0)) {
+        p.threatT = 12; this._release(p); p.seat = null; p.fixedY = null;
+        const t = p.temper;
+        if (t === 'call' || (t === 'flee' && Math.random() < 0.3)) {
+          p.state = 'callHelp'; p.timer = 3.2; p.afterCall = 'flee'; p.fleeFrom = [pl.x, pl.z];
+          this.say(p, this.line('callCops'), 3, true); ctx.onReport?.(p);
+        } else if (t === 'freeze' || t === 'dodge') { p.state = 'surrender'; p.timer = 6 + Math.random() * 4; this.say(p, this.line('aimed'), 2.4, true); }
+        else if (t === 'fight' && !p.app.long && Math.random() < 0.4) { p.state = 'surrender'; p.timer = 3; this.say(p, this.line('tough'), 2.4, true); }
+        else { p.state = 'flee'; p.timer = 7; p.fleeFrom = [pl.x, pl.z]; this.say(p, this.line('aimed'), 2.2, true); }
+        return true;
+      }
+    }
+    if (p.threatT > 0) p.threatT -= dt;
+    // too close: standing in their face or running into them
+    if (d < 1.15 && ['walk', 'wander', 'idle'].includes(p.state)) {
+      p.nearT = (p.nearT || 0) + dt * (Math.hypot(pl.vx || 0, pl.vz || 0) > 3 ? 3 : 1);
+      if (p.nearT > 0.9 && !(p.sayT > 0) && !(p.closeCool > 0)) {
+        p.closeCool = 8 + Math.random() * 6; p.nearT = 0;
+        this.say(p, this.line(p.temper === 'fight' && !p.app.long ? 'closeAngry' : 'close'), 2.2);
+        p.yaw = Math.atan2(-dx, -dz);
+        if (p.temper === 'flee' || p.app.long) { p.state = 'flee'; p.timer = 2.5; p.fleeFrom = [pl.x, pl.z]; }
+      }
+    } else p.nearT = Math.max(0, (p.nearT || 0) - dt);
+    if (p.closeCool > 0) p.closeCool -= dt;
+    return false;
+  }
 
   // state to return to after a scare/fight: travellers wander, people who live/work inside walk back to their spot
   _calm(p) {

@@ -19,6 +19,7 @@ import { Tuning, applyMods } from './game/tuning.js';
 import { Characters } from './game/characters.js';
 import { Gangs } from './game/gangs.js';
 import { Robbery } from './game/robbery.js';
+import { Voices } from './game/voice.js';
 import { Police, POLICE_STATION, HOSPITAL } from './game/police.js';
 import { VEHICLE_TYPES } from './vehicles/vehicleTypes.js';
 import { ShopUI, shopKind } from './game/shops.js';
@@ -108,6 +109,7 @@ class Game {
     this.chars = new Characters(this);
     this.gangs = new Gangs(this);
     this.robbery = new Robbery(this);
+    this.voices = new Voices(this); this.peds.voice = this.voices;
     this.vehicleTypes = VEHICLE_TYPES;
     this.interiors.boardTexture = this.airport.boardTexture;
     this.player = new Player(this.scene, defaultAppearance());
@@ -912,7 +914,7 @@ class Game {
     for (const car of all) if (car.driver === 'ai' && !car.driverPed && !car.isAir && !car.removed) this.peds.addDriver(car);
     this.vehicles.update(dt, focusX, focusZ, all, (x, z) => this.chunks.isPhysicsReady(x, z), !!(v && v.isAir && v.airborne && v.y > 25));
     this.boats.update(dt, focusX, focusZ, all);
-    this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, copsArmed: this.police.level >= 3, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
+    this.peds.update(dt, this.time, { px: focusX, pz: focusZ, player: p, aiming: aimingNow, onReport: (who) => { if (!this.police.level) { this.police.setWanted(1, p.x, p.z); this.toast('📞 אזרח דיווח למשטרה — ★', 2.5); } }, copsArmed: this.police.level >= 3, vehicles: all, cells: this.physCells, graph: this.graph, statics: this.statics, benches: this.chunks.benches, places: this.interiors.places(),
       onCrime: (k, x, z) => this.police.crime(k, x, z),
       onRunOver: (ped, sp) => { this.audio.impact?.(Math.min(9, sp * 0.4)); this.rig.shake = Math.max(this.rig.shake, Math.min(0.35, sp * 0.02)); if (ped.killed) this.combat._drop(ped); },
       onPlayerHit: (who, n, type) => {

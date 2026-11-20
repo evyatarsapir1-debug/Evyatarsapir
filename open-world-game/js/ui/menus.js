@@ -75,6 +75,7 @@ export function bindSettings(settings, apply) {
   $('sTraffic').value = settings.traffic;
   $('sVolume').value = settings.volume;
   $('sFps').checked = settings.showFps;
+  $('sVoices').checked = settings.voices !== false;
   $('sWeather').value = settings.weather || 'auto';
   const read = () => {
     settings.quality = $('sQuality').value;
@@ -83,8 +84,9 @@ export function bindSettings(settings, apply) {
     settings.traffic = +$('sTraffic').value;
     settings.volume = +$('sVolume').value;
     settings.showFps = $('sFps').checked;
+    settings.voices = $('sVoices').checked;
     settings.weather = $('sWeather').value;
     apply(settings);
   };
-  ['sQuality', 'sSens', 'sInvert', 'sTraffic', 'sVolume', 'sFps', 'sWeather'].forEach((id) => { $(id).onchange = read; $(id).oninput = read; });
+  ['sQuality', 'sSens', 'sInvert', 'sTraffic', 'sVolume', 'sFps', 'sVoices', 'sWeather'].forEach((id) => { $(id).onchange = read; $(id).oninput = read; });
 }

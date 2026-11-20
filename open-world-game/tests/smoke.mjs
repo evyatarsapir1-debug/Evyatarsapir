@@ -1146,6 +1146,27 @@ const nav = await g(() => {
 check('navigation strip only when flying / sailing to another country', nav.onFoot === 'none' && nav.inBoat !== 'none' && nav.local === 'none', JSON.stringify(nav));
 check('villa: no ceiling over the stairwell (the stairs go up through an opening)', ui.ceil === 2, JSON.stringify(ui));
 
+// ---------------------------------------------------------------- people talk back (spoken voice + bubble) and react to you
+const talk = await g(() => {
+  const game = __game, P = game.player, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const said = []; const sp = game.voices.speak.bind(game.voices); game.voices.speak = (p, text, urgent) => { said.push(text); };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.police.clear(); game.equip(null); game.teleport(530, 560, 0, 0.3); step(60);
+  const pick = (ex) => game.peds.peds.find((o) => o !== ex && !o.car && !o.shopKey && !o.keep && o.app && !o.app.cop && ['walk', 'wander', 'idle'].includes(o.state) && Math.hypot(o.x - P.x, o.z - P.z) < 80);
+  const q = pick(); if (!q) return { err: 'nobody' };
+  q.temper = 'flee'; step(40, () => { P.x = q.x - 0.6; P.z = q.z; P.y = q.y; });
+  const bump = said.slice();
+  game.econ.weapons.p7 = { ammo: 30 }; game.equip('p7'); step(15);
+  const q2 = pick(q); if (!q2) return { bump, err: 'no second' };
+  q2.temper = 'call'; game.teleport(q2.x, q2.z - 6, 0, q2.y + 0.3); step(2);
+  step(20, () => { game.aiming = true; P.aimT = 1.5; P.facing = Math.atan2(q2.x - P.x, q2.z - P.z); });
+  const res = { bump, said: said.slice(), q2: q2.state, stars: game.police.level };
+  game.aiming = false; game.equip(null); game.police.clear(); game.voices.speak = sp;
+  return res;
+});
+check('people talk back out loud when you get in their face (own voice, varied lines)', talk.bump?.length >= 1, JSON.stringify(talk));
+check('pointing a weapon at someone: they react by character - this one calls the police (1 star)', talk.q2 === 'callHelp' && talk.stars >= 1 && talk.said.length >= 2, JSON.stringify(talk));
+
 const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera); return __game.renderer.info.render.calls; });
 console.log(`(draw calls on low quality: ${calls})`);
 await g(() => __game.save());
