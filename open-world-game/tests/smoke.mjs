@@ -829,7 +829,7 @@ check('police: no patrol car ever jumps / teleports closer', chase.jumps === 0);
 const brawl = await g(() => {
   const game = __game, P = game.player, step = (n) => { for (let i = 0; i < n; i++) { if (game.police.level) game.police.clear(); game.time += 1 / 30; game._playFrame(1 / 30); } };
   game.equip(null); game.teleport(311, 309, 0, 0.3); step(20);
-  const q = game.peds.peds.filter((o) => !o.car && !o.app.long && !o.app.cop && !o.app.gang && !['inside', 'shopkeeper', 'resident', 'dead', 'guard'].includes(o.state))   // a man: women don't start fist fights, officers arrest.sort((a, b) => Math.hypot(a.x - P.x, a.z - P.z) - Math.hypot(b.x - P.x, b.z - P.z))[0];
+  const q = game.peds.peds.filter((o) => !o.car && !o.shopKey && o.app && !o.app.long && !o.app.cop && !o.app.gang && !['inside', 'shopkeeper', 'resident', 'dead', 'guard'].includes(o.state)) /* a man: women don't start fist fights, officers arrest */.sort((a, b) => Math.hypot(a.x - P.x, a.z - P.z) - Math.hypot(b.x - P.x, b.z - P.z))[0];
   if (!q) return {};
   q.temper = 'fight'; q.skill = 1; q.hp = q.maxHp = 16; q.state = 'walk';
   game.teleport(q.x, q.z - 1.3, 0, 0.3); step(2);
