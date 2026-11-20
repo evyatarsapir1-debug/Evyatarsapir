@@ -155,13 +155,16 @@ export class PostFX {
     if (!this.enabled) return;
     const n = L.night || 0, wet = L.wet || 0;
     const golden = Math.max(0, 1 - Math.abs(hour - 18.5) / 1.6) + Math.max(0, 1 - Math.abs(hour - 6.3) / 1.2);
-    this.bloom.strength = 0.3 + golden * 0.25 + n * 0.32;
-    this.bloom.threshold = 0.95 - golden * 0.1 - n * 0.2;
+    // only real light sources bloom (lamps, headlights, neon, the sun on chrome) - never whole lit facades
+    this.bloom.strength = 0.24 + golden * 0.1 + n * 0.2;
+    this.bloom.threshold = 0.97 - golden * 0.04 - n * 0.12;
     this.bloom.radius = 0.42 + n * 0.12;
     const U = this.grade.uniforms;
-    U.contrast.value = 1.12 + n * 0.04 - wet * 0.04;
-    U.saturation.value = 1.26 - n * 0.14 - wet * 0.14;
-    U.tint.value.set(1.035 + golden * 0.08 - n * 0.09, 1.01 + golden * 0.01 - n * 0.03, 0.96 - golden * 0.09 + n * 0.11);
+    // filmic, slightly dusty look (like a hazy summer afternoon) instead of saturated cartoon colours
+    U.contrast.value = 1.07 + n * 0.05 - wet * 0.03;
+    U.saturation.value = 0.94 + golden * 0.08 - n * 0.1 - wet * 0.1;
+    U.lift.value = 0.012 * (1 - n);
+    U.tint.value.set(1.04 + golden * 0.08 - n * 0.09, 1.0 + golden * 0.0 - n * 0.03, 0.93 - golden * 0.09 + n * 0.12);
     U.vignette.value = 0.22 + n * 0.15;
     U.seed.value = (U.seed.value + 7.31) % 100;
     U.grain.value = 0.02 + n * 0.02;

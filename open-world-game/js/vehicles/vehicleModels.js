@@ -114,6 +114,91 @@ function wheel(parent, x, y, z, r, w, front) {
   return { pivot, spin, front };
 }
 
+// ---- sculpted car body -----------------------------------------------------------------------------------------
+const TUCK = 0.16;   // how much the glasshouse leans in towards the roof (fraction of its half width)
+const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+// extrude a side profile (z forward, y up) across the car's width, centred, with rounded edges
+function extrudeSide(shape, width, bevel, curveSeg = 10) {
+  const depth = Math.max(0.02, width - bevel * 2);
+  const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel * 0.9, bevelSegments: 3, curveSegments: curveSeg, steps: 1 });
+  g.translate(0, 0, -depth / 2);
+  g.rotateY(-Math.PI / 2);   // profile x -> car z, extrusion -> car x
+  return g;
+}
+function finish(g) { g.deleteAttribute('uv'); g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); const out = mergeVertices(g); out.computeVertexNormals(); return out; }
+// the lower shell: bumper-to-bumper side profile with the wheel openings cut into it
+function carShell(T, W, L, clear, lowH, r, wb, sporty) {
+  const bv = 0.07, ins = bv * 0.9;   // the rounded edge grows the outline by ins, so draw it inset by that much
+  const y0 = clear + ins, yT = clear + lowH - ins, zF = L / 2 - ins, zR = -L / 2 + ins, R = r + 0.08 + ins;
+  const s = new THREE.Shape();
+  const nose = sporty ? 0.34 : 0.24, tail = sporty ? 0.22 : 0.16, hoodDrop = sporty ? 0.14 : T.van ? 0.04 : 0.08;
+  s.moveTo(zR + 0.22, y0);
+  const arch = (cz) => {   // over the wheel: an arc from the bottom line, over the top, back down
+    const b = Math.asin(Math.min(0.99, Math.max(-0.99, (y0 - r) / R)));
+    const a0 = Math.PI - b, a1 = b, n = 12;
+    s.lineTo(cz + Math.cos(a0) * R, y0);
+    for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * (i / n); s.lineTo(cz + Math.cos(a) * R, r + Math.sin(a) * R); }
+  };
+  arch(-wb / 2); arch(wb / 2);
+  s.lineTo(zF - 0.24, y0);
+  s.quadraticCurveTo(zF + 0.02, y0, zF, y0 + 0.2);                       // front bumper bottom
+  s.lineTo(zF, yT - nose);
+  s.quadraticCurveTo(zF - 0.02, yT - hoodDrop, zF - 0.3, yT - hoodDrop * 0.85);   // rounded nose into the bonnet
+  s.quadraticCurveTo(zF * 0.25, yT + 0.015, 0, yT);                      // bonnet rises to the windshield
+  s.lineTo(zR + 0.35, yT - 0.01);                                         // boot lid
+  s.quadraticCurveTo(zR + 0.02, yT - 0.03, zR, yT - tail);               // rounded tail
+  s.lineTo(zR, y0 + 0.2);
+  s.quadraticCurveTo(zR + 0.02, y0, zR + 0.22, y0);
+  const g = extrudeSide(s, W, bv, 6);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const end = ss(0.72, 1.0, Math.abs(z) / (L / 2));                    // plan view: the corners round off
+    const shoulder = ss(yT - 0.22, yT, y);                               // tucks in towards the top edge
+    const sill = ss(y0 + 0.12, y0, y);                                   // and a little at the sill
+    p.setX(i, x * (1 - 0.075 * end * end - 0.035 * shoulder - 0.03 * sill));
+  }
+  return finish(g);
+}
+// glass cabin + roof + pillar geometry
+function glassHouse(T, W, base, cabZ, cabL, cabH, sporty) {
+  const top = base + cabH * 0.93, Wg = W * 0.84;
+  const fB = cabZ + cabL / 2 + (sporty ? 0.35 : T.van ? 0.05 : 0.22);   // windshield foot (raked forward over the bonnet)
+  const fT = cabZ + cabL * (T.van ? 0.42 : sporty ? 0.16 : 0.26);       // roof front
+  const rT = cabZ - cabL * (T.van ? 0.47 : sporty ? 0.3 : 0.3);         // roof rear
+  const rB = cabZ - cabL / 2 - (sporty ? 0.3 : T.van ? 0.0 : 0.1);       // rear window foot
+  const s = new THREE.Shape();
+  s.moveTo(rB, base - 0.02); s.lineTo(fB, base - 0.02);
+  s.quadraticCurveTo(fB - (fB - fT) * 0.35, base + cabH * 0.55, fT, top);
+  s.lineTo(rT, top);
+  s.quadraticCurveTo(rB + (rT - rB) * 0.15, base + cabH * 0.5, rB, base - 0.02);
+  const lean = (g) => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const k = Math.min(1, Math.max(0, (p.getY(i) - base) / cabH)); p.setX(i, p.getX(i) * (1 - TUCK * k)); } return g; };
+  const glass = finish(lean(extrudeSide(s, Wg, 0.06, 8)));
+  // roof skin: a thin panel following the roof line, slightly proud of the glass
+  const rs = new THREE.Shape();
+  const fT2 = fT + (fB - fT) * 0.06, rT2 = rT - (rT - rB) * 0.06;
+  rs.moveTo(rT2, top - 0.07); rs.lineTo(fT2, top - 0.07); rs.quadraticCurveTo(fT + 0.02, top + 0.03, fT - 0.15, top + 0.035);
+  rs.lineTo(rT + 0.15, top + 0.035); rs.quadraticCurveTo(rT - 0.02, top + 0.03, rT2, top - 0.07);
+  const roof = finish(lean(extrudeSide(rs, Wg + 0.03, 0.04, 6)));
+  // pillars: A (windshield edges), B (between the doors), C (rear window edges), on both sides
+  const pillars = [];
+  const hx = (y) => (Wg / 2 + 0.012) * (1 - TUCK * Math.min(1, Math.max(0, (y - base) / cabH)));
+  for (const sx of [-1, 1]) {
+    pillars.push([[sx * hx(base), base, fB - 0.04], [sx * hx(top), top, fT]]);
+    pillars.push([[sx * hx(base), base, rB + 0.04], [sx * hx(top), top, rT]]);
+    const bz = cabZ + (sporty || T.pickup ? -cabL * 0.15 : cabL * 0.02);
+    if (!sporty && !T.pickup) pillars.push([[sx * hx(base), base, bz], [sx * hx(top), top, bz]]);
+  }
+  const pillar = (a, b) => {
+    const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), len = A.distanceTo(B);
+    const g = new THREE.BoxGeometry(0.05, len, 0.09);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), B.clone().sub(A).normalize());
+    g.applyQuaternion(q); g.translate((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2);
+    return g;
+  };
+  return { glass, roof, pillars, pillar };
+}
+
 // Merge the static meshes of the body by material (fewer draw calls) and build a one-mesh LOD for distance.
 function optimize(parts) {
   const body = parts.body;
@@ -319,15 +404,14 @@ export function buildVehicleModel(type, color) {
     } else {
       const lowH = H * (T.van ? 0.4 : 0.48);
       const sporty = T.maxSpeed > 60 || T.coupe;
-      // lower body
-      const lower = m(rbox(W, lowH, L, 0.16), paint, body, 0, clear + lowH / 2, 0);
-      lower.receiveShadow = true;
-      // hood slope hint
-      m(rbox(W * 0.96, 0.1, L * 0.3, 0.05), paint, body, 0, clear + lowH + 0.01, L * 0.33);
       // cabin (glass) + roof — shaped per body style
       let cabL = L * (sporty ? 0.42 : 0.5), cabH = H - lowH - clear, cabZ = sporty ? -L * 0.06 : -L * 0.05;
       if (T.pickup) { cabL = L * 0.36; cabZ = L * 0.05; }
       if (T.van) { cabL = L * 0.8; cabZ = -L * 0.08; }
+      // lower body: one sculpted shell - real side profile (rounded nose and tail, a hood that rises to the windshield,
+      // cut-outs over the wheels), rounded edges, narrower at the ends and tucked in at the shoulder line
+      const lower = m(carShell(T, W, L, clear, lowH, r, wb, sporty), paint, body, 0, 0, 0);
+      lower.receiveShadow = true;
       if (T.convertible) {
         // open top: only a raked windshield, seats and a roll bar
         m(box(W * 0.86, cabH * 0.55, 0.05), shared.glass, body, 0, clear + lowH + cabH * 0.27, cabZ + cabL * 0.45, false).rotation.x = -0.35;
@@ -335,13 +419,13 @@ export function buildVehicleModel(type, color) {
         m(box(W * 0.84, 0.08, 0.08), paint, body, 0, clear + lowH + cabH * 0.55, cabZ - cabL * 0.35);
         carInterior(parts, body, { W, clear, lowH, cabZ, cabL, cabH, rear: false });
       } else {
-        const cab = m(rbox(W * 0.88, cabH * 0.92, cabL, 0.18), shared.glass, body, 0, clear + lowH + cabH * 0.46, cabZ, false);
+        // glasshouse: raked windshield and rear window, roof panel and pillars in body colour
+        const G = glassHouse(T, W, clear + lowH, cabZ, cabL, cabH, sporty);
+        const cab = m(G.glass, shared.glass, body, 0, 0, 0, false);
         parts.glassParts.push(cab);
-        m(rbox(W * 0.87, 0.09, cabL * 0.84, 0.04), paint, body, 0, clear + lowH + cabH * 0.95, cabZ - cabL * 0.02);
-        for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-          m(box(0.06, cabH * 0.92, 0.08), paint, body, sx * W * 0.43, clear + lowH + cabH * 0.46, cabZ + sz * cabL * 0.47);
-        }
-        if (T.van) for (const sx of [-1, 1]) m(box(0.04, cabH * 0.75, cabL * 0.55), paint, body, sx * W * 0.445, clear + lowH + cabH * 0.42, cabZ - cabL * 0.2);
+        m(G.roof, paint, body, 0, 0, 0);
+        for (const [a, b] of G.pillars) m(G.pillar(a, b), paint, body, 0, 0, 0, false);
+        if (T.van) for (const sx of [-1, 1]) m(box(0.04, cabH * 0.75, cabL * 0.55), paint, body, sx * W * 0.395, clear + lowH + cabH * 0.42, cabZ - cabL * 0.2);
         carInterior(parts, body, { W, clear, lowH, cabZ, cabL, cabH, rear: !sporty && !T.pickup && cabL > 1.9 });
       }
       if (T.pickup) {
@@ -367,7 +451,8 @@ export function buildVehicleModel(type, color) {
       body.add(hinge);
       const dl = cabL * 0.62;
       m(box(0.05, lowH, dl), paint, hinge, 0.01, lowH / 2, -dl / 2);
-      const dw = m(box(0.04, cabH * 0.8, dl * 0.95), shared.glass, hinge, 0.0, lowH + cabH * 0.42, -dl / 2, false);
+      const lean = T.convertible ? 0 : W * 0.42 * TUCK / cabH, dw = m(box(0.03, cabH * 0.78, dl * 0.95), shared.glass, hinge, T.convertible ? 0 : -(W / 2 - W * 0.42 * (1 - TUCK * 0.42)) + 0.01, lowH + cabH * 0.42, -dl / 2, false);
+      dw.rotation.z = Math.atan(lean);
       parts.glassParts.push(dw);
       m(box(0.05, 0.04, 0.18), shared.chrome, hinge, 0.04, lowH * 0.75, -dl * 0.8);
       m(box(0.02, lowH * 0.8, dl * 0.92), shared.cabin, hinge, -0.025, lowH * 0.52, -dl / 2, false);      // inner door panel
@@ -375,8 +460,8 @@ export function buildVehicleModel(type, color) {
       parts.door = hinge;
       // lights
       for (const sx of [-1, 1]) {
-        parts.lights.push(m(box(0.38, 0.14, 0.06), shared.head, body, sx * (W / 2 - 0.3), clear + lowH * 0.72, L / 2 + 0.01, false));
-        m(box(0.36, 0.13, 0.06), shared.tail, body, sx * (W / 2 - 0.3), clear + lowH * 0.75, -L / 2 - 0.01, false);
+        parts.lights.push(m(rbox(0.38, 0.14, 0.06, 0.03), shared.head, body, sx * (W / 2 - 0.32), clear + lowH * 0.6, L / 2 + 0.01, false));
+        m(rbox(0.36, 0.13, 0.06, 0.03), shared.tail, body, sx * (W / 2 - 0.32), clear + lowH * 0.62, -L / 2 - 0.01, false);
       }
       // ---- body details: door seams + handles on both sides, mirrors, grille, wheel arches, side skirts
       const fourDoor = !(sporty || T.convertible || T.pickup || T.van || T.kind === 'bike');
@@ -402,13 +487,13 @@ export function buildVehicleModel(type, color) {
         }
       }
       // grille with chrome bar + lower intake
-      m(box(W * 0.46, lowH * 0.3, 0.03), shared.dark, body, 0, clear + lowH * 0.68, L / 2 + 0.012, false);
-      m(box(W * 0.46, 0.025, 0.035), shared.chrome, body, 0, clear + lowH * 0.68, L / 2 + 0.02, false);
+      m(box(W * 0.46, lowH * 0.26, 0.03), shared.dark, body, 0, clear + lowH * 0.56, L / 2 + 0.012, false);
+      m(box(W * 0.46, 0.025, 0.035), shared.chrome, body, 0, clear + lowH * 0.56, L / 2 + 0.02, false);
       m(box(W * 0.6, lowH * 0.12, 0.03), shared.dark, body, 0, clear + lowH * 0.32, L / 2 + 0.1, false);
       // rear window frame line + third brake light
-      if (!T.convertible) m(box(W * 0.25, 0.04, 0.03), shared.tail, body, 0, clear + lowH + cabH * 0.8, cabZ - cabL * 0.5 - 0.01, false);
-      parts.panels.front = m(box(W + 0.04, lowH * 0.35, 0.14), shared.dark, body, 0, clear + lowH * 0.2, L / 2 + 0.03);
-      parts.panels.rear = m(box(W + 0.04, lowH * 0.35, 0.14), shared.dark, body, 0, clear + lowH * 0.2, -L / 2 - 0.03);
+      if (!T.convertible) m(box(W * 0.25, 0.04, 0.03), shared.tail, body, 0, clear + lowH + cabH * 0.9, cabZ - cabL * (sporty ? 0.33 : 0.33) - 0.02, false);
+      parts.panels.front = m(rbox(W * 0.96, lowH * 0.3, 0.16, 0.06), shared.dark, body, 0, clear + lowH * 0.2, L / 2 + 0.02);
+      parts.panels.rear = m(rbox(W * 0.96, lowH * 0.3, 0.16, 0.06), shared.dark, body, 0, clear + lowH * 0.2, -L / 2 - 0.02);
       m(box(0.5, 0.08, 0.02), shared.white, body, 0, clear + lowH * 0.3, -L / 2 - 0.11); // plate
       m(box(0.5, 0.08, 0.02), shared.white, body, 0, clear + lowH * 0.3, L / 2 + 0.11);
       if (T.taxi) {
@@ -425,13 +510,13 @@ export function buildVehicleModel(type, color) {
         parts.sirenB = m(box(0.34, 0.11, 0.27), lb, body, 0.21, H + 0.12, cabZ); m(box(0.18, 0.1, 0.25), lb, body, 0.55, H + 0.115, cabZ);
         m(box(0.07, 0.09, 0.27), shared.white, body, 0, H + 0.11, cabZ);
         // grille strobes (flash with the bar)
-        m(box(0.12, 0.05, 0.03), lr, body, -0.32, clear + lowH * 0.68, L / 2 + 0.03, false); m(box(0.12, 0.05, 0.03), lb, body, 0.32, clear + lowH * 0.68, L / 2 + 0.03, false);
+        m(box(0.12, 0.05, 0.03), lr, body, -0.32, clear + lowH * 0.56, L / 2 + 0.03, false); m(box(0.12, 0.05, 0.03), lb, body, 0.32, clear + lowH * 0.56, L / 2 + 0.03, false);
         // livery: blue band with "משטרה" on both doors, checker line, lettering on the bonnet
         const band = policeBand();
         for (const sx of [-1, 1]) {
           const pl = new THREE.Mesh(new THREE.PlaneGeometry(L * 0.7, lowH * 0.42), band.side); pl.position.set(sx * (W / 2 + 0.05), clear + lowH * 0.58, -0.05); pl.rotation.y = sx * Math.PI / 2; body.add(pl);
         }
-        const hood = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.55, 0.2), band.hood); hood.position.set(0, clear + lowH + 0.015, L / 2 - 0.55); hood.rotation.x = -Math.PI / 2; body.add(hood);
+        const hood = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.55, 0.2), band.hood); hood.position.set(0, clear + lowH - 0.035, L / 2 - 0.55); hood.rotation.x = -Math.PI / 2; body.add(hood);
         // push bar + antenna
         for (const sx of [-1, 1]) m(box(0.05, 0.34, 0.05), shared.dark, body, sx * 0.33, clear + 0.28, L / 2 + 0.16, false);
         m(box(0.76, 0.045, 0.05), shared.dark, body, 0, clear + 0.42, L / 2 + 0.16, false); m(box(0.76, 0.045, 0.05), shared.dark, body, 0, clear + 0.16, L / 2 + 0.16, false);

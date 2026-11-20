@@ -166,20 +166,21 @@ export class Environment {
     // lights
     const sunUp = elev > -0.05;
     this.sun.color.setHex(0xfff1dc).lerp(C(0xff9a5a), dusk * 0.8);
-    this.sun.intensity = sunUp ? 2.6 * smoothstep(-0.05, 0.2, elev) * (1 - cl * 0.7) : 0.25 * (1 - cl);
+    this.sun.intensity = sunUp ? 2.9 * smoothstep(-0.05, 0.2, elev) * (1 - cl * 0.7) : 0.25 * (1 - cl);
     if (!sunUp) this.sun.color.setHex(0x8fa6d6); // moonlight
     // low sun / moon: long grazing shadows band and stripe on flat roads -> fade them out smoothly
     this.sun.shadow.intensity = sunUp ? smoothstep(0.06, 0.3, elev) : 0;
     this.lightDir = sunUp ? this.sunDir : U.moonDir.value;
-    this.hemi.intensity = 0.18 + day * 0.95 * (1 - cl * 0.25);
+    this.hemi.intensity = 0.18 + day * 0.8 * (1 - cl * 0.25);   // a little less fill: crisper sun / shade contrast
     this.hemi.color.setHex(0xcfe6ff).lerp(C(0x5a6b8f), this.night);
     this.hemi.groundColor.setHex(0x6b6250).lerp(C(0x1b1d24), this.night);
     // the live probe already contains the real brightness (dark at night); the static fallback needs scaling
     this.scene.environmentIntensity = this.probeReady ? 0.45 + 0.45 * day + this.wet * 0.35 : 0.12 + 0.6 * day + this.wet * 0.3;
-    this.scene.fog.color.copy(hor);
+    // aerial perspective: by day the air is a warm, dusty haze that starts close and swallows the distance
+    this.scene.fog.color.copy(hor).lerp(this._tmp.setHex(0xd9d0bd), 0.45 * day * (1 - cl * 0.6));
     const ff = this.fogFar * this.w.fog;
-    this.scene.fog.far = ff * 0.97; this.scene.fog.near = ff * 0.25 * this.w.fog;
-    this.renderer.toneMappingExposure = 1.0 + this.night * 0.25;
+    this.scene.fog.far = ff * 0.97; this.scene.fog.near = ff * (0.25 - 0.19 * day * (1 - cl)) * this.w.fog;
+    this.renderer.toneMappingExposure = 1.0 + this.night * 0.15;
     this.rain.material.opacity = this.w.rain * 0.45;
     this.rain.visible = this.w.rain > 0.02;
     return { night: this.night, wet: this.wet, rain: this.w.rain };

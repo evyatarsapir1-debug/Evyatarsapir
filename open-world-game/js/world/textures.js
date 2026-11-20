@@ -183,49 +183,109 @@ export function bumpOf(t) {
 export function getRoof() {
   return cache.roof ||= (() => { const [c, g] = canvas(128, 128); noise(g, 128, 128, '#8b8b88', 30, 2500, 2, 11); return tex(c); })();
 }
+// ---- realistic ground surfaces: everything tiles seamlessly (each mark is drawn at all 9 wrap offsets) ----
+function wrapDraw(N, M, fn) { for (const ox of [-N, 0, N]) for (const oy of [-M, 0, M]) fn(ox, oy); }
+function blotches(g, N, M, r, count, rmin, rmax, cols) {
+  for (let i = 0; i < count; i++) {
+    const x = r.float(0, N), y = r.float(0, M), rad = r.float(rmin, rmax), col = cols[Math.floor(r.float(0, cols.length))];
+    wrapDraw(N, M, (ox, oy) => {
+      const gr = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, rad);
+      gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(x + ox - rad, y + oy - rad, rad * 2, rad * 2);
+    });
+  }
+}
+function speckle(g, N, M, amt, seed) {
+  const img = g.getImageData(0, 0, N, M), d = img.data, r = new RNG(seed);
+  for (let i = 0; i < d.length; i += 4) {
+    let n = (r.float(0, 1) - 0.5) * amt;
+    if (r.float(0, 1) < 0.04) n += (r.float(0, 1) - 0.4) * amt * 2.2;   // aggregate stones catching the light
+    d[i] += n; d[i + 1] += n; d[i + 2] += n * 0.95;
+  }
+  g.putImageData(img, 0, 0);
+}
+function cracks(g, N, M, r, count, len, col, width) {
+  g.strokeStyle = col; g.lineCap = 'round'; g.lineJoin = 'round';
+  for (let i = 0; i < count; i++) {
+    let x = r.float(0, N), y = r.float(0, M), a = r.float(0, Math.PI * 2);
+    const pts = [[x, y]], n = 4 + Math.floor(r.float(0, len));
+    for (let k = 0; k < n; k++) { a += r.float(-0.7, 0.7); x += Math.cos(a) * r.float(3, 9); y += Math.sin(a) * r.float(3, 9); pts.push([x, y]); }
+    g.lineWidth = width * r.float(0.6, 1.3);
+    wrapDraw(N, M, (ox, oy) => { g.beginPath(); pts.forEach(([px, py], j) => (j ? g.lineTo(px + ox, py + oy) : g.moveTo(px + ox, py + oy))); g.stroke(); });
+  }
+}
+function asphaltBase(g, N, M, seed) {
+  const r = new RNG(seed);
+  g.fillStyle = '#4a4b4c'; g.fillRect(0, 0, N, M);
+  blotches(g, N, M, r, 26, 30, 110, ['rgba(30,30,32,0.22)', 'rgba(120,118,112,0.12)', 'rgba(70,64,56,0.16)']);   // worn / sun-bleached areas
+  // repair patches: slightly darker, sharp-edged rectangles of newer asphalt
+  for (let i = 0; i < 3; i++) {
+    const x = r.float(0, N), y = r.float(0, M), w = r.float(20, 70), h = r.float(16, 60);
+    wrapDraw(N, M, (ox, oy) => { g.fillStyle = 'rgba(22,22,24,0.32)'; g.fillRect(x + ox, y + oy, w, h); g.strokeStyle = 'rgba(15,15,15,0.5)'; g.lineWidth = 1.2; g.strokeRect(x + ox, y + oy, w, h); });
+  }
+  speckle(g, N, M, 26, seed + 1);
+  cracks(g, N, M, r, 6, 9, 'rgba(18,18,18,0.55)', 0.9);          // hairline cracks
+  cracks(g, N, M, r, 2, 12, 'rgba(14,14,14,0.38)', 2.0);           // glossy tar-sealed joints
+}
 export function getTiles() {
-  // sidewalks: red clay pavers laid in a herringbone pattern (seamless: the pattern repeats every 32 px)
+  // sidewalks: poured concrete slabs (2 x 2 per 3 m tile) with expansion joints, mottling, gum and grime stains, cracks
   return cache.tiles ||= (() => {
-    const N = 256, u = 8, [c, g] = canvas(N, N);
-    g.fillStyle = '#6f5b4d'; g.fillRect(0, 0, N, N);                      // mortar / sand joints
-    const shades = ['#a9563b', '#b4613f', '#9b4b34', '#bf6d4c', '#a34f39', '#b86a47', '#94462f'];
-    const hash = (x, y) => { const h = Math.sin((((x % N) + N) % N) * 12.9898 + (((y % N) + N) % N) * 78.233) * 43758.5453; return h - Math.floor(h); };
-    const brick = (x, y, w, h) => {
-      const col = shades[Math.floor(hash(x, y) * shades.length)];
-      for (const ox of [-N, 0, N]) for (const oy of [-N, 0, N]) {
-        const X = x + ox, Y = y + oy; if (X > N || Y > N || X + w < 0 || Y + h < 0) continue;
-        g.fillStyle = col; g.fillRect(X + 0.6, Y + 0.6, w - 1.2, h - 1.2);
-        g.fillStyle = 'rgba(255,230,200,0.10)'; g.fillRect(X + 0.6, Y + 0.6, w - 1.2, 1.2);   // worn top edge
-        g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(X + 0.6, Y + h - 1.6, w - 1.2, 1);
-      }
-    };
-    for (let s = -20; s <= 20; s++) for (let k = -40; k <= 40; k++) {
-      const x = k * u + s * 2 * u, y = k * u - s * 2 * u;
-      if (x < -3 * u || x > N || y < -3 * u || y > N) continue;
-      brick(x, y, 2 * u, u); brick(x, y + u, u, 2 * u);
+    const N = 512, [c, g] = canvas(N, N), r = new RNG(71);
+    g.fillStyle = '#bdb8ae'; g.fillRect(0, 0, N, N);
+    blotches(g, N, N, r, 40, 25, 120, ['rgba(120,112,98,0.16)', 'rgba(255,250,240,0.14)', 'rgba(90,86,80,0.12)']);
+    // each slab a slightly different shade
+    for (const [x, y] of [[0, 0], [256, 0], [0, 256], [256, 256]]) { g.fillStyle = `rgba(${r.float(0, 1) < 0.5 ? '255,250,240' : '60,55,50'},${r.float(0.02, 0.07)})`; g.fillRect(x, y, 256, 256); }
+    speckle(g, N, N, 18, 72);
+    // grime collects along the joints
+    for (const v of [0, 256, 512]) {
+      const gr = g.createLinearGradient(0, v - 14, 0, v + 14); gr.addColorStop(0, 'rgba(70,64,56,0)'); gr.addColorStop(0.5, 'rgba(70,64,56,0.22)'); gr.addColorStop(1, 'rgba(70,64,56,0)');
+      g.fillStyle = gr; g.fillRect(0, v - 14, N, 28);
+      const gc = g.createLinearGradient(v - 14, 0, v + 14, 0); gc.addColorStop(0, 'rgba(70,64,56,0)'); gc.addColorStop(0.5, 'rgba(70,64,56,0.22)'); gc.addColorStop(1, 'rgba(70,64,56,0)');
+      g.fillStyle = gc; g.fillRect(v - 14, 0, 28, N);
     }
-    // grime and wear
-    const img = g.getImageData(0, 0, N, N), d = img.data;
-    for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 22; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
-    g.putImageData(img, 0, 0);
+    // expansion joints: dark groove with a lit edge
+    for (const v of [0, 256]) {
+      g.fillStyle = 'rgba(40,36,32,0.85)'; g.fillRect(0, v - 1.5, N, 3); g.fillRect(v - 1.5, 0, 3, N);
+      g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(0, v + 1.5, N, 1); g.fillRect(v + 1.5, 0, 1, N);
+    }
+    // gum spots and stains
+    for (let i = 0; i < 30; i++) { const x = r.float(0, N), y = r.float(0, N), rr = r.float(1.5, 4); g.fillStyle = `rgba(40,38,36,${r.float(0.25, 0.5)})`; g.beginPath(); g.ellipse(x, y, rr, rr * r.float(0.7, 1), r.float(0, 3), 0, Math.PI * 2); g.fill(); }
+    blotches(g, N, N, r, 5, 10, 28, ['rgba(50,44,38,0.28)']);
+    cracks(g, N, N, r, 4, 12, 'rgba(60,55,50,0.55)', 1);
     return tex(c);
   })();
 }
 export function getAsphalt() {
-  return cache.asphalt ||= (() => { const [c, g] = canvas(256, 256); noise(g, 256, 256, '#3c3f43', 22, 9000, 2, 13); return tex(c); })();
+  return cache.asphalt ||= (() => { const [c, g] = canvas(512, 512); asphaltBase(g, 512, 512, 13); return tex(c); })();
 }
 // Road strip texture: across = 14m (u 0..1), along repeats every 12m.
 export function getRoad() {
   return cache.road ||= (() => {
-    const [c, g] = canvas(256, 256);
-    noise(g, 256, 256, '#3c3f43', 22, 9000, 2, 13);
-    const m = (v) => (v / 14 + 0.5) * 256;
-    g.fillStyle = '#e8e3d0';
-    // dashed center
-    for (let y = 0; y < 256; y += 64) g.fillRect(m(0) - 2, y, 4, 34);
-    // lane edge lines (parking lanes beyond)
-    g.fillStyle = 'rgba(235,235,235,0.85)';
-    g.fillRect(m(-4.6) - 1.5, 0, 3, 256); g.fillRect(m(4.6) - 1.5, 0, 3, 256);
+    const N = 512, [c, g] = canvas(N, N), r = new RNG(29);
+    asphaltBase(g, N, N, 19);
+    const m = (v) => (v / 14 + 0.5) * N;
+    // tyre tracks: the wheel paths of each lane are darker and smoother (rubber and oil), the middle of the lane
+    // collects oil drips
+    for (const lane of [-2.3, 2.3]) {
+      for (const w of [-0.8, 0.8]) {
+        const x = m(lane + w), gr = g.createLinearGradient(x - 16, 0, x + 16, 0);
+        gr.addColorStop(0, 'rgba(20,20,22,0)'); gr.addColorStop(0.5, 'rgba(20,20,22,0.28)'); gr.addColorStop(1, 'rgba(20,20,22,0)');
+        g.fillStyle = gr; g.fillRect(x - 16, 0, 32, N);
+      }
+      const gr = g.createLinearGradient(m(lane) - 12, 0, m(lane) + 12, 0);
+      gr.addColorStop(0, 'rgba(25,22,18,0)'); gr.addColorStop(0.5, 'rgba(25,22,18,0.3)'); gr.addColorStop(1, 'rgba(25,22,18,0)');
+      g.fillStyle = gr; g.fillRect(m(lane) - 12, 0, 24, N);
+      for (let i = 0; i < 10; i++) { const y = r.float(0, N), x = m(lane) + r.float(-6, 6), rr = r.float(3, 9); wrapDraw(0, N, (ox, oy) => { const s2 = g.createRadialGradient(x, y + oy, 0, x, y + oy, rr); s2.addColorStop(0, 'rgba(12,10,8,0.45)'); s2.addColorStop(1, 'rgba(12,10,8,0)'); g.fillStyle = s2; g.fillRect(x - rr, y + oy - rr, rr * 2, rr * 2); }); }
+    }
+    // worn paint: lines drawn on their own layer, then eaten away by noise and tyres before going onto the road
+    const [lc, lg] = canvas(N, N);
+    lg.fillStyle = '#e9e4d2';
+    for (let y = 0; y < N; y += 128) lg.fillRect(m(0) - 4, y, 8, 68);                      // dashed centre line
+    lg.fillStyle = '#ecece8'; lg.fillRect(m(-4.6) - 3, 0, 6, N); lg.fillRect(m(4.6) - 3, 0, 6, N);   // lane edges
+    const img = lg.getImageData(0, 0, N, N), d = img.data, rr = new RNG(31);
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3]) { const y = (i / 4 / N) | 0; d[i + 3] = Math.max(0, 255 * (0.92 - rr.float(0, 0.55) - 0.25 * (Math.sin(y * 0.05) * 0.5 + 0.5) * rr.float(0, 1))); }
+    lg.putImageData(img, 0, 0);
+    g.drawImage(lc, 0, 0);
     return tex(c);
   })();
 }
@@ -240,9 +300,14 @@ export function getCrosswalk() {
   })();
 }
 export function getGrass() {
+  // city grass: patchy green with dry, sun-burnt yellow areas and bare soil spots
   return cache.grass ||= (() => {
-    const [c, g] = canvas(256, 256);
-    noise(g, 256, 256, '#5f8f3f', 30, 12000, 2, 14);
+    const N = 256, [c, g] = canvas(N, N), r = new RNG(14);
+    g.fillStyle = '#62803e'; g.fillRect(0, 0, N, N);
+    blotches(g, N, N, r, 30, 15, 60, ['rgba(160,150,80,0.35)', 'rgba(60,90,35,0.35)', 'rgba(120,100,60,0.25)', 'rgba(140,130,70,0.3)']);
+    const img = g.getImageData(0, 0, N, N), d = img.data;
+    for (let i = 0; i < d.length; i += 4) { const n = (r.float(0, 1) - 0.5) * 46; d[i] += n * 0.9; d[i + 1] += n; d[i + 2] += n * 0.5; }
+    g.putImageData(img, 0, 0);
     return tex(c);
   })();
 }

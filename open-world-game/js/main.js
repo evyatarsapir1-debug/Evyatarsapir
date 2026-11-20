@@ -747,7 +747,7 @@ class Game {
     const L = this.env.tick(dt);
     this.fx?.update(L, this.env.hour);
     const n = L.night, M = this.mats;
-    for (const st of ['glass', 'office', 'concrete', 'plaster', 'brick', 'industrial', 'storefront']) M['f_' + st].emissiveIntensity = n * (st === 'storefront' ? 1.3 : 1.05);
+    for (const st of ['glass', 'office', 'concrete', 'plaster', 'brick', 'industrial', 'storefront']) M['f_' + st].emissiveIntensity = Math.pow(n, 1.6) * (st === 'storefront' ? 1.1 : 0.75);   // lights come on gradually; lit windows glow, not blaze
     M.lamp.emissiveIntensity = 0.6 + n * 2.6;
     M.signs.emissiveIntensity = 0.15 + n * 0.9;
     vehicleMats.head.emissiveIntensity = 0.4 + n * 3;
