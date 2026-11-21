@@ -81,7 +81,10 @@ class Game {
   }
 
   async load() {
-    const step = async (pct, text) => { $('loadBar').style.width = pct + '%'; $('loadText').textContent = text; await new Promise((r) => setTimeout(r, 0)); };
+    // the percentage on screen follows the GTA-style intro clock (see _startIntro); the real steps only change the text
+    const devMenu = localStorage.getItem('azura_dev_menu') === '1' || /[?&]menu\b/.test(location.search);
+    if (!devMenu) this._intro = this._startIntro();
+    const step = async (pct, text) => { if (devMenu) { $('loadBar').style.width = pct + '%'; $('loadText').textContent = text; } await new Promise((r) => setTimeout(r, 0)); };
     await step(5, 'מתכנן את העולם...');
     this.graph = new RoadGraph();
     this.statics = new StaticWorld();
@@ -144,8 +147,41 @@ class Game {
     this.renderer.compile(this.scene, this.camera);
     await step(100, 'מוכן!');
     this._bindUI();
-    this.toMenu();
     this.renderer.setAnimationLoop(() => this.frame());
+    if (devMenu) { this.toMenu(); return; }        // developer / test entry: the old main menu, no waiting
+    // straight into the game, like GTA: when the intro reaches the end you are in the city (your saved game, or a new one)
+    this.state = 'intro';
+    await this._intro;
+    if (hasSave()) this.continueGame(); else this.newGame();
+  }
+
+  // GTA-style loading: pictures from the game fade into each other with a slow pan; the counter climbs 10% every
+  // 3 seconds up to 90%, holds 3 seconds, then 5 more seconds and the game starts (about 35 s). If the city is not
+  // ready by then (very slow device) it stays on 90% until it is.
+  _startIntro() {
+    const slides = [...document.querySelectorAll('#loading .ld-slide')], cap = $('ldCap');
+    let i = -1, z = 1;
+    const next = () => {
+      const prev = slides[i]; i = (i + 1) % slides.length; const s = slides[i];
+      s.style.zIndex = ++z; s.classList.remove('on'); void s.offsetWidth; s.classList.add('on');
+      if (prev && prev !== s) setTimeout(() => prev.classList.remove('on'), 1500);
+      cap.classList.remove('on'); setTimeout(() => { cap.textContent = s.dataset.cap || ''; cap.classList.add('on'); }, 600);
+    };
+    const show = (pct) => { $('loadPct').textContent = pct + '%'; $('loadBar').style.width = pct + '%'; };
+    next(); show(0);
+    const slideT = setInterval(next, 5800);
+    // read the real clock (not a tick counter), so a busy phone that delays a timer never stretches the intro
+    const t0 = performance.now();
+    return new Promise((resolve) => {
+      let last = 0, told = false;
+      const tick = setInterval(() => {
+        const t = (performance.now() - t0) / 1000;
+        const pct = Math.min(90, Math.floor(t / 3) * 10);
+        if (pct !== last) { last = pct; show(pct); }
+        if (t >= 30 && !told) { told = true; $('loadText').textContent = 'נכנס ללוס אנטוס...'; }   // 90% at 27 s, held 3 s
+        if (t >= 35) { clearInterval(tick); clearInterval(slideT); resolve(); }                      // then 5 s more
+      }, 100);
+    });
   }
 
   applySettings(s) {
@@ -187,29 +223,22 @@ class Game {
     $('btnSettings').onclick = () => { this.settingsBack = 'menu'; showScreen('settings'); };
     $('btnExit').onclick = () => { this.save(); showScreen('exitScreen'); try { window.close(); } catch { /* ignore */ } };
     $('exitBack').onclick = () => this.toMenu();
-    $('cBack').onclick = () => (this.creatorBack === 'pause' ? this.pause() : this.toMenu());
+    $('cBack').onclick = () => this.toMenu();
     $('cStart').onclick = () => {
       if (this.creatorBack === 'pause') { this.save(); this.resume(); return; }
       if (this.pendingNew || !hasSave()) this.newGame(); else { this.save(true); this.continueGame(); }
     };
     $('sHour').oninput = (e) => { this.env.hour = +e.target.value; };
     $('btnSettings').addEventListener('click', () => { $('sHour').value = this.env.hour; });
-    $('pSettings').addEventListener('click', () => { $('sHour').value = this.env.hour; });
-    $('sBack').onclick = () => (this.settingsBack === 'pause' ? this.pause() : this.toMenu());
-    $('pResume').onclick = () => this.resume();
-    $('pMap').onclick = () => this.openMap();
-    $('pChar').onclick = () => { this.creatorBack = 'pause'; this.toCreator(true); };
-    $('pSettings').onclick = () => { this.settingsBack = 'pause'; showScreen('settings'); };
-    $('pHelp').onclick = () => showScreen('help');
-    $('hBack').onclick = () => this.pause();
-    $('pSave').onclick = () => { this.save(); this.toast('המשחק נשמר'); this.resume(); };
-    $('pMenu').onclick = () => { this.save(); this.toMenu(); };
+    $('sBack').onclick = () => this.toMenu();
+    $('hBack').onclick = () => this.toMenu();
     // leaving the map after marking a spot: a short hint, the route itself is only the purple line on the map
     $('mapClose').onclick = () => { const marked = this.gps.dest && this.gps.dest !== this._markAtOpen; this.resume(); if (marked) this.toast('📍 תסתכל בסימון על המפה', 2); };
     $('bagClose').onclick = () => this.closeBag();
     this._bindFullMap();
     $('prompt').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); const k = $('prompt').dataset.key; if (k) this.input.pressed.add(k); });
-    document.addEventListener('visibilitychange', () => { if (document.hidden && this.state === 'playing') { this.save(); this.pause(); } });
+    // no pause menu: leaving the app just saves and silences the game; coming back carries on
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { if (this.state === 'playing') this.save(); this.audio.mute(true); } else { this.audio.mute(false); this.clock.getDelta(); } });
   }
 
   // ------------------------------------------------------------------ states
@@ -642,7 +671,6 @@ class Game {
     this.rig.yaw = facing; this.rig.first = true;
   }
 
-  pause() { if (this.state === 'menu') return; this.state = 'paused'; showScreen('pause'); this.audio.mute(true); }
   resume() { this.state = 'playing'; showScreen(null); this.audio.mute(false); this.input.endFrame(); this.clock.getDelta(); }
   openMap() {
     this.state = 'map'; showScreen('mapScreen'); this._markAtOpen = this.gps.dest;
@@ -728,6 +756,7 @@ class Game {
   // ------------------------------------------------------------------ frame
   frame() {
     const dt = Math.min(0.05, this.clock.getDelta());
+    if (this.state === 'intro') return;   // the loading pictures cover the screen: don't spend the phone's power drawing behind them
     this.time += dt;
     this.fpsAvg = this.fpsAvg * 0.95 + (1 / Math.max(dt, 0.001)) * 0.05;
     if (this.state === 'menu' || this.state === 'exit') this._menuFrame(dt);
@@ -832,7 +861,6 @@ class Game {
     const input = this.input, p = this.player;
     input.poll();
     this.playTime = (this.playTime || 0) + dt;
-    if (input.wasPressed('pause')) { this.save(); this.pause(); input.endFrame(); return; }
     if (input.wasPressed('map')) { this.openMap(); input.endFrame(); return; }
     if (input.wasPressed('camera')) this.rig.toggleMode();
     if (input.wasPressed('bag')) { this.openBag(); input.endFrame(); return; }

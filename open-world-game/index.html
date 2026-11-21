@@ -17,9 +17,24 @@
 
   <!-- Loading -->
   <div id="loading" class="screen show">
-    <div class="logo">לוס <span>אנטוס</span></div>
-    <div class="bar"><div id="loadBar"></div></div>
-    <div id="loadText">טוען את העיר...</div>
+    <!-- GTA-style loading: big pictures from the game itself, slowly panning and fading into each other -->
+    <div class="ld-slides">
+      <div class="ld-slide" style="background-image:url(assets/loading/skyline.jpg)" data-cap="לוס אנטוס — העיר שלא נרדמת"></div>
+      <div class="ld-slide" style="background-image:url(assets/loading/rifle.jpg);background-position:center 40%" data-cap="ג׳ייסון. אל תעמוד בדרך שלו."></div>
+      <div class="ld-slide" style="background-image:url(assets/loading/woman.jpg);background-position:center 18%" data-cap="כל אחד כאן מחפש משהו"></div>
+      <div class="ld-slide" style="background-image:url(assets/loading/car.jpg)" data-cap="תבחר רכב. כל רכב."></div>
+      <div class="ld-slide" style="background-image:url(assets/loading/trio.jpg);background-position:center 60%" data-cap="מיגל · טבור · ג׳ייסון"></div>
+      <div class="ld-slide" style="background-image:url(assets/loading/night.jpg)" data-cap="בלילה העיר מתחילה לחיות"></div>
+    </div>
+    <div class="ld-shade"></div>
+    <div class="ld-logo">לוס <span>אנטוס</span></div>
+    <div class="ld-cap" id="ldCap"></div>
+    <div class="ld-prog">
+      <div class="ld-spin"></div>
+      <div class="ld-pct" id="loadPct">0%</div>
+      <div class="bar"><div id="loadBar"></div></div>
+      <div id="loadText">טוען את לוס אנטוס...</div>
+    </div>
   </div>
 
   <!-- Main menu -->
@@ -83,21 +98,6 @@
     </div>
   </div>
 
-  <!-- Pause -->
-  <div id="pause" class="screen panel-screen">
-    <div class="creator-panel narrow">
-      <h2>הפסקה</h2>
-      <div class="menu-buttons">
-        <button class="mbtn primary" id="pResume">המשך</button>
-        <button class="mbtn" id="pMap">מפת העיר</button>
-        <button class="mbtn" id="pChar">שינוי מראה</button>
-        <button class="mbtn" id="pSettings">הגדרות</button>
-        <button class="mbtn" id="pHelp">מקשים ושליטה</button>
-        <button class="mbtn" id="pSave">שמור משחק</button>
-        <button class="mbtn" id="pMenu">שמור וצא לתפריט</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Help -->
   <div id="help" class="screen panel-screen">
@@ -189,7 +189,6 @@
     <button id="phoneBtn" data-btn="phone" type="button" aria-label="טלפון"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3" fill="none" stroke="#fff" stroke-width="2"/><circle cx="12" cy="18" r="1.3" fill="#fff"/></svg><i id="phoneBadge"></i></button>
     <div id="gpsHud"><div class="garrow"><svg viewBox="0 0 40 40"><path d="M20 2 L35 36 L20 27 L5 36 Z"/></svg></div><div class="ginfo"><div class="gmain"><b class="gdist"></b><span class="geta"></span></div><small class="gname"></small></div><button id="gpsCancel" type="button" aria-label="בטל סימון">✕</button></div>
     <div id="objective"></div>
-    <button id="pauseBtn" data-btn="pause" aria-label="הפסקה">II</button>
   </div>
 
   <!-- Touch controls (shown only on touch devices) -->
