@@ -353,6 +353,7 @@ export class Gangs {
   // ------------------------------------------------------------------ convoy: the crew drives behind you
   _trail(v) {
     const L = this.trail, last = L[L.length - 1];
+    if (last && v.speed < 0.3) return;   // reversing / standing: the road ahead of the convoy does not grow
     if (!last || Math.hypot(v.x - last.x, v.z - last.z) > 0.6) {
       this.trailS += last ? Math.hypot(v.x - last.x, v.z - last.z) : 0;
       L.push({ x: v.x, z: v.z, y: v.y, s: this.trailS });
@@ -478,10 +479,13 @@ export class Gangs {
   _drive(dt, pv) {
     this._trail(pv);
     const vmax = Math.abs(pv.speed) + 12;
+    // backing up into them: they back up along the road too, keeping their distance
+    let back = Infinity;
+    if (pv.speed < -0.3) { const L = this.trail; let best = Infinity; for (let i = Math.max(0, L.length - 400); i < L.length; i++) { const d = Math.hypot(L[i].x - pv.x, L[i].z - pv.z); if (d < best) { best = d; back = L[i].s; } } }
     for (const c of this.convoy) {
       // every ride keeps its own place on the road you drove and moves along it - the same corners, the same lane
-      const want = this.trailS - 11 - c.k * 9.5, prev = c.s;
-      c.s = Math.max(c.s ?? want, Math.min(want, (c.s ?? want) + vmax * dt));
+      const gap = 11 + c.k * 9.5, want = Math.min(this.trailS, back) - gap, prev = c.s ?? want;
+      c.s = prev > want ? want : Math.min(want, prev + vmax * dt);   // backs off at once, catches up at a car's pace
       if (want - c.s > 60) c.s = want - 60;   // fell far behind (you raced off): catch up out of sight
       const at = this._at(c.s), ahead = this._at(c.s + 3); if (!at) continue;
       const v = c.v; v.x = at.x; v.z = at.z; v.y = at.y;

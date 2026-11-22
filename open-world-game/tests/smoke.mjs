@@ -1107,7 +1107,7 @@ const gang = await g(() => {
   // drive: they ride behind in the crew's cars / bikes, and get out when you do
   const v = game.spawnVehicleNear('sedan', 503.5, 515); v.x = 503.5; v.z = 515; v.heading = 0; v.sync(); step(5);
   const dp = v.doorPoint(); game.teleport(dp.x, dp.z, 0); step(3); game.input.pressed.add('vehicle'); step(70);
-  const I = game.input; step(30 * 5, () => { I.joyY = 1; I.joyX = 0; }); step(30 * 1.5, () => { I.joyY = -1; }); I.joyY = 0; step(20);
+  const I = game.input; step(30 * 5, () => { I.joyY = 1; I.joyX = 0; }); step(30 * 1.5, () => { I.joyY = -1; }); I.joyY = 0; step(30 * 3);   // roll to a stop before getting out
   const convoy = Gs.convoy.length, convoyColor = Gs.convoy[0]?.v.parts.baseColor.getHex(), behind = Gs.convoy.map((c) => ((c.v.x - v.x) * Math.sin(v.heading) + (c.v.z - v.z) * Math.cos(v.heading)));
   game.input.pressed.add('vehicle'); step(90); step(30 * 3);
   const out = Gs.convoy.length === 0 && Gs.followers.every((f) => f.state !== 'convoy'), nearAfter = Gs.followers.filter((f) => Math.hypot(f.x - P.x, f.z - P.z) < 9).length;
