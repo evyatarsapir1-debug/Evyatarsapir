@@ -180,6 +180,13 @@ export class Environment {
     this.scene.fog.color.copy(hor).lerp(this._tmp.setHex(0xd9d0bd), 0.45 * day * (1 - cl * 0.6));
     const ff = this.fogFar * this.w.fog;
     this.scene.fog.far = ff * 0.97; this.scene.fog.near = ff * (0.25 - 0.19 * day * (1 - cl)) * this.w.fog;
+    // high in the air (helicopter, skydiving) you look down through clean air: the haze thins out so the city shows
+    // clearly below, only the horizon fades - and it turns a little bluer
+    const hi = smoothstep(60, 450, this.camY || 0);
+    if (hi > 0) {
+      this.scene.fog.near = lerp(this.scene.fog.near, ff * 0.62, hi); this.scene.fog.far = lerp(this.scene.fog.far, ff * 1.75, hi);
+      this.scene.fog.color.lerp(this._tmp.setRGB(0.62, 0.72, 0.84).multiplyScalar(0.35 + 0.65 * day), hi * 0.55);
+    }
     this.renderer.toneMappingExposure = 1.0 + this.night * 0.15;
     this.rain.material.opacity = this.w.rain * 0.45;
     this.rain.visible = this.w.rain > 0.02;
@@ -210,6 +217,7 @@ export class Environment {
   _mix(a, b, t) { return new THREE.Color().copy(a).lerp(b, t); }
 
   update(focus, dt = 0.016, camera) {
+    if (camera) this.camY = camera.position.y;
     const d = this.lightDir || this.sunDir;
     const snap = 0.5;
     const fx = Math.round(focus.x / snap) * snap, fz = Math.round(focus.z / snap) * snap;

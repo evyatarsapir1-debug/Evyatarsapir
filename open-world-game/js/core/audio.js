@@ -22,6 +22,22 @@ export class GameAudio {
     } catch { this.ctx = null; }
   }
   setVolume(v) { this.volume = v; if (this.master) this.master.gain.value = v; }
+  // rushing wind (free fall, parachute, open helicopter): looped filtered noise, louder and brighter the faster you go
+  wind(level) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    if (!this.windGain) {
+      if (level <= 0.01) return;
+      const len = 2, buf = ctx.createBuffer(1, ctx.sampleRate * len, ctx.sampleRate), d = buf.getChannelData(0);
+      let b = 0; for (let i = 0; i < d.length; i++) { b = b * 0.97 + (Math.random() * 2 - 1) * 0.3; d[i] = b; }
+      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+      this.windFilter = ctx.createBiquadFilter(); this.windFilter.type = 'bandpass'; this.windFilter.Q.value = 0.7; this.windFilter.frequency.value = 400;
+      this.windGain = ctx.createGain(); this.windGain.gain.value = 0;
+      src.connect(this.windFilter); this.windFilter.connect(this.windGain); this.windGain.connect(this.master); src.start();
+    }
+    this.windGain.gain.setTargetAtTime(level * 0.5, t, 0.25);
+    this.windFilter.frequency.setTargetAtTime(250 + level * 900, t, 0.3);
+  }
   // vehicle: null when on foot
   update(vehicle, throttle, horn) {
     if (!this.ctx) return;

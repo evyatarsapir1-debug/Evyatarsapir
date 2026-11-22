@@ -36,6 +36,7 @@ import { setAnisotropy } from './world/textures.js';
 import { makeMaterials } from './world/worldBuilder.js';
 import { ChunkManager } from './world/chunkManager.js';
 import { Environment } from './world/sky.js';
+import { Clouds } from './world/clouds.js';
 import { StaticWorld } from './physics/collision.js';
 import { RoadGraph, lightState } from './traffic/roadGraph.js';
 import { Traffic } from './traffic/traffic.js';
@@ -90,6 +91,7 @@ class Game {
     this.statics = new StaticWorld();
     this.mats = makeMaterials();
     this.env = new Environment(this.scene, this.renderer);
+    this.clouds = new Clouds(this.scene);
     await step(25, 'סולל כבישים ומדרכות...');
     this.chunks = new ChunkManager(this.scene, this.mats, this.statics, surfaces);
     this.physCells = [];
@@ -767,6 +769,7 @@ class Game {
     else if (this.state === 'switching') this.chars.frame(dt);
     else if (this.state === 'charwheel') this.chars.wheelFrame(dt);
     this._lights();
+    this.clouds?.update(this.camera, this.env);
     this.fx.render();
     this.env.probe(this.camera);   // live reflections: one cube-map face per frame
   }
@@ -1017,7 +1020,8 @@ class Game {
     fl.intensity = on ? 60 : 0;
     if (on) { fl.position.set(p.x, p.y + 1.5, p.z); fl.target.position.set(p.x + Math.sin(p.facing) * 8, p.y + 0.4, p.z + Math.cos(p.facing) * 8); }
     // flying fast: stream less detail and at most one chunk per frame -> no stutters in the air
-    const flying = v && v.isAir && v.airborne && v.y > 35, high = flying && v.y > 90;
+    const sky = p.state === 'foot' && (p.skydive || p.parachute) && (p.altitude || 0) > 35;   // skydiving counts as flying too
+    const flying = (v && v.isAir && v.airborne && v.y > 35) || sky, high = flying && (v ? v.y : p.y) > 90;
     // high up only the low-detail world is needed (it is real geometry and looks right from the air)
     if (this.baseRadius) this.chunks.radius = high ? 0 : flying ? Math.min(this.baseRadius, 230) : this.baseRadius;
     this.chunks.maxNearPerFrame = flying ? 1 : 99;
@@ -1035,6 +1039,10 @@ class Game {
     }
     this.mats.water.map.offset.x = (this.time * 0.01) % 1;
     this.audio.update(v, p.controls?.throttle || 0, input.isHeld('horn'));
+    this.audio.wind?.(p.state === 'foot' && p.skydive ? Math.min(1, Math.abs(p.vy) / 50) : p.state === 'foot' && p.parachute ? 0.25 : v && v.isAir && v.airborne ? Math.min(0.35, Math.abs(v.speed) / 200) : 0);
+    // the jump button opens the parachute while you are falling
+    const jb = this._jumpBtn ||= document.querySelector('[data-btn="jump"]');
+    if (jb) { const t = p.state === 'foot' && p.skydive ? 'פתח מצנח' : 'קפיצה'; if (jb.textContent !== t) { jb.textContent = t; jb.classList.toggle('accent', t !== 'קפיצה'); } }
 
     // adaptive detail: shrink the streaming radius if the device struggles
     this._perfT = (this._perfT || 0) + dt;

@@ -1,110 +1,209 @@
-// Gang territories: two small neighbourhoods at the edge of the city (one crossroads each), run by fictional street
-// gangs. Yellow warning signs stand on every road into them. Members hang out on the corners in green, faces covered
-// with balaclavas or bandanas, armed only with pistols, knives or their fists; a leader with bodyguards; their cars and
-// a motorbike parked nearby. Walk around freely - they only stare and talk. They come for you only if you hurt one of
-// them, shoot on their turf (at them or their houses), or steal / damage their car or bike: the pistols stop and
-// shoot, the others charge (game damage only, no blood). Walk up to the leader to join the gang, and again to leave.
+// Street gangs (fictional, game mechanics only - no blood): two crews, ABC in green and BC in blue, each holding a
+// small neighbourhood at the edge of the city with warning signs on every road in. Members are full character models
+// (real clothes in the crew colour, ABC with bandanas over the face, BC with caps, gold chains on everyone, pistols and
+// compact rifles). Walk past them freely - they only stare and talk; they come for you only if you hurt one of them,
+// shoot on their turf, or take / damage their cars and bikes.
+//
+// Join a crew from the phone (Gangs app). Then call your boys: "follow me" - they walk behind you, and when you get in a
+// car they jump into the crew's cars and bikes and drive behind you; when you stop and get out, they get out too.
+// "Attack!" - they go for the rival crew (guns keep their distance, the rest charge). Wipe out the rival crew on its own
+// turf and the neighbourhood becomes yours: your colours on the map, your signs, your people on the corners.
+// The X button in the app takes you out of the gang - back to being a normal person.
 import * as THREE from 'three';
 import { P, ROAD_HALF } from '../world/layout.js';
 import { heightAt } from '../world/terrain.js';
 import { Vehicle } from '../vehicles/vehicle.js';
+import { CharacterModel } from '../character/characterModel.js';
 
 export const GANGS = [
-  // two small, out-of-the-way neighbourhoods at the edge of the city (one crossroads each), nowhere else
-  { id: 'snakes', name: 'הנחשים הירוקים', short: 'הנחשים', color: 0x2f9e44, dark: 0x1d4d27, accent: 0x111111, car: 0x1f7a35, mask: 0x1c3a22, cx: 100, cz: 100, r: 85, cross: [1, 1] },
-  { id: 'harbor', name: 'חבורת הנמל', short: 'הנמל', color: 0x56702f, dark: 0x2e3b1a, accent: 0x1c1c1c, car: 0x3b4d22, mask: 0x161616, cx: 100, cz: 900, r: 85, cross: [1, 9] },
+  { id: 'abc', name: 'ABC', full: 'כנופיית ABC', color: 0x2f9e44, css: '#2f9e44', top: 4, top2: 11, car: 0x1f7a35, mask: 'bandana', fill: 'rgba(40,180,70,0.22)', fillMine: 'rgba(60,220,90,0.30)', stroke: 'rgba(20,110,40,0.95)', signDark: '#1d5c2a' },
+  { id: 'bc', name: 'BC', full: 'כנופיית BC', color: 0x2563c9, css: '#2563c9', top: 3, top2: 17, car: 0x1f4fa8, mask: 'cap', fill: 'rgba(40,100,220,0.22)', fillMine: 'rgba(70,140,255,0.32)', stroke: 'rgba(20,55,140,0.95)', signDark: '#173a7a' },
+];
+// the two neighbourhoods (one crossroads each); `home` is the crew that holds it until someone takes it over
+export const TURFS = [
+  { id: 'north', name: 'השכונה הצפונית', cx: 100, cz: 100, r: 85, cross: [1, 1], home: 'abc' },
+  { id: 'south', name: 'שכונת הנמל', cx: 100, cz: 900, r: 85, cross: [1, 9], home: 'bc' },
 ];
 const BY_ID = Object.fromEntries(GANGS.map((g) => [g.id, g]));
+const OLD_IDS = { snakes: 'abc', harbor: 'bc' };   // saves from before the ABC / BC crews
 const WARN = ['אתה לא שייך לפה', 'תמשיך ללכת', 'מה אתה מסתכל?', 'זה השטח שלנו', 'אל תעשה שטויות', 'לך מפה'];
 const ANGRY = ['תפסו אותו!', 'הוא נגע בנו!', 'עכשיו אתה גמור!', 'אל תיתנו לו לברוח!', 'כולם עליו!'];
 const HELLO = ['אחי!', 'מה המצב?', 'הבית שלך פה', 'כבוד', 'אנחנו איתך'];
+const COME = ['אנחנו איתך!', 'מאחוריך, אחי', 'בוא נזוז', 'סע, אנחנו אחריך'];
+const GO = ['קדימה! עליהם!', 'זה השטח שלנו עכשיו!', 'אל תשאירו אף אחד!', 'יאללה!'];
+const SKINS = [0, 1, 2, 3, 4];
+const DOWN = ['dead', 'knocked', 'down', 'thrown', 'fall', 'dazed'];
+
+// ------------------------------------------------------------------ crew weapons (generic game props)
+const STEEL = new THREE.MeshStandardMaterial({ color: 0x24272b, metalness: 0.75, roughness: 0.35 });
+const POLY = new THREE.MeshStandardMaterial({ color: 0x1b1d20, metalness: 0.1, roughness: 0.7 });
+const BLADE = new THREE.MeshStandardMaterial({ color: 0xd9dde2, metalness: 0.9, roughness: 0.2 });
+function npcWeapon(kind) {
+  const g = new THREE.Group();
+  const add = (w, h, d, m, x, y, z, rx = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.rotation.x = rx; o.castShadow = true; g.add(o); return o; };
+  const cy = (r, l, m, x, y, z) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, l, 10).rotateX(Math.PI / 2), m); o.position.set(x, y, z); g.add(o); return o; };
+  if (kind === 'pistol') {
+    add(0.034, 0.042, 0.19, STEEL, 0, -0.262, 0.07); add(0.03, 0.03, 0.15, POLY, 0, -0.293, 0.065);
+    add(0.031, 0.11, 0.05, POLY, 0, -0.34, -0.005, 0.22); add(0.006, 0.03, 0.05, STEEL, 0, -0.318, 0.04);
+    add(0.006, 0.01, 0.01, STEEL, 0, -0.236, 0.15); add(0.016, 0.01, 0.01, STEEL, 0, -0.236, -0.015); cy(0.008, 0.02, STEEL, 0, -0.262, 0.17);
+    add(0.034, 0.012, 0.054, POLY, 0, -0.402, -0.02, 0.22);
+  } else if (kind === 'rifle') {
+    add(0.045, 0.07, 0.3, STEEL, 0, -0.27, 0.08); add(0.05, 0.055, 0.2, POLY, 0, -0.275, 0.32);
+    for (let i = 0; i < 6; i++) add(0.052, 0.008, 0.012, POLY, 0, -0.245, 0.24 + i * 0.03);
+    cy(0.011, 0.28, STEEL, 0, -0.262, 0.55); cy(0.016, 0.05, STEEL, 0, -0.262, 0.7);
+    add(0.03, 0.09, 0.045, POLY, 0, -0.33, -0.01, 0.3); add(0.03, 0.13, 0.055, POLY, 0, -0.355, 0.14, 0.25);
+    add(0.04, 0.075, 0.27, POLY, 0, -0.285, -0.2); add(0.044, 0.09, 0.03, POLY, 0, -0.285, -0.335); add(0.02, 0.025, 0.04, STEEL, 0, -0.226, 0.0);
+  } else if (kind === 'knife') {
+    add(0.022, 0.03, 0.1, POLY, 0, -0.3, 0.0); const b = add(0.006, 0.026, 0.13, BLADE, 0, -0.3, 0.11); b.scale.set(1, 1, 1);
+  }
+  return g;
+}
+
+// ------------------------------------------------------------------ looks
+function pedApp(G, role, i) {
+  // the simple crowd look (used only far away, where the full model is not drawn)
+  const skins = [0xe9b98f, 0xc98e62, 0xa86f48, 0x7b4a2c, 0x4f2f1d];
+  const a = { skin: skins[(i * 3 + role.length) % skins.length], hair: 0x1b1410, long: false, bald: i % 3 === 0, h: 1.02 + (i % 5) * 0.025, w: 1.02 + (i % 4) * 0.04,
+    shirt: G.color, pants: 0x1d1d1f, shoes: i % 2 ? 0xf2f2f2 : 0x1d1d1f, gang: G.id };
+  if (G.mask === 'bandana' && role !== 'leader') a.bandana = G.color; else a.capColor = G.color;
+  return a;
+}
+function modelApp(G, role, i) {
+  const tops = ['tshirt', 'hoodie', 'tank', 'tshirt', 'longsleeve', 'hoodie'];
+  const app = {
+    skin: SKINS[(i * 3 + 1) % SKINS.length], hairStyle: ['buzz', 'short', 'bald', 'curly', 'buzz', 'mohawk'][i % 6], hairColor: i % 4 === 3 ? 2 : 0,
+    top: tops[i % tops.length], topColor: i % 3 === 2 ? G.top2 : G.top, underColor: 1,
+    bottom: i % 3 === 1 ? 'shorts' : 'jeans', bottomColor: i % 3 === 1 ? 1 : (i % 2 ? 16 : 1), shoes: i % 2 ? 0 : 1, shoeStyle: i % 5 === 4 ? 'boot' : 'sneaker',
+    height: 1.0 + (i % 5) * 0.02, build: 1.0 + (i % 4) * 0.05, beard: ['stubble', 'short', 'none', 'goatee', 'scruffy'][i % 5], glasses: i % 5 === 0 ? 'sun' : 'none',
+    hat: 'none', hatColor: G.top, mask: 'none', maskColor: G.color, chain: true,
+  };
+  if (G.mask === 'bandana') { app.mask = 'bandana'; if (i % 3 === 1) { app.hat = 'beanie'; app.hatColor = 1; } }
+  else { app.hat = i % 3 === 2 ? 'beanie' : 'cap'; if (i % 4 === 3) app.mask = 'bandana'; }
+  if (role === 'leader') Object.assign(app, { top: 'tshirt', topColor: 0, bottom: 'jeans', bottomColor: 1, glasses: 'sun', mask: 'none', hat: G.mask === 'bandana' ? 'none' : 'cap', beard: 'short', build: 1.15, height: 1.06, hairStyle: 'buzz' });
+  return app;
+}
 
 export class Gangs {
   constructor(game) {
     this.game = game; this.crews = {};
-    for (const G of GANGS) this.crews[G.id] = { G, members: [], cars: [], hostile: 0, warned: 0, spawned: false };
+    for (const T of TURFS) this.crews[T.id] = { T, G: null, members: [], cars: [], hostile: 0, spawned: false };
     this.inside = null; this.serial = 0;
+    this.followers = []; this.order = 'follow'; this.convoy = []; this.trail = []; this.trailS = 0;
+    this.models = new Set(); this._cmBudget = 0;
   }
+  // ------------------------------------------------------------------ state
+  get member() { const id = this.game.econ.gang; return id ? (OLD_IDS[id] || id) : null; }
+  info(id) { return BY_ID[OLD_IDS[id] || id]; }
+  owner(T) { return BY_ID[(this.game.econ.turf || {})[T.id]] || BY_ID[T.home]; }
+  territoryAt(x, z) { return TURFS.find((T) => Math.hypot(x - T.cx, z - T.cz) < T.r) || null; }
+  turfsOf(gid) { return TURFS.filter((T) => this.owner(T).id === gid); }
+  enemyOf(gid) { return GANGS.find((G) => G.id !== gid); }
   // listen to the people system: hitting or running over a gang member provokes his crew
   _hook() {
     if (this._hooked) return; this._hooked = true;
-    const peds = this.game.peds, P = this.game.player;
+    const peds = this.game.peds, Pl = this.game.player;
     const hit = peds.hit.bind(peds), run = peds._runOver.bind(peds);
-    peds.hit = (p, src, dmg, kick) => { const r = hit(p, src, dmg, kick); if (r && src === P && p.app?.gang) this.provoke(p.app.gang, 'hit'); return r; };
-    peds._runOver = (p, v, sp, ctx) => { run(p, v, sp, ctx); if (v.driver === 'player' && p.app?.gang) this.provoke(p.app.gang, 'car'); };
+    peds.hit = (p, src, dmg, kick) => { const r = hit(p, src, dmg, kick); if (r && src === Pl && p.gangId) this.provoke(p.gangId, 'hit', p); return r; };
+    peds._runOver = (p, v, sp, ctx) => { run(p, v, sp, ctx); if (v.driver === 'player' && p.gangId) this.provoke(p.gangId, 'car', p); };
+    if (this.game.econ.gang && OLD_IDS[this.game.econ.gang]) this.game.econ.gang = OLD_IDS[this.game.econ.gang];
   }
-  get member() { return this.game.econ.gang || null; }
-  info(id) { return BY_ID[id]; }
-  territoryAt(x, z) { return GANGS.find((G) => Math.hypot(x - G.cx, z - G.cz) < G.r) || null; }
 
-  // ------------------------------------------------------------------ spawning the crew near the player
-  _corner(G, [ix, iz], k) {
-    // a sidewalk corner of an intersection inside the territory (k picks which of the four corners)
-    const o = ROAD_HALF + 2.2, sx = k & 1 ? 1 : -1, sz = k & 2 ? 1 : -1;
-    return { x: ix * P + sx * o, z: iz * P + sz * o };
+  // ------------------------------------------------------------------ full character models for gang members
+  _attachModel(p) {
+    const cm = new CharacterModel(p.modelApp);
+    this.game.scene.add(cm.root); p.cm = cm; p.cmOn = true; this.models.add(p);
+    const kind = p.app.gun ? (p.gangRole === 'guard' ? 'rifle' : 'pistol') : p.app.knife ? 'knife' : null;
+    if (kind) { p.weapon = npcWeapon(kind); p.weaponKind = kind; cm.arms[1].elbow.add(p.weapon); p.weapon.visible = false; }
   }
-  _app(G, role, i) {
-    const skins = [0xe9b98f, 0xc98e62, 0xa86f48, 0x7b4a2c, 0x4f2f1d];
-    const a = { skin: skins[(i * 3 + role.length) % skins.length], hair: 0x1b1410, long: false, bald: i % 3 === 0, h: 1.02 + (i % 5) * 0.025, w: 1.02 + (i % 4) * 0.04,
-      shirt: i % 2 ? G.color : G.dark, pants: i % 3 === 1 ? 0xc8c8c8 : G.accent, shoes: i % 2 ? 0xf2f2f2 : 0x1d1d1f, gang: G.id };
-    if (role === 'leader') Object.assign(a, { shirt: 0xd9d9d6, pants: 0xd9d9d6, shoes: 0xf2f2f2, vestColor: 0x161616, capColor: G.color, gun: true, h: 1.1, w: 1.12 });
-    else {
-      // street criminals: faces covered (balaclava in the crew colour or black, or a bandana), pistol / knife / fists only
-      if (i % 4 === 3) a.bandana = G.color; else { a.mask = true; a.maskColor = i % 2 ? G.mask : 0x141414; }
-      if (role === 'guard') { a.vestColor = 0x161616; a.gun = true; }
-      else { const w = i % 3; if (w === 0) a.gun = true; else if (w === 1) a.knife = true; else a.fists = true; }
-      if (i % 4 === 1 && !a.mask) a.capColor = G.color;
-      if (i % 5 === 2) a.vestColor = 0x161616;
+  _dropModel(p) {
+    if (!p.cm) return;
+    this.game.scene.remove(p.cm.root);
+    p.cm.root.traverse((o) => { if (o.isMesh) o.geometry?.dispose(); });
+    p.cm = null; p.cmOn = false; p.weapon = null; this.models.delete(p);
+  }
+  _models(dt) {
+    const g = this.game, cam = g.camera.position;
+    this._cmBudget = 2;                                 // build at most two models per frame (no stutter when a crew appears)
+    const all = [...this.followers, ...Object.values(this.crews).flatMap((c) => c.members)];
+    for (const p of all) {
+      const d = Math.hypot(p.x - cam.x, p.z - cam.z);
+      if (!p.cm && d < 80 && p.state !== 'convoy' && this._cmBudget-- > 0) this._attachModel(p);
+      else if (p.cm && d > 100) this._dropModel(p);
+      if (!p.cm) continue;
+      const cm = p.cm, R = cm.root, hidden = p.state === 'convoy';
+      R.visible = !hidden; if (hidden) continue;
+      const down = DOWN.includes(p.state);
+      R.position.set(p.x, p.y + (down ? 0.13 : 0), p.z);
+      R.rotation.order = 'YXZ';
+      R.rotation.set(down ? -Math.PI / 2 : 0, down ? (p.fallYaw ?? p.yaw) + Math.PI : p.yaw, 0);
+      const armed = !!p.weapon && !down && (p.gunOut || p.state === 'gangFight' || (p.state === 'copChase' && p.copChase));
+      if (p.weapon) p.weapon.visible = armed;
+      const aim = armed && p.weaponKind !== 'knife' ? (p.pose === 'aimGun' ? 2 : 1) : 0;
+      cm.animate(dt, { speed: down ? 0 : (p.speed || 0), grounded: true, mode: 'foot', aim, hold: aim ? (p.weaponKind === 'rifle' ? 'rifle' : 'pistol') : null, aimPitch: 0, recoil: p.recoilT > 0 ? p.recoilT : 0, stance: !armed && (p.state === 'gangFight' || p.state === 'fight'), draw: 1, reload: 0, holster: 0 });
+      if (p.recoilT > 0) p.recoilT -= dt;
     }
-    return a;
+  }
+
+  // ------------------------------------------------------------------ the crew on its corners
+  _corner(T, k) {
+    const o = ROAD_HALF + 2.2, sx = k & 1 ? 1 : -1, sz = k & 2 ? 1 : -1;
+    return { x: T.cross[0] * P + sx * o, z: T.cross[1] * P + sz * o };
+  }
+  _newPed(G, role, i, x, z, yaw, extra = {}) {
+    const peds = this.game.peds;
+    const app = pedApp(G, role, i);
+    const w = role === 'leader' ? 'gun' : role === 'guard' ? 'gun' : ['gun', 'gun', 'knife', 'fists'][i % 4];
+    if (w === 'gun') app.gun = true; else if (w === 'knife') app.knife = true; else app.fists = true;
+    const p = peds._add({ x, z, state: 'guard', yaw, app, homeSpot: { x, z, yaw, state: 'guard', y: heightAt(x, z) }, keep: true, gangKey: ++this.serial, phone: false, suitcase: false, ...extra });
+    p.temper = 'fight'; p.skill = 0.8; p.baseYaw = yaw; p.hp = p.maxHp = role === 'leader' ? 16 : 11; p.gangRole = role; p.gangId = G.id;
+    p.modelApp = modelApp(G, role, i);
+    return p;
   }
   _spawn(crew) {
-    const G = crew.G, peds = this.game.peds;
+    const T = crew.T, G = crew.G = this.owner(T);
     let i = 0;
     [0, 1, 2, 3].forEach((ci) => {
-      const lead = ci === 0;
-      const c = this._corner(G, G.cross, ci), n = lead ? 4 : 3;
+      const lead = ci === 0, c = this._corner(T, ci), n = lead ? 4 : 3;
       for (let k = 0; k < n; k++, i++) {
         const role = lead ? (k === 0 ? 'leader' : 'guard') : 'member';
         const a = (k / n) * Math.PI * 2 + ci, x = c.x + Math.sin(a) * 1.3, z = c.z + Math.cos(a) * 1.3;
-        const yaw = Math.atan2(c.x - x, c.z - z);
-        const p = peds._add({ x, z, state: 'guard', yaw, app: this._app(G, role, i + ci), homeSpot: { x, z, yaw, state: 'guard', y: heightAt(x, z) }, keep: true, gangKey: ++this.serial, phone: false, suitcase: false });
-        p.temper = 'fight'; p.skill = 0.8; p.baseYaw = yaw; p.hp = p.maxHp = role === 'leader' ? 16 : 11; p.gangRole = role; p.gangId = G.id;
-        crew.members.push(p);
+        crew.members.push(this._newPed(G, role, i + ci * 3, x, z, Math.atan2(c.x - x, c.z - z)));
       }
     });
-    peds._colors();
-    // their cars parked along the street by the leader's corner
-    const lc = this._corner(G, G.cross, 0), [cx0, cz0] = [G.cross[0] * P, G.cross[1] * P];
-    for (let k = 0; k < 3; k++) {
-      const x = cx0 + 5.4 * (lc.x > cx0 ? 1 : -1), z = lc.z + (lc.z > cz0 ? 1 : -1) * (8 + k * 6.5);
-      const v = new Vehicle(['suv', 'muscle', 'moto'][k], k === 2 ? 0x111111 : G.car, x, z, 0, heightAt(x, z));
+    this.game.peds._colors();
+    // the crew's rides: cars and motorbikes in the crew colour, parked along the streets around the crossroads
+    const cx0 = T.cross[0] * P, cz0 = T.cross[1] * P, kinds = ['muscle', 'suv', 'moto', 'sedan', 'moto', 'muscle', 'moto'];
+    kinds.forEach((kind, k) => {
+      const side = k % 2 ? 1 : -1, arm = Math.floor(k / 2), along = 14 + arm * 7.5;
+      const ns = k % 4 < 2;   // north-south street or east-west street
+      const x = ns ? cx0 + side * 5.4 : cx0 + (k % 3 ? 1 : -1) * along, z = ns ? cz0 + (k % 3 ? -1 : 1) * along : cz0 + side * 5.4;
+      const v = new Vehicle(kind, G.car, x, z, ns ? 0 : Math.PI / 2, heightAt(x, z));
       v.gang = G.id; v.dmg0 = 0; this.game.scene.add(v.object); this.game.vehicles.adopt(v); v.sync();
       crew.cars.push(v);
-    }
+    });
     this._signs(crew);
-    crew.spawned = true;
+    crew.spawned = true; crew.hostile = 0;
   }
-  // warning signs on every road into the neighbourhood, facing the people coming in
-  _signTex(G) {
+  _signTex(G, T) {
     const c = document.createElement('canvas'); c.width = 512; c.height = 256; const x = c.getContext('2d');
     x.fillStyle = '#f2c230'; x.fillRect(0, 0, 512, 256);
     x.fillStyle = '#111'; for (let i = -6; i < 30; i++) { x.save(); x.translate(i * 34, 0); x.rotate(0.6); x.fillRect(0, -20, 14, 60); x.restore(); x.save(); x.translate(i * 34, 236); x.rotate(0.6); x.fillRect(0, -20, 14, 60); x.restore(); }
     x.fillStyle = '#f2c230'; x.fillRect(10, 26, 492, 204);
     x.strokeStyle = '#111'; x.lineWidth = 8; x.strokeRect(14, 30, 484, 196);
     x.fillStyle = '#111'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.direction = 'rtl';
-    x.font = 'bold 40px Arial, sans-serif'; x.fillText('⚠ נכנסים לשכונה של', 256, 78);
-    x.font = 'bold 58px Arial, sans-serif'; x.fillStyle = '#' + new THREE.Color(G.dark).getHexString(); x.fillText(G.name, 256, 142);
-    x.fillStyle = '#111'; x.font = 'bold 26px Arial, sans-serif'; x.fillText('שטח כנופיה — אל תיגע בכלום', 256, 196);
+    x.font = 'bold 34px Arial, sans-serif'; x.fillText(`⚠ ${T.name} — שטח של`, 256, 76);
+    x.font = 'bold 78px Arial, sans-serif'; x.fillStyle = G.signDark; x.direction = 'ltr'; x.fillText(G.name, 256, 146); x.direction = 'rtl';
+    x.fillStyle = '#111'; x.font = 'bold 26px Arial, sans-serif'; x.fillText('שטח כנופיה — אל תיגע בכלום', 256, 200);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
   }
   _signs(crew) {
-    const G = crew.G, g = this.game, cx = G.cross[0] * P, cz = G.cross[1] * P;
-    const face = new THREE.MeshStandardMaterial({ map: (this._tex ||= {})[G.id] ||= this._signTex(G), roughness: 0.6 });
+    const T = crew.T, G = crew.G, g = this.game, cx = T.cross[0] * P, cz = T.cross[1] * P;
+    const key = G.id + T.id;
+    const face = new THREE.MeshStandardMaterial({ map: (this._tex ||= {})[key] ||= this._signTex(G, T), roughness: 0.6 });
     const back = new THREE.MeshStandardMaterial({ color: 0x8a9096, metalness: 0.6, roughness: 0.4 }), post = new THREE.MeshStandardMaterial({ color: 0x6d7378, metalness: 0.7, roughness: 0.35 });
     crew.signs = [];
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const D = G.r - 4, px = -dz, pz = dx;                       // right-hand side for someone driving in (towards the centre)
+      const D = T.r - 4, px = -dz, pz = dx;
       const x = cx + dx * D + px * (ROAD_HALF + 1.6), z = cz + dz * D + pz * (ROAD_HALF + 1.6), y = heightAt(x, z);
       const s = new THREE.Group(); s.position.set(x, y, z); s.rotation.y = Math.atan2(dx, dz);
       for (const sx of [-0.95, 0.95]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.9, 8), post); m.position.set(sx, 1.45, -0.03); m.castShadow = true; s.add(m); }
@@ -115,135 +214,317 @@ export class Gangs {
   }
   _despawn(crew) {
     const peds = this.game.peds;
-    for (const p of crew.members) { const i = peds.peds.indexOf(p); if (i >= 0) peds.peds.splice(i, 1); }
+    for (const p of crew.members) { this._dropModel(p); const i = peds.peds.indexOf(p); if (i >= 0) peds.peds.splice(i, 1); }
     peds._colors();
-    for (const v of crew.cars) if (v.driver !== 'player') { const L = this.game.vehicles.kept, i = L.indexOf(v); if (i >= 0) this.game.vehicles._dispose(v, L); }
+    for (const v of crew.cars) if (v.driver !== 'player' && !this.convoy.some((c) => c.v === v)) { const L = this.game.vehicles.kept, i = L.indexOf(v); if (i >= 0) this.game.vehicles._dispose(v, L); }
     for (const s of crew.signs || []) { this.game.scene.remove(s); s.traverse((o) => o.geometry?.dispose()); }
     crew.members = []; crew.cars = []; crew.signs = []; crew.spawned = false;
   }
 
-  // ------------------------------------------------------------------ provoking the crew
-  provoke(id, why) {
-    const crew = this.crews[id]; if (!crew) return;
-    if (this.member === id) {
-      // hitting your own people gets you thrown out
-      if (why === 'hit' || why === 'shot' || why === 'car') { this.leave(true); } else return;
+  // ------------------------------------------------------------------ provoking a crew
+  provoke(gid, why) {
+    if (this.member === gid) {
+      // hurting your own people gets you thrown out
+      if (why === 'hit' || why === 'shot' || why === 'car') this.leave(true);
+      return;
     }
-    const was = crew.hostile > 0;
-    crew.hostile = 70;
-    if (!was) {
-      const loud = crew.members.find((p) => p.state !== 'dead');
-      if (loud) this.game.peds.say(loud, ANGRY[Math.floor(Math.random() * ANGRY.length)], 2.4);
-      this.game.toast(`⚠ ${crew.G.name} רודפים אחריך!`, 3);
+    for (const crew of Object.values(this.crews)) {
+      if (!crew.spawned || crew.G.id !== gid) continue;
+      const was = crew.hostile > 0;
+      crew.hostile = 70;
+      if (!was) {
+        const loud = crew.members.find((p) => p.state !== 'dead');
+        if (loud) this.game.peds.say(loud, ANGRY[Math.floor(Math.random() * ANGRY.length)], 2.4);
+        this.game.toast(`⚠ ${crew.G.full} רודפים אחריך!`, 3);
+      }
     }
   }
-  // called when the player hits / shoots a person (any weapon)
-  onHit(ped, how) { if (ped?.app?.gang) this.provoke(ped.app.gang, how); }
-  // gunfire: shooting on their turf near them makes them come for you
+  onHit(ped, how) { if (ped?.gangId) this.provoke(ped.gangId, how); }
+  // gunfire on a crew's turf (not your own crew's) makes them come for you
   onShot(x, z) {
     for (const crew of Object.values(this.crews)) {
       if (!crew.spawned || this.member === crew.G.id) continue;
-      if (Math.hypot(x - crew.G.cx, z - crew.G.cz) < crew.G.r) this.provoke(crew.G.id, 'shot');
+      if (Math.hypot(x - crew.T.cx, z - crew.T.cz) < crew.T.r) this.provoke(crew.G.id, 'shot');
     }
   }
 
-  // ------------------------------------------------------------------ joining / leaving at the leader
-  promptFor(p) {
-    if (p.state !== 'foot') return null;
-    for (const crew of Object.values(this.crews)) {
-      const L = crew.members.find((m) => m.gangRole === 'leader' && m.state !== 'dead');
-      if (!L || crew.hostile > 0 || Math.hypot(L.x - p.x, L.z - p.z) > 2.6) continue;
-      const G = crew.G, me = this.member;
-      if (me === G.id) return { text: `🚪 עזוב את ${G.name}`, action: () => this.leave(false) };
-      if (me) return { text: `אתה כבר ב${BY_ID[me].name} — עזוב קודם`, action: () => {} };
-      return { text: `🤝 הצטרף ל${G.name}`, action: () => this.join(G.id) };
-    }
-    return null;
-  }
+  // ------------------------------------------------------------------ joining / leaving (phone app)
+  promptFor() { return null; }   // joining happens in the phone now
   join(id) {
-    const g = this.game, G = BY_ID[id], P = g.player;
+    const g = this.game, G = BY_ID[id], Pl = g.player; if (!G) return;
+    if (this.member === id) return;
+    if (this.member) this.leave(false, true);
     g.econ.gang = id;
-    // the crew's colours: you get their green shirt (your old look comes back when you leave)
-    g.econ.gangPrev = { top: P.model.app.top, topColor: P.model.app.topColor };
-    P.model.setAppearance({ ...P.model.app, topColor: G.id === 'snakes' ? 4 : 11 });
-    const L = this.crews[id].members.find((m) => m.gangRole === 'leader'); if (L) g.peds.say(L, 'ברוך הבא למשפחה. מעכשיו אתה איתנו.', 3);
-    g.toast(`🤝 הצטרפת ל${G.name}! החבר׳ה שלהם הם החבר׳ה שלך — והיריבים כבר לא אוהבים אותך`, 4.5);
+    // you wear their colour and chain while you are in (your own look comes back when you leave)
+    g.econ.gangPrev = { topColor: Pl.model.app.topColor, chain: !!Pl.model.app.chain };
+    Pl.model.setAppearance({ ...Pl.model.app, topColor: G.top, chain: true });
+    for (const crew of Object.values(this.crews)) if (crew.G?.id === id) { crew.hostile = 0; const L = crew.members.find((m) => m.gangRole === 'leader' && m.state !== 'dead'); if (L) g.peds.say(L, 'ברוך הבא למשפחה. מעכשיו אתה איתנו.', 3); }
+    g.toast(`🤝 הצטרפת ל${G.full}! בטלפון: "קרא לחבר׳ה" — והם באים אחריך`, 4.5);
     g.save();
   }
-  leave(kicked) {
+  leave(kicked, quiet) {
     const g = this.game, id = this.member; if (!id) return;
-    const G = BY_ID[id], P = g.player;
+    const G = BY_ID[id], Pl = g.player;
+    this.dismiss(true);
     g.econ.gang = null;
-    if (g.econ.gangPrev) { P.model.setAppearance({ ...P.model.app, ...g.econ.gangPrev }); g.econ.gangPrev = null; }
-    if (kicked) { g.toast(`❌ ${G.name} זרקו אותך מהחבורה — ועכשיו הם כועסים`, 4); this.crews[id].hostile = 60; }
-    else { const L = this.crews[id].members.find((m) => m.gangRole === 'leader'); if (L) g.peds.say(L, 'בסדר. רק אל תחזור לבקש טובות.', 3); g.toast(`יצאת מ${G.name}`, 3); }
+    if (g.econ.gangPrev) { Pl.model.setAppearance({ ...Pl.model.app, topColor: g.econ.gangPrev.topColor ?? Pl.model.app.topColor, chain: !!g.econ.gangPrev.chain }); g.econ.gangPrev = null; }
+    if (kicked) { g.toast(`❌ ${G.full} זרקו אותך מהכנופיה — ועכשיו הם כועסים`, 4); for (const crew of Object.values(this.crews)) if (crew.G?.id === id) crew.hostile = 60; }
+    else if (!quiet) g.toast(`✖ יצאת מ${G.full}. אתה שוב אדם רגיל`, 3);
     g.save();
+  }
+
+  // ------------------------------------------------------------------ your crew: call, orders, dismiss
+  call(n = 4) {
+    const g = this.game, id = this.member, G = BY_ID[id]; if (!G) return 'אתה לא בכנופיה';
+    this.followers = this.followers.filter((p) => p.state !== 'dead' && this.game.peds.peds.includes(p));
+    const need = n - this.followers.length;
+    if (need <= 0) { this.order = 'follow'; this._say(COME); return 'החבר׳ה כבר איתך — הם באים אחריך'; }
+    const pos = g.playerPos();
+    // first the boys standing on your own crew's corners nearby, the rest come from around the block
+    const local = Object.values(this.crews).filter((c) => c.spawned && c.G.id === id).flatMap((c) => c.members)
+      .filter((p) => p.gangRole !== 'leader' && p.state !== 'dead' && Math.hypot(p.x - pos.x, p.z - pos.z) < 70)
+      .sort((a, b) => Math.hypot(a.x - pos.x, a.z - pos.z) - Math.hypot(b.x - pos.x, b.z - pos.z)).slice(0, need);
+    for (const p of local) { for (const c of Object.values(this.crews)) { const i = c.members.indexOf(p); if (i >= 0) c.members.splice(i, 1); } this._enlist(p); }
+    const facing = pos.facing ?? 0;
+    for (let k = this.followers.length; k < n; k++) {
+      // arrive from behind you (out of sight), already running
+      const a = facing + Math.PI + (k - 1.5) * 0.35, x = pos.x + Math.sin(a) * 26, z = pos.z + Math.cos(a) * 26;
+      const p = this._newPed(G, k === 0 ? 'guard' : 'member', 40 + this.serial, x, z, facing, {});
+      this._enlist(p);
+    }
+    g.peds._colors();
+    this.order = 'follow';
+    this._say(COME);
+    return `👥 ${this.followers.length} חברים מ${G.full} באים אחריך`;
+  }
+  _enlist(p) { p.follower = true; p.state = 'follow'; p.copChase = false; p.gunOut = false; p.hp = p.maxHp = 12; p.temper = 'fight'; this.followers.push(p); }
+  attack() {
+    if (!this.followers.length) return 'קודם קרא לחבר׳ה';
+    const pos = this.game.playerPos(), enemies = this._enemies(pos, 90);
+    this.order = 'attack';
+    if (!enemies.length) return `🔫 החבר׳ה מוכנים — תוביל אותם לשטח של ${this.enemyOf(this.member).full}`;
+    this._say(GO);
+    for (const crew of Object.values(this.crews)) if (crew.spawned && crew.G.id !== this.member && enemies.some((e) => crew.members.includes(e))) { crew.hostile = 80; crew.war = true; }
+    return `🔫 תוקפים! ${enemies.length} מ${this.enemyOf(this.member).full} בסביבה`;
+  }
+  hold() { if (!this.followers.length) return 'אין חבר׳ה איתך'; this.order = 'wait'; for (const p of this.followers) if (p.state === 'follow') { p.state = 'guard'; p.homeSpot = { x: p.x, z: p.z, yaw: p.yaw, state: 'guard', y: p.y }; } return '✋ החבר׳ה מחכים כאן'; }
+  dismiss(quiet) {
+    const peds = this.game.peds;
+    for (const c of this.convoy) this._parkConvoy(c);
+    this.convoy = [];
+    for (const p of this.followers) { this._dropModel(p); const i = peds.peds.indexOf(p); if (i >= 0) peds.peds.splice(i, 1); }
+    peds._colors();
+    this.followers = []; this.order = 'follow';
+    if (!quiet) return 'החבר׳ה הלכו הביתה';
+  }
+  _say(lines) { const p = this.followers.find((q) => q.state !== 'dead' && q.state !== 'convoy'); if (p) this.game.peds.say(p, lines[Math.floor(Math.random() * lines.length)], 2); }
+  _enemies(pos, r) {
+    const me = this.member; if (!me) return [];
+    return Object.values(this.crews).filter((c) => c.spawned && c.G.id !== me).flatMap((c) => c.members).filter((p) => p.state !== 'dead' && Math.hypot(p.x - pos.x, p.z - pos.z) < r);
+  }
+
+  // ------------------------------------------------------------------ convoy: the crew drives behind you
+  _trail(v) {
+    const L = this.trail, last = L[L.length - 1];
+    if (!last || Math.hypot(v.x - last.x, v.z - last.z) > 0.6) {
+      this.trailS += last ? Math.hypot(v.x - last.x, v.z - last.z) : 0;
+      L.push({ x: v.x, z: v.z, y: v.y, s: this.trailS });
+      if (L.length > 900) L.splice(0, L.length - 900);
+    }
+  }
+  _at(s) {
+    const L = this.trail; if (!L.length) return null;
+    if (s <= L[0].s) return { ...L[0], h: L.length > 1 ? Math.atan2(L[1].x - L[0].x, L[1].z - L[0].z) : 0 };
+    let i = L.length - 1; while (i > 0 && L[i - 1].s > s) i--;
+    const a = L[i - 1] || L[0], b = L[i], k = b.s > a.s ? (s - a.s) / (b.s - a.s) : 0;
+    return { x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k, y: a.y + (b.y - a.y) * k, h: Math.atan2(b.x - a.x, b.z - a.z) };
+  }
+  _board(pv) {
+    // they run to the crew's rides: two to a car, one to a bike; the rides pull in behind your car
+    const g = this.game, G = BY_ID[this.member], riders = this.followers.filter((p) => !DOWN.includes(p.state));
+    if (!riders.length) return;
+    this.trail = []; this.trailS = 0;
+    // seed the trail with a straight run-up behind your car so the rides start in line behind you
+    const bx = -Math.sin(pv.heading), bz = -Math.cos(pv.heading);
+    for (let d = 60; d >= 0; d -= 1) this._trailPush(pv.x + bx * d, pv.z + bz * d, heightAt(pv.x + bx * d, pv.z + bz * d));
+    const groups = []; for (let i = 0; i < riders.length; i += 2) groups.push(riders.slice(i, i + 2));
+    groups.forEach((grp, k) => {
+      const kind = grp.length === 1 ? 'moto' : k % 2 ? 'suv' : 'muscle';
+      const at = this._at(this.trailS - 11 - k * 9.5);
+      const v = new Vehicle(kind, G.car, at.x, at.z, at.h, at.y);
+      v.gang = G.id; v.convoy = true; v.dmg0 = 0; g.scene.add(v.object); g.vehicles.adopt(v); v.sync();
+      for (const p of grp) { p.state = 'convoy'; p.cmOn = true; p.carRef = v; }
+      this.convoy.push({ v, riders: grp, k });
+    });
+    this._say(['עולים!', 'כולם לרכבים!', 'סע, אנחנו מאחוריך']);
+  }
+  _trailPush(x, z, y) { const L = this.trail, last = L[L.length - 1]; this.trailS += last ? Math.hypot(x - last.x, z - last.z) : 0; L.push({ x, z, y, s: this.trailS }); }
+  _drive(dt, pv) {
+    this._trail(pv);
+    for (const c of this.convoy) {
+      const v = c.v, want = this._at(this.trailS - 11 - c.k * 9.5); if (!want) continue;
+      // close the gap smoothly (never faster than you + a bit), turning along the road you drove
+      const dx = want.x - v.x, dz = want.z - v.z, d = Math.hypot(dx, dz);
+      const vmax = Math.abs(pv.speed) + 6, step = Math.min(d, vmax * dt * 1.15);
+      if (d > 40) { v.x = want.x; v.z = want.z; }
+      else if (d > 0.01) { v.x += (dx / d) * step; v.z += (dz / d) * step; }
+      v.y = want.y; v.speed = d > 0.3 ? step / Math.max(dt, 1e-3) : 0; v.vx = v.vz = 0;
+      let dh = want.h - v.heading; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); v.heading += dh * Math.min(1, dt * 6);
+      v.sync(dt);
+      for (const p of c.riders) { p.x = v.x; p.z = v.z; p.y = v.y; }
+    }
+  }
+  _parkConvoy(c) {
+    // everybody out: they step out of the doors and the ride stays parked
+    const v = c.v; v.speed = 0; v.convoy = false;
+    c.riders.forEach((p, i) => {
+      const side = i % 2 ? 1 : -1, rx = Math.cos(v.heading) * side * 1.5, rz = -Math.sin(v.heading) * side * 1.5;
+      p.x = v.x + rx; p.z = v.z + rz; p.y = heightAt(p.x, p.z); p.carRef = null;
+      if (p.state === 'convoy') p.state = 'follow';
+    });
   }
 
   // ------------------------------------------------------------------ every frame
   update(dt) {
     this._hook();
-    this.game.minimap.zones = this.zones();
-    const g = this.game, P = g.player, pos = g.playerPos();
-    // territory banner + map
+    const g = this.game, Pl = g.player, pos = g.playerPos();
+    if (g.minimap) g.minimap.zones = this.zones();
     const t = this.territoryAt(pos.x, pos.z);
     if ((t?.id || null) !== this.inside) {
       this.inside = t?.id || null;
-      if (t) g.toast(this.member === t.id ? `🏠 השטח של ${t.name} — הבית שלך` : `⚠ נכנסת לשטח של ${t.name}. אל תיגע בכלום.`, 3.2);
+      if (t) { const G = this.owner(t); g.toast(this.member === G.id ? `🏠 ${t.name} — השטח של ${G.full}. הבית שלך` : `⚠ נכנסת ל${t.name} — השטח של ${G.full}. אל תיגע בכלום.`, 3.2); }
     }
     for (const crew of Object.values(this.crews)) {
-      const G = crew.G, d = Math.hypot(pos.x - G.cx, pos.z - G.cz);
-      if (!crew.spawned && d < G.r + 140) this._spawn(crew);
-      else if (crew.spawned && d > G.r + 260) this._despawn(crew);
+      const T = crew.T, d = Math.hypot(pos.x - T.cx, pos.z - T.cz);
+      if (!crew.spawned && d < T.r + 140) this._spawn(crew);
+      else if (crew.spawned && d > T.r + 260) this._despawn(crew);
       if (!crew.spawned) continue;
-      // touching their cars (getting in, or damaging them)
+      if (crew.G.id !== this.owner(T).id) { this._despawn(crew); continue; }   // the turf changed hands
       for (const v of crew.cars) {
-        if (this.member === G.id) continue;
-        if ((P.vehicle === v && (P.state === 'driving' || P.state === 'entering')) || v.damage > v.dmg0 + 4) { v.dmg0 = v.damage; this.provoke(G.id, 'car'); }
+        if (this.member === crew.G.id || v.convoy) continue;
+        if ((Pl.vehicle === v && (Pl.state === 'driving' || Pl.state === 'entering')) || v.damage > v.dmg0 + 4) { v.dmg0 = v.damage; this.provoke(crew.G.id, 'car'); }
       }
-      crew.hostile = Math.max(0, crew.hostile - dt * (t === G ? 0.5 : 1.5));
-      this._crew(crew, dt, pos, t === G);
+      crew.hostile = Math.max(0, crew.hostile - dt * (t === T ? 0.5 : 1.5));
+      if (crew.hostile <= 0) crew.war = false;
+      this._crew(crew, dt, pos, t === T);
+      this._takeover(crew, t === T);
+    }
+    this._followers(dt, pos);
+    this._models(dt);
+  }
+
+  _followers(dt, pos) {
+    const g = this.game, Pl = g.player, peds = g.peds;
+    if (!this.member && this.followers.length) this.dismiss(true);
+    this.followers = this.followers.filter((p) => peds.peds.includes(p));
+    if (!this.followers.length) { if (this.convoy.length) { for (const c of this.convoy) this._parkConvoy(c); this.convoy = []; } return; }
+    const pv = Pl.state === 'driving' ? Pl.vehicle : null;
+    const road = pv && !pv.isAir && !pv.isBoat;
+    if (road && !this.convoy.length) this._board(pv);
+    if (road && this.convoy.length) { this._drive(dt, pv); return; }
+    if (!road && this.convoy.length) { for (const c of this.convoy) this._parkConvoy(c); this.convoy = []; this._say(['הגענו!', 'יאללה, יוצאים', 'מה התוכנית?']); }
+    const facing = pos.facing ?? 0, enemies = this.order === 'attack' ? this._enemies(pos, 90) : [];
+    let slot = 0;
+    for (const p of this.followers) {
+      if (p.state === 'dead') continue;
+      if (['flee', 'hide', 'surrender', 'callHelp', 'surprised', 'evade', 'dodge', 'walk', 'idle', 'talk', 'goHome', 'copChase'].includes(p.state)) p.state = 'follow';
+      if (DOWN.includes(p.state) || p.state === 'getup') continue;
+      // fight: each one picks the nearest rival
+      if (this.order === 'attack' && enemies.length) {
+        if (p.state !== 'gangFight' || !p.target || p.target.state === 'dead') {
+          p.target = enemies.reduce((b, e) => (Math.hypot(e.x - p.x, e.z - p.z) < Math.hypot(b.x - p.x, b.z - p.z) ? e : b), enemies[0]);
+          p.state = 'gangFight'; p.gunOut = !!p.app.gun;
+        }
+        this._strike(p, p.target, dt, false);
+        continue;
+      }
+      if (p.state === 'gangFight') { p.state = 'follow'; p.target = null; p.gunOut = false; }
+      if (this.order === 'wait') { if (p.state === 'follow') { p.state = 'guard'; p.homeSpot = { x: p.x, z: p.z, yaw: p.yaw, state: 'guard', y: p.y }; } continue; }
+      // follow in a loose group behind you
+      const row = Math.floor(slot / 2), side = slot % 2 ? 1 : -1; slot++;
+      const bx = -Math.sin(facing), bz = -Math.cos(facing), rx = Math.cos(facing), rz = -Math.sin(facing);
+      const ox = side * (1.3 + row * 0.5), ob = 2.0 + row * 1.8;
+      p.state = 'follow'; p.followTo = { x: pos.x + bx * ob + rx * ox, z: pos.z + bz * ob + rz * ox, yaw: facing };
+      if (Math.hypot(p.x - pos.x, p.z - pos.z) > 70) { p.x = p.followTo.x + bx * 20; p.z = p.followTo.z + bz * 20; p.y = heightAt(p.x, p.z); }
+    }
+  }
+  // one gang member attacking another (game damage only): guns shoot from range, the rest hit up close
+  _strike(p, target, dt, shooterIsEnemy) {
+    const g = this.game, d = Math.hypot(target.x - p.x, target.z - p.z);
+    p.atkT = (p.atkT ?? Math.random() * 0.8) - dt;
+    if (p.atkT > 0) return;
+    if (p.app.gun && p.pose === 'aimGun' && d < 34) {
+      p.atkT = 0.7 + Math.random() * 0.6; p.recoilT = 0.12;
+      const from = new THREE.Vector3(p.x + Math.sin(p.yaw) * 0.5, p.y + 1.4, p.z + Math.cos(p.yaw) * 0.5);
+      const to = new THREE.Vector3(target.x + (Math.random() - 0.5) * 1.4, target.y + 1.1, target.z + (Math.random() - 0.5) * 1.4);
+      g.weapons.npcShot(from, to, p.weaponKind === 'rifle' ? 'rifle' : 'pistol', g.audio);
+      if (Math.random() < (d < 14 ? 0.5 : 0.32)) g.peds.hit(target, p, shooterIsEnemy ? 2.5 : 3);
+    } else if (!p.app.gun && d < 1.6) {
+      p.atkT = 0.85 + Math.random() * 0.4; p.hitT = 0.25;
+      g.peds.hit(target, p, p.app.knife ? 3 : 2); g.audio.impact?.(2);
     }
   }
 
   _crew(crew, dt, pos, onTurf) {
-    const g = this.game, P = g.player, peds = g.peds, hostile = crew.hostile > 0, mine = this.member === crew.G.id;
+    const g = this.game, Pl = g.player, peds = g.peds, hostile = crew.hostile > 0, mine = this.member === crew.G.id;
     crew.shootT = (crew.shootT || 0) - dt;
+    const myBoys = this.followers.filter((f) => f.state !== 'dead' && f.state !== 'convoy');
     for (const p of crew.members) {
       if (p.state === 'dead') continue;
       const d = Math.hypot(p.x - pos.x, p.z - pos.z);
-      // they never run off scared like ordinary people
       if (['flee', 'hide', 'surrender', 'callHelp', 'surprised', 'evade', 'dodge'].includes(p.state)) { p.state = hostile ? 'copChase' : 'goHome'; p.timer = 0; }
       if (hostile && d < 90) {
+        // the nearest threat: one of your boys if he is closer than you, otherwise you
+        const boy = myBoys.reduce((b, f) => (!b || Math.hypot(f.x - p.x, f.z - p.z) < Math.hypot(b.x - p.x, b.z - p.z) ? f : b), null);
+        if (boy && Math.hypot(boy.x - p.x, boy.z - p.z) < d - 2) {
+          if (!DOWN.includes(p.state) && p.state !== 'getup') { peds._release(p); p.state = 'gangFight'; p.target = boy; p.gunOut = !!p.app.gun; p.copChase = false; }
+          this._strike(p, boy, dt, true);
+          continue;
+        }
         if (!['copChase', 'fall', 'knocked', 'getup', 'thrown', 'down', 'dazed'].includes(p.state)) { peds._release(p); p.seat = null; p.state = 'copChase'; }
         p.copChase = true; p.chaseTo = null; p.gunOut = !!p.app.gun;
-        // knives: close in and slash (game damage, no blood)
-        if ((p.app.knife || p.app.fists) && d < 1.6 && P.state === 'foot' && p.state === 'copChase') {
+        if ((p.app.knife || p.app.fists) && d < 1.6 && Pl.state === 'foot' && p.state === 'copChase') {
           p.stabT = (p.stabT || 0) - dt;
-          if (p.stabT <= 0) { p.stabT = 0.9 + Math.random() * 0.4; g.hurt(p.app.knife ? 7 : 4, crew.G.name); g.audio.impact?.(p.app.knife ? 1.5 : 2.5); g.rig.shake = Math.max(g.rig.shake, 0.12); p.hitT = 0.25; }
+          if (p.stabT <= 0) { p.stabT = 0.9 + Math.random() * 0.4; g.hurt(p.app.knife ? 7 : 4, crew.G.full); g.audio.impact?.(p.app.knife ? 1.5 : 2.5); g.rig.shake = Math.max(g.rig.shake, 0.12); p.hitT = 0.25; }
         }
-        // pistols: stop, aim and fire when they can see you
         if (p.app.gun && p.pose === 'aimGun' && crew.shootT <= 0 && d < 34 && (g.police._los?.(p.x, p.z, pos.x, pos.z) ?? true)) {
-          crew.shootT = 0.55 + Math.random() * 0.5;
+          crew.shootT = 0.55 + Math.random() * 0.5; p.recoilT = 0.12;
           const from = new THREE.Vector3(p.x + Math.sin(p.yaw) * 0.5, p.y + 1.4, p.z + Math.cos(p.yaw) * 0.5);
           const to = new THREE.Vector3(pos.x + (Math.random() - 0.5) * 2.2, pos.y + 1.1, pos.z + (Math.random() - 0.5) * 2.2);
           g.weapons.npcShot(from, to, 'pistol', g.audio);
-          if (Math.random() < (d < 12 ? 0.45 : 0.3)) g.hurt(P.state === 'driving' ? 3 : 6, crew.G.name);
+          if (Math.random() < (d < 12 ? 0.45 : 0.3)) g.hurt(Pl.state === 'driving' ? 3 : 6, crew.G.full);
         }
         if (Math.random() < dt * 0.15) peds.say(p, ANGRY[Math.floor(Math.random() * ANGRY.length)], 1.6);
       } else {
-        if (p.state === 'copChase') { p.copChase = false; p.gunOut = false; p.state = 'goHome'; p.timer = 0; }
+        if (p.state === 'copChase' || p.state === 'gangFight') { p.copChase = false; p.gunOut = false; p.target = null; p.state = 'goHome'; p.timer = 0; }
         if (p.state === 'fight' && !hostile) { p.state = 'goHome'; p.timer = 0; }
-        // idle: stare at you when you come close; warn strangers, greet members
-        if (p.state === 'guard' && (d >= 7 || P.state !== 'foot') && p.baseYaw !== undefined) p.homeSpot.yaw = p.baseYaw;
-        if (p.state === 'guard' && d < 7 && P.state === 'foot') {
-          p.homeSpot.yaw = Math.atan2(pos.x - p.x, pos.z - p.z);   // they turn and watch you
-          if (!p.sayT || p.sayT <= 0) { p.toldT = (p.toldT || 0) - dt; if (p.toldT <= 0) { p.toldT = 9 + Math.random() * 6; peds.say(p, (mine ? HELLO : WARN)[Math.floor(Math.random() * 6) % (mine ? HELLO.length : WARN.length)], 2); } }
+        // idle: they only stare and talk - nobody is attacked just for walking past
+        if (p.state === 'guard' && (d >= 7 || Pl.state !== 'foot') && p.baseYaw !== undefined) p.homeSpot.yaw = p.baseYaw;
+        if (p.state === 'guard' && d < 7 && Pl.state === 'foot') {
+          p.homeSpot.yaw = Math.atan2(pos.x - p.x, pos.z - p.z);
+          if (!p.sayT || p.sayT <= 0) { p.toldT = (p.toldT || 0) - dt; if (p.toldT <= 0) { p.toldT = 9 + Math.random() * 6; const L = mine ? HELLO : WARN; peds.say(p, L[Math.floor(Math.random() * L.length)], 2); } }
         }
       }
     }
   }
+  // wipe out the rival crew on its own turf (three or fewer left standing - they run) and the neighbourhood is yours
+  _takeover(crew, onTurf) {
+    const me = this.member; if (!me || crew.G.id === me || !onTurf || !crew.war) return;
+    const alive = crew.members.filter((p) => p.state !== 'dead');
+    if (alive.length > 3) return;
+    const g = this.game, G = BY_ID[me];
+    (g.econ.turf ||= {})[crew.T.id] = me;
+    for (const p of alive) { p.state = 'flee'; p.timer = 12; p.fleeFrom = [crew.T.cx, crew.T.cz]; }
+    g.toast(`🏴 השתלטתם על ${crew.T.name}! מעכשיו זה השטח של ${G.full}`, 5);
+    this._say(['השטח שלנו!', 'כבוד, אחי!', 'עכשיו הם יודעים מי אנחנו']);
+    this.order = 'follow'; crew.war = false; crew.hostile = 0;
+    g.audio.coin?.(); g.save();
+    // the old crew's people and signs go; next time you come by, your crew stands on the corners
+    setTimeout(() => { if (crew.spawned) this._despawn(crew); }, 6000);
+  }
 
-  // gang turf on the minimap and the big map (green circles, brighter if it is your gang)
-  zones() { return GANGS.map((G) => ({ x: G.cx, z: G.cz, r: G.r, name: `שטח ${G.name}`, fill: this.member === G.id ? 'rgba(60,200,90,0.18)' : 'rgba(30,140,50,0.22)', stroke: 'rgba(20,100,35,0.85)' })); }
+  // gang turf on the minimap and the big map (crew colour, brighter if it is yours)
+  zones() {
+    return TURFS.map((T) => { const G = this.owner(T); return { x: T.cx, z: T.cz, r: T.r, name: `${T.name} — ${G.full}`, fill: this.member === G.id ? G.fillMine : G.fill, stroke: G.stroke }; });
+  }
 }

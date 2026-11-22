@@ -549,6 +549,23 @@ export class Pedestrians {
         break;
       }
       case 'guard': speed = 0; pose = Math.sin(time * 0.25 + p.x * 0.7) > 0.55 ? 'talk' : 'idle'; if (p.homeSpot) p.yaw = dampAngle(p.yaw, p.homeSpot.yaw, 4, dt); break;
+      case 'convoy': speed = 0; pose = 'idle'; goal = null; break;   // riding in a gang car (moved by the gang system)
+      case 'follow': {
+        // a gang member walking / running behind the player (target spot set by the gang system every frame)
+        const t = p.followTo; if (!t) { p.state = 'guard'; break; }
+        const d = Math.hypot(t.x - p.x, t.z - p.z);
+        if (d > 1.0) { goal = [t.x, t.z]; speed = d > 7 ? 5.0 : d > 2.5 ? 2.8 : 1.4; pose = speed > 3 ? 'run' : 'walk'; }
+        else { speed = 0; pose = 'idle'; if (t.yaw !== undefined) p.yaw = dampAngle(p.yaw, t.yaw, 5, dt); }
+        break;
+      }
+      case 'gangFight': {
+        // street fight between gangs: guns keep their distance and aim, the rest run in close (damage is dealt by the gang system)
+        const t = p.target; if (!t || t.state === 'dead') { p.state = 'guard'; p.target = null; break; }
+        const dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz), want = p.app.gun ? 12 : 1.1;
+        if (d > want) { goal = [t.x, t.z]; speed = d > 4 ? 4.8 : 2.2; pose = 'run'; }
+        else { speed = 0; goal = null; pose = p.app.gun ? 'aimGun' : 'guard'; p.yaw = dampAngle(p.yaw, Math.atan2(dx, dz), 10, dt); }
+        break;
+      }
       case 'sunbathe': speed = 0; pose = 'sunbathe'; p.y = damp(p.y, p.homeSpot?.y ?? p.y, 8, dt); break;
       case 'beachsit': speed = 0; pose = 'beachsit'; break;
       case 'swimmer': {
@@ -1165,6 +1182,7 @@ export class Pedestrians {
     const R = this.rig, M = this.M;
     const dt = this._lastDt || 0.016;
     this.peds.forEach((p, i) => {
+      if (p.cmOn) { for (const [k, m] of Object.entries(M)) { if (LIMB_KEYS.has(k)) { m.setMatrixAt(i * 2, this.zero); m.setMatrixAt(i * 2 + 1, this.zero); } else m.setMatrixAt(i, this.zero); } return; }
       this._pose(p, dt);
       R.root.position.set(p.x, p.y, p.z);
       R.root.rotation.set(0, p.state === 'fall' || p.state === 'dead' || p.state === 'knocked' ? p.fallYaw : p.yaw, 0);
@@ -1213,3 +1231,4 @@ export class Pedestrians {
 }
 
 function capGeo(g) { return g; }
+const LIMB_KEYS = new Set(['uArm', 'lArm', 'hand', 'uLeg', 'lLeg', 'foot']);

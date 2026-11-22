@@ -31,8 +31,24 @@ export class Player {
     this.nearVehicle = null;
     this.nearBench = null;
     this.message = null;
-    const can = new THREE.Mesh(new THREE.SphereGeometry(2.4, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2.6), new THREE.MeshStandardMaterial({ color: 0xff7a2a, side: THREE.DoubleSide, roughness: 0.8 }));
-    can.position.y = 4.2; can.scale.set(1, 0.5, 1.3); can.visible = false;
+    // parachute: a ram-air wing - nine cells along an arched span in alternating colours, open at the front, with the
+    // suspension lines running down to the risers on the shoulders
+    const can = new THREE.Group(), R = 6.2, N = 9;
+    const cols = [0xff6a1a, 0xf4f1ea, 0x1d1d1f, 0xf4f1ea, 0xff6a1a, 0xf4f1ea, 0x1d1d1f, 0xf4f1ea, 0xff6a1a];
+    const lineGeo = [];
+    for (let i = 0; i < N; i++) {
+      const a = (i - (N - 1) / 2) * 0.115, w = R * 0.115 * 1.02;
+      const cell = new THREE.Mesh(new THREE.BoxGeometry(w, 0.34, 2.5, 1, 2, 3), new THREE.MeshStandardMaterial({ color: cols[i], roughness: 0.65, side: THREE.DoubleSide }));
+      const pos = cell.geometry.attributes.position;
+      for (let k = 0; k < pos.count; k++) { const z = pos.getZ(k); pos.setY(k, pos.getY(k) * (1 - (Math.abs(z - 0.35) / 1.6) ** 2 * 0.7) + (z > 0.9 ? -0.06 : 0)); }   // airfoil: thick at the front third, thin trailing edge
+      cell.geometry.computeVertexNormals();
+      cell.position.set(Math.sin(a) * R, 4.9 + Math.cos(a) * R - R, 0.1); cell.rotation.z = -a; cell.castShadow = true;
+      can.add(cell);
+      for (const z of [-0.9, 0.9]) { const bx = Math.sin(a) * (R - 0.17), by = 4.9 + Math.cos(a) * (R - 0.17) - R; lineGeo.push(bx, by, z + 0.1, i < N / 2 ? -0.18 : 0.18, 1.48, 0); }
+    }
+    const lines = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(lineGeo, 3)), new THREE.LineBasicMaterial({ color: 0x3a3a3a }));
+    can.add(lines);
+    can.visible = false;
     this.object.add(can);
     this.canopy = can;
   }
@@ -83,12 +99,28 @@ export class Player {
     const wasGrounded = this.grounded;
     if (wasGrounded) this.fallTop = this.y; else this.fallTop = Math.max(this.fallTop ?? this.y, this.y);
     this.vy -= GRAVITY * dt;
+    const alt = this.y - heightAt(this.x, this.z, this.y);
+    this.altitude = alt;
+    // free fall (jumped from a helicopter / plane or off something very high): steer with the stick - forward dives
+    // faster and further, back slows you down, sideways turns. Open the parachute yourself; it opens by itself low down
+    if (!this.grounded && !this.parachute && !this.swimming && alt > 40 && this.vy < -4) this.skydive = true;
+    if (this.skydive) {
+      if (this.grounded || this.parachute || this.swimming) this.skydive = false;
+      else {
+        this.facing += -mx * 1.6 * dt;
+        const fwd = 7 + Math.max(0, my) * 21 - Math.max(0, -my) * 5;
+        this.vx = damp(this.vx, Math.sin(this.facing) * fwd, 1.2, dt); this.vz = damp(this.vz, Math.cos(this.facing) * fwd, 1.2, dt);
+        this.vy = Math.max(this.vy, -(48 + Math.max(0, my) * 14));            // terminal speed (faster head down)
+        const have = world.econ?.items.parachute > 0;
+        if (have && (input.wasPressed('jump') || alt < 75)) { world.econ.items.parachute--; this.parachute = true; this.skydive = false; this.vy = -14; world.onMessage?.('🪂 המצנח נפתח!'); }
+      }
+    }
     // parachute: opens by itself when falling from high up (if you own one)
-    if (!this.grounded && this.vy < -9 && !this.parachute && world.econ?.items.parachute > 0 && this.y - heightAt(this.x, this.z, this.y) > 7) {
+    if (!this.skydive && !this.grounded && this.vy < -9 && !this.parachute && world.econ?.items.parachute > 0 && alt > 7) {
       world.econ.items.parachute--; this.parachute = true; world.onMessage?.('המצנח נפתח!');
     }
     if (this.parachute) {
-      this.vy = Math.max(this.vy, -3.2);
+      this.vy = this.vy < -3.2 ? damp(this.vy, -3.2, 2.2, dt) : Math.max(this.vy, -3.2);   // the canopy snaps open and slows you down
       const sp = 6 + my * 3;
       this.facing += -mx * 1.4 * dt;
       this.vx = Math.sin(this.facing) * sp; this.vz = Math.cos(this.facing) * sp;
@@ -130,10 +162,17 @@ export class Player {
       this.prompt = { key: 'interact', text: this.nearSeat.kind === 'sleep' ? 'לישון' : 'לשבת', seat: this.nearSeat.label };
       if (input.wasPressed('interact')) this.useSeat(this.nearSeat);
     }
-    this.model.animate(dt, { speed: this.parachute ? 0 : Math.hypot(this.vx, this.vz), grounded: this.grounded || this.parachute, vy: this.vy, mode: this.swimming ? 'swim' : 'foot', aim: this.armed ? (this.firing > 0 || this.aimT > 0 ? 2 : 1) : 0, hold: this.hold, aimPitch: this.aimPitch || 0, recoil: this.recoil || 0, throw: this.throwT > 0 ? this.throwT : 0, chute: this.parachute, attack: this.attack, stance: this.combatT > 0 && !this.armed, eat: this.eatT > 0 && !this.attack ? this.eating : null, hit: this.hitT > 0 ? { k: this.hitT / 0.4, kind: this.hitKind, side: this.hitSide } : null, draw: this.drawK ?? 1, reload: this.reloadK || 0, holster: this.holsterK || 0 });
+    this.model.animate(dt, { speed: this.parachute ? 0 : Math.hypot(this.vx, this.vz), grounded: this.grounded || this.parachute, vy: this.vy, mode: this.swimming ? 'swim' : 'foot', aim: this.armed ? (this.firing > 0 || this.aimT > 0 ? 2 : 1) : 0, hold: this.hold, aimPitch: this.aimPitch || 0, recoil: this.recoil || 0, throw: this.throwT > 0 ? this.throwT : 0, chute: this.parachute, skydive: !!this.skydive, attack: this.attack, stance: this.combatT > 0 && !this.armed, eat: this.eatT > 0 && !this.attack ? this.eating : null, hit: this.hitT > 0 ? { k: this.hitT / 0.4, kind: this.hitKind, side: this.hitSide } : null, draw: this.drawK ?? 1, reload: this.reloadK || 0, holster: this.holsterK || 0 });
     if (this.hitT > 0) this.hitT -= dt;
     if (this.eatT > 0) this.eatT -= dt;
-    if (this.canopy) this.canopy.visible = !!this.parachute;
+    if (this.canopy) {
+      this.canopy.visible = !!this.parachute;
+      // it opens: snaps out from a bundle over the shoulders and fills with air, then sways with your turns
+      this.chuteT = this.parachute ? (this.chuteT || 0) + dt : 0;
+      const k = Math.min(1, this.chuteT / 0.7), e = 1 - (1 - k) ** 3;
+      this.canopy.scale.set(0.15 + 0.85 * e, 0.3 + 0.7 * e, 0.15 + 0.85 * e);
+      this.canopy.rotation.z = damp(this.canopy.rotation.z, (input?.moveX || 0) * 0.25, 3, dt);
+    }
     this._sync();
   }
 
@@ -388,9 +427,12 @@ export class Player {
     if (v.isTwoWheel && v.lastImpact > 7 && Math.abs(preSpeed) > 7) { this.eject(v, preSpeed, preHeading, world); return; }
     this.model.animate(dt, { speed: Math.abs(v.speed), mode: v.parts.seatMode, steer: v.steer / (v.T.steerMax || 1), pedal: v.T.kind === 'bike' && Math.abs(v.speed) > 0.3 });
     const landed = !v.isAir || v.y < Math.max(heightAt(v.x, v.z, v.y + 0.3), v.roofY ?? -100) + 0.4;
+    const high = v.isAir && v.y - heightAt(v.x, v.z, v.y) > 14;
     if (landed && Math.abs(v.speed) < 3) this.prompt = { key: 'vehicle', text: 'צא מהרכב' };
+    else if (high) this.prompt = { key: 'vehicle', text: '🪂 קפוץ למטה', label: 'קפוץ' };
     if (input.wasPressed('vehicle')) {
-      if (!landed) this.message = v.isPlane ? 'יש לנחות לפני היציאה מהמטוס' : 'יש לנחות לפני היציאה מהמסוק';
+      if (high) this.exitVehicle(world);
+      else if (!landed) this.message = v.isPlane ? 'יש לנחות לפני היציאה מהמטוס' : 'יש לנחות לפני היציאה מהמסוק';
       else if (Math.abs(v.speed) > 3) this.message = 'האט כדי לצאת מהרכב';
       else this.exitVehicle(world);
     }
@@ -398,6 +440,8 @@ export class Player {
 
   exitVehicle(world) {
     const v = this.vehicle;
+    // high in the air (helicopter / plane): jump out into free fall instead of climbing down a ladder that isn't there
+    if (v.isAir && v.y - heightAt(v.x, v.z, v.y) > 14) { this._bail(v, world); return; }
     // find a free spot: driver side first, then the other side, then behind
     const c = Math.cos(v.heading), s = Math.sin(v.heading);
     const sideOff = v.isTwoWheel ? 0.9 : v.T.W / 2 + 0.7;
@@ -413,6 +457,18 @@ export class Player {
     v.vx = v.vz = 0; v.speed = 0;
     this.state = 'exiting';
     this.seq = { t: 0, phase: v.isTwoWheel ? 'out' : 'open', spot };
+  }
+  _bail(v, world) {
+    const c = Math.cos(v.heading), s = Math.sin(v.heading), side = (v.T.W || 2) / 2 + 1.2;
+    this._detach?.();
+    v.driver = null; this.vehicle = null; this.ignoreVehicle = v;
+    this.state = 'foot'; this.object.visible = true;
+    this.x = v.x + side * c; this.z = v.z - side * s; this.y = v.y + 0.4;
+    const sp = v.speed || 0;
+    this.vx = Math.sin(v.heading) * sp * 0.8; this.vz = Math.cos(v.heading) * sp * 0.8; this.vy = -1;
+    this.facing = v.heading; this.grounded = false; this.fallTop = this.y; this.parachute = false; this.skydive = true;
+    if (world.econ && !(world.econ.items.parachute > 0)) { world.econ.items.parachute = 1; world.onMessage?.('🪂 קפצת! קיבלת מצנח — לחץ "פתח מצנח" (רווח) כשתתקרב לקרקע'); }
+    else world.onMessage?.('🪂 נפילה חופשית! "פתח מצנח" (רווח) לפתיחה');
   }
   _free(x, z, world, ignore) {
     world.statics.query(x - 1, z - 1, x + 1, z + 1, _q);

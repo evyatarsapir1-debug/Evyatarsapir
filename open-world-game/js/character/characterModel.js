@@ -30,6 +30,22 @@ export const PRESETS = [
   { name: 'דניאל', skin: 3, hairStyle: 'curly', hairColor: 0, top: 'hoodie', topColor: 4, bottom: 'pants', bottomColor: 1, shoes: 0, height: 1.03, build: 1.08 },
   { name: 'תמר', skin: 2, hairStyle: 'long', hairColor: 5, top: 'tank', topColor: 12, bottom: 'shorts', bottomColor: 3, shoes: 1, height: 0.97, build: 0.95 },
 ];
+const _bandanaCache = new Map();
+function bandanaTex(color) {
+  if (_bandanaCache.has(color)) return _bandanaCache.get(color);
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+  x.fillStyle = '#' + new THREE.Color(color).getHexString(); x.fillRect(0, 0, 128, 128);
+  x.strokeStyle = 'rgba(255,255,255,0.85)'; x.fillStyle = 'rgba(255,255,255,0.85)'; x.lineWidth = 1.6;
+  for (let i = 0; i < 9; i++) {                       // paisley teardrops, dots and a border band
+    const px = (i % 3) * 43 + 20, py = Math.floor(i / 3) * 43 + 20, r = 9;
+    x.beginPath(); x.arc(px, py, r, 0.4, Math.PI * 1.9); x.quadraticCurveTo(px + r * 1.4, py - r * 1.6, px + r * 0.2, py - r * 1.9); x.stroke();
+    x.beginPath(); x.arc(px, py, 2.5, 0, Math.PI * 2); x.fill();
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; x.beginPath(); x.arc(px + Math.cos(a) * 15, py + Math.sin(a) * 15, 1.2, 0, Math.PI * 2); x.fill(); }
+  }
+  x.lineWidth = 3; x.strokeRect(4, 4, 120, 120);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 1);
+  _bandanaCache.set(color, t); return t;
+}
 export function defaultAppearance() { return { ...PRESETS[0] }; }
 
 const cap = (r, len) => new THREE.CapsuleGeometry(r, len, 3, 8);
@@ -168,6 +184,15 @@ export class CharacterModel {
     this.glassesGroup = this._pivot(head, 0, 0, 0);
     this.hairGroup = this._pivot(head, 0, 0, 0);
     this.hatGroup = this._pivot(head, 0, 0, 0);
+    // street-gang gear: a bandana pulled up over the nose (patterned cloth, the corner hanging over the throat) and a
+    // gold chain over the chest
+    this.maskGroup = this._pivot(head, 0, 0, 0);
+    this.chainGroup = this._pivot(spine, 0, 0, 0);
+    { const gold = new THREE.MeshStandardMaterial({ color: 0xd8b04a, metalness: 1, roughness: 0.22 });
+      const pts = [[0, 0.522, -0.07], [0.07, 0.505, -0.02], [0.082, 0.47, 0.06], [0.055, 0.405, 0.128], [0, 0.372, 0.148], [-0.055, 0.405, 0.128], [-0.082, 0.47, 0.06], [-0.07, 0.505, -0.02]].map(([x, y, z]) => new THREE.Vector3(x, y, z));
+      const links = this._mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 72, 0.0055, 5, true), gold, this.chainGroup, 0, 0, 0); links.castShadow = false;
+      const pend = this._mesh(new THREE.BoxGeometry(0.03, 0.04, 0.008), gold, this.chainGroup, 0, 0.346, 0.152); pend.rotation.z = Math.PI / 4; pend.castShadow = false; }
+    this.chainGroup.visible = false;
     this.foodMat = new THREE.MeshStandardMaterial({ roughness: 0.7 });
     // arms
     this.arms = [];
@@ -453,6 +478,23 @@ export class CharacterModel {
     }
   }
 
+  // bandana over the lower face (cloth with a paisley-style print), tied at the back, its corner over the throat
+  _mask(style, color) {
+    const g = this.maskGroup;
+    while (g.children.length) { const c = g.children.pop(); c.geometry.dispose(); }
+    if (style !== 'bandana') return;
+    const mat = new THREE.MeshStandardMaterial({ map: bandanaTex(color), roughness: 0.92, side: THREE.DoubleSide });
+    const shell = sculpt(new THREE.SphereGeometry(0.136, 26, 10, -0.3, Math.PI + 0.6, Math.PI / 2 + 0.02, 0.92), (v) => {
+      if (v.z > 0.02) v.z += 0.006 + Math.max(0, -v.y) * 0.05;          // stands off the nose and chin like cloth, not paint
+      if (v.y < -0.06) v.y -= (v.z > 0 ? v.z : 0) * 0.12;
+    });
+    const m = this._mesh(shell, mat, g, 0, 0.0, 0.004); m.scale.set(0.98, 1.06, 1.06); m.castShadow = false;
+    const tri = new THREE.Shape(); tri.moveTo(-0.1, 0); tri.lineTo(0.1, 0); tri.lineTo(0, -0.13); tri.closePath();
+    const c = this._mesh(new THREE.ShapeGeometry(tri), mat, g, 0, -0.112, 0.118); c.rotation.x = 0.35; c.castShadow = false;
+    const knot = this._mesh(new THREE.SphereGeometry(0.022, 8, 6), mat, g, 0, 0.01, -0.13); knot.scale.set(1.3, 0.8, 0.8);
+    for (const sx of [-1, 1]) { const t = this._mesh(new THREE.BoxGeometry(0.02, 0.07, 0.006), mat, g, sx * 0.018, -0.03, -0.14); t.rotation.z = sx * 0.3; }
+  }
+
   setVest(color) { this.vest.visible = color != null; if (color != null) this.vestMat.color.setHex(color); }
 
   setAppearance(app) {
@@ -471,8 +513,11 @@ export class CharacterModel {
     M.under.color.setHex(CLOTH_COLORS[app.underColor ?? 0] ?? 0xf4f4f2);
     M.hat.color.setHex(CLOTH_COLORS[app.hatColor] ?? 0x1d1d1f);
     if (this._hatKey !== app.hat) { this._hatKey = app.hat; this._hat(app.hat); }
+    const mk = app.mask === 'bandana' ? 'bandana:' + (app.maskColor ?? 0x2f9e44) : 'none';
+    if (this._maskKey !== mk) { this._maskKey = mk; this._mask(app.mask, app.maskColor ?? 0x2f9e44); }
+    this.chainGroup.visible = !!app.chain;
     this.hairGroup.visible = app.hat !== 'balaclava' && (!(app.hat === 'beanie' || app.hat === 'bucket') || app.hairStyle === 'long' || app.hairStyle === 'ponytail');
-    this.beardGroup.visible = app.hat !== 'balaclava'; this.glassesGroup.visible = app.hat !== 'balaclava';
+    this.beardGroup.visible = app.hat !== 'balaclava' && app.mask !== 'bandana'; this.glassesGroup.visible = app.hat !== 'balaclava';
     const shoeStyle = app.shoeStyle || 'sneaker';
     M.sole.color.setHex(shoeStyle === 'sneaker' ? 0xf4f4f4 : 0x2a1d14);
     M.shoes.roughness = shoeStyle === 'formal' ? 0.3 : 0.6;
@@ -643,6 +688,15 @@ export class CharacterModel {
         else { target.spine -= 0.35 * k; target.twist = (target.twist || 0) + 0.45 * (s.hit.side || 1) * k; target.armL -= 0.3 * k; target.armR += 0.25 * k; }
       }
       if (s.chute) { target.armL = target.armR = -2.8; target.elbowL = target.elbowR = -0.2; target.legL = -0.2; target.legR = 0.1; }
+      if (s.skydive) {
+        // free fall: face down, back arched, arms out and bent up beside the head, legs apart and bent - and the wind
+        // shaking every limb
+        const w = this.time = (this.time || 0) + dt, f = (a, b) => Math.sin(w * a + b) * 0.08;
+        target.armL = -0.35 + f(17, 0); target.armR = -0.35 + f(15, 1.3); target.armSide = 1.25 + f(11, 2);
+        target.elbowL = -1.35 + f(19, 0.4); target.elbowR = -1.35 + f(13, 2.2);
+        target.legL = 0.3 + f(9, 0.7); target.legR = 0.3 + f(10, 1.9); target.kneeL = 0.95 + f(14, 0.2); target.kneeR = 0.95 + f(12, 1.1);
+        target.legSpread = 0.38; target.spine = -0.32; target.twist = f(3, 0) * 0.6; hipsY = 0.95;
+      }
     } else if (mode === 'sit' || mode === 'drive' || mode === 'passenger') {
       target.legL = -1.45; target.legR = -1.45; target.kneeL = 1.4; target.kneeR = 1.4;
       target.spine = -0.05; target.armSide = 0.12;
@@ -673,17 +727,20 @@ export class CharacterModel {
       bodyZ = -0.05;
     }
     const k = s.attack || s.throw > 0 ? 22 : s.aim > 1 ? 18 : 14;
-    for (const key of ['legL', 'legR', 'kneeL', 'kneeR', 'armL', 'armR', 'elbowL', 'elbowR', 'spine', 'armSide', 'twist']) {
+    for (const key of ['legL', 'legR', 'kneeL', 'kneeR', 'armL', 'armR', 'elbowL', 'elbowR', 'spine', 'armSide', 'twist', 'legSpread']) {
       t[key] = damp(t[key] ?? 0, target[key] ?? 0, k, dt);
     }
     t.hipsY = damp(t.hipsY ?? hipsY, hipsY, k, dt);
     this.hips.position.y = t.hipsY;
     t.lie = damp(t.lie ?? 0, mode === 'lie' ? 1 : 0, 6, dt);
-    this.body.rotation.x = -Math.PI / 2 * t.lie;
+    t.sky = damp(t.sky ?? 0, s.skydive ? 1 : 0, 5, dt);
+    this.body.rotation.x = -Math.PI / 2 * t.lie + Math.PI / 2 * 0.9 * t.sky;   // skydiving: belly to the ground
+    this.body.position.y = 0.95 * t.sky;
     this.hips.position.z = bodyZ;
     this.spine.rotation.x = t.spine;
     this.spine.rotation.y = t.twist;
     this.legs[0].hip.rotation.x = t.legL; this.legs[1].hip.rotation.x = t.legR;
+    this.legs[0].hip.rotation.z = -t.legSpread; this.legs[1].hip.rotation.z = t.legSpread;
     this.legs[0].knee.rotation.x = t.kneeL; this.legs[1].knee.rotation.x = t.kneeR;
     this.arms[0].sh.rotation.x = t.armL; this.arms[1].sh.rotation.x = t.armR;
     if (this.food) {

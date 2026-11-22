@@ -669,7 +669,7 @@ const la = await g(() => {
   return { clothes: n['חנות בגדים'] || 0, weapons: n['חנות נשקים'] || 0, ice: n['גלידת שקיעה'] || 0, falafel: n['פלאפל הכיכר'] || 0, title: document.title, d: __wg.districtAt(470, 470) };
 });
 check('city is called Los Antos', la.title === 'לוס אנטוס', la.title);
-check('Los Antos: 8 clothes, 6 weapons, 2 ice-cream and 4 falafel shops (fewer, more open space)', la.clothes === 8 && la.weapons === 6 && la.ice === 2 && la.falafel === 4, JSON.stringify(la));
+check('Los Antos: 7 clothes, 6 weapons, 1 ice-cream and 3 falafel shops (fewer, more open space)', la.clothes === 7 && la.weapons === 6 && la.ice === 1 && la.falafel === 3, JSON.stringify(la));
 
 // ---------------------------------------------------------------- crashes, rider thrown off a motorbike, reversing with the brake
 const crash = await g(() => {
@@ -1073,31 +1073,57 @@ const gs = await g(async () => {
 });
 check('gun store: compact store with glass counter, wall displays, shelves, ceiling lights and brand signs', gs.boxes > 400 && gs.glass >= 4 && gs.lamps >= 4 && gs.counter && gs.signs.includes('נץ שטח'), JSON.stringify({ ...gs, room: undefined }));
 
-// ---------------------------------------------------------------- gang territories
+// ---------------------------------------------------------------- gangs: ABC (green) and BC (blue), phone app, crew that follows / drives / fights, turf takeover
 const gang = await g(() => {
   const game = __game, P = game.player, Gs = game.gangs;
   const step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
   game.police.clear(); if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
-  game.econ.health = 100; game.teleport(114, 114, 0); step(40);
-  const C = Gs.crews.snakes, L = C.members.find((m) => m.gangRole === 'leader');
-  const counts = { spawned: C.members.length, cars: C.cars.length, signs: (C.signs || []).length };
-  const looks = { fists: C.members.filter((m) => m.app.fists).length, masks: C.members.filter((m) => m.app.mask).length, knives: C.members.filter((m) => m.app.knife).length, guns: C.members.filter((m) => m.app.gun).length };
+  if (game.econ.gang) Gs.leave(false, true);
+  game.econ.health = 100; game.teleport(114, 114, 0); step(90);
+  const C = Gs.crews.north;
+  const counts = { spawned: C.members.length, gang: C.G.id, cars: C.cars.filter((v) => v.typeKey !== 'moto').length, bikes: C.cars.filter((v) => v.typeKey === 'moto').length, carColor: C.cars[0]?.parts.baseColor.getHex(), signs: (C.signs || []).length };
+  const looks = { models: C.members.filter((m) => m.cm).length, bandanas: C.members.filter((m) => m.modelApp.mask === 'bandana').length, chains: C.members.filter((m) => m.modelApp.chain).length, guns: C.members.filter((m) => m.app.gun).length, weaponMeshes: C.members.filter((m) => m.weapon).length };
   const inside = Gs.inside;
-  game.teleport(L.x + 1.5, L.z + 1.2, 0); step(5);
-  const prompt = P.prompt?.text || ''; game.input.pressed.add('interact'); step(2); const joined = game.econ.gang;
-  step(5); game.input.pressed.add('interact'); step(2); const left = game.econ.gang;
+  // walking right up to them does nothing - they only talk
+  const L = C.members.find((m) => m.gangRole === 'leader'); game.teleport(L.x + 1.2, L.z + 1.2, 0); step(30 * 4);
+  const calm = C.hostile === 0 && C.members.every((m) => m.state !== 'copChase');
+  // provoke: hit one and the crew comes for you and shoots (game damage)
   const m = C.members.find((q) => q.gangRole === 'member' && q.app.gun && q.state !== 'dead');
   game.teleport(m.x + 8, m.z + 8, 0); step(5);
   game.peds.hit(m, P, 1, false);
   let hurt = 0; step(30 * 8, () => { if (game.econ.health < 50) { hurt += 100 - game.econ.health; game.econ.health = 100; } });
   hurt += 100 - game.econ.health; game.econ.health = 100;
-  const chase = C.members.filter((q) => q.state === 'copChase').length;
-  C.hostile = 0; game.teleport(530, 545, 0); step(20);
-  return { ...counts, looks, inside, prompt, joined, left, chase, hurt, zones: (game.minimap.zones || []).length };
+  const chase = C.members.filter((q) => q.state === 'copChase' || q.state === 'gangFight').length;
+  C.hostile = 0; game.teleport(498, 515, 0); step(40);
+  // phone: join ABC, call the crew
+  game.phone.toggle(true); game.phone.show('gang');
+  const apps = !!document.querySelector('[data-join="abc"]') && !!document.querySelector('[data-join="bc"]');
+  document.querySelector('[data-join="abc"]').click(); const joined = game.econ.gang, chain = !!P.model.app.chain;
+  document.querySelector('[data-g="call"]').click(); game.phone.toggle(false);
+  step(30 * 8); const near = Gs.followers.filter((f) => Math.hypot(f.x - P.x, f.z - P.z) < 7).length;
+  // drive: they ride behind in the crew's cars / bikes, and get out when you do
+  const v = game.spawnVehicleNear('sedan', 503.5, 515); v.x = 503.5; v.z = 515; v.heading = 0; v.sync(); step(5);
+  const dp = v.doorPoint(); game.teleport(dp.x, dp.z, 0); step(3); game.input.pressed.add('vehicle'); step(70);
+  const I = game.input; step(30 * 5, () => { I.joyY = 1; I.joyX = 0; }); step(30 * 1.5, () => { I.joyY = -1; }); I.joyY = 0; step(20);
+  const convoy = Gs.convoy.length, convoyColor = Gs.convoy[0]?.v.parts.baseColor.getHex(), behind = Gs.convoy.map((c) => ((c.v.x - v.x) * Math.sin(v.heading) + (c.v.z - v.z) * Math.cos(v.heading)));
+  game.input.pressed.add('vehicle'); step(90); step(30 * 3);
+  const out = Gs.convoy.length === 0 && Gs.followers.every((f) => f.state !== 'convoy'), nearAfter = Gs.followers.filter((f) => Math.hypot(f.x - P.x, f.z - P.z) < 9).length;
+  // war: take the BC neighbourhood
+  game.teleport(118, 905, 0); step(150); Gs.call(); step(30 * 6);
+  Gs.attack();
+  for (let k = 0; k < 90 && !(game.econ.turf || {}).south; k++) step(30, () => { game.econ.health = 100; });
+  const owner = (game.econ.turf || {}).south;
+  // leave with the X button: back to a normal person, the crew goes home
+  game.phone.toggle(true); game.phone.show('gang'); document.querySelector('[data-g="leave"]').click(); game.phone.toggle(false);
+  const left = game.econ.gang, crewLeft = Gs.followers.length;
+  game.econ.turf = {}; game.econ.health = 100; game.teleport(530, 545, 0); step(30);
+  return { ...counts, looks, inside, calm, chase, hurt, apps, joined, chain, near, convoy, convoyColor, behind, out, nearAfter, owner, left, crewLeft, zones: (game.minimap.zones || []).length };
 });
-check('gangs: two small territories with entrance signs, masked crews (pistols, knives, fists), cars + bike, turf on the map', gang.spawned >= 10 && gang.cars === 3 && gang.signs === 4 && gang.looks.masks > 0 && gang.looks.knives > 0 && gang.looks.guns > 0 && gang.inside === 'snakes' && gang.zones === 2, JSON.stringify(gang));
-check('gangs: join and leave at the leader', gang.prompt.includes('הצטרף') && gang.joined === 'snakes' && gang.left === null, JSON.stringify(gang));
-check('gangs: touch one of them and the crew comes for you and shoots (game damage)', gang.chase >= 2 && gang.hurt > 0, JSON.stringify(gang));
+check('gangs: ABC (green) and BC (blue) turfs with signs; full-body members with bandanas, chains and weapons; crew cars and bikes in the crew colour', gang.spawned >= 10 && gang.gang === 'abc' && gang.cars >= 3 && gang.bikes >= 2 && gang.carColor === 0x1f7a35 && gang.signs === 4 && gang.looks.models >= 8 && gang.looks.bandanas >= 6 && gang.looks.chains === gang.spawned && gang.looks.weaponMeshes >= 6 && gang.inside === 'north' && gang.zones === 2, JSON.stringify(gang));
+check('gangs: walking right up to them is fine (no shooting) - hurt one and the crew comes for you and shoots', gang.calm && gang.chase >= 2 && gang.hurt > 0, JSON.stringify({ calm: gang.calm, chase: gang.chase, hurt: gang.hurt }));
+check('gangs: phone app - join a crew (you wear their colour and chain) and call your boys: they come and follow you', gang.apps && gang.joined === 'abc' && gang.chain && gang.near >= 3, JSON.stringify({ apps: gang.apps, joined: gang.joined, near: gang.near }));
+check('gangs: in a car the crew rides behind you in the crew cars, and gets out when you do', gang.convoy >= 2 && gang.convoyColor === 0x1f7a35 && gang.behind.every((b) => b < -3) && gang.out && gang.nearAfter >= 2, JSON.stringify({ convoy: gang.convoy, behind: gang.behind, out: gang.out, nearAfter: gang.nearAfter }));
+check('gangs: "attack!" - the crew fights the rival gang and the neighbourhood is taken over; X in the app leaves the gang', gang.owner === 'abc' && gang.left === null && gang.crewLeft === 0, JSON.stringify({ owner: gang.owner, left: gang.left, crewLeft: gang.crewLeft }));
 
 // ---------------------------------------------------------------- holding up a shop
 const rob = await g(async () => {
@@ -1191,6 +1217,26 @@ const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera
 console.log(`(draw calls on low quality: ${calls})`);
 await g(() => __game.save());
 check('game saves progress', await g(() => !!localStorage.getItem('azura_city_save_v1')));
+// ---------------------------------------------------------------- skydiving: jump out of a helicopter high above the clouds
+const sky = await g(() => {
+  const game = __game, P = game.player;
+  const step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.police.clear(); game.econ.health = 100; game.econ.items.parachute = 0; game.teleport(530, 545, 0); step(20);
+  const v = game.spawnVehicleNear('heli', P.x + 6, P.z); v.x = P.x + 6; v.z = P.z; v.sync(); step(5);
+  const dp = v.doorPoint(); game.teleport(dp.x, dp.z, 0); step(3); game.input.pressed.add('vehicle'); step(80);
+  v.y = 880; v.vy = 0; step(20);
+  const prompt = P.prompt?.text || '';
+  game.input.pressed.add('vehicle'); step(2);
+  const jumped = P.state === 'foot' && P.skydive, gotChute = game.econ.items.parachute === 1;
+  step(30 * 5); const fall = { vy: P.vy, btn: document.querySelector('[data-btn="jump"]').textContent, clouds: game.clouds.mesh.visible, y: P.y };
+  game.input.pressed.add('jump'); step(30 * 2); const opened = P.parachute && !P.skydive, slow = P.vy > -12;
+  let n = 0; while (!P.grounded && n < 30 * 120) { step(30); n += 30; }
+  return { prompt, jumped, gotChute, fall, opened, slow, landed: P.grounded, health: game.econ.health };
+});
+check('skydiving: jump out of the helicopter high up into free fall (parachute given), clouds below', sky.prompt.includes('קפוץ') && sky.jumped && sky.gotChute && sky.fall.vy < -40 && sky.fall.btn === 'פתח מצנח' && sky.fall.clouds, JSON.stringify(sky));
+check('skydiving: "open parachute" opens the canopy, you glide down and land safely', sky.opened && sky.slow && sky.landed && sky.health === 100, JSON.stringify(sky));
+
 // ---------------------------------------------------------------- GTA-style entry: loading pictures, 10% every 3 s, into the game, no pause menu
 {
   const ip = await browser.newPage({ viewport: { width: 844, height: 390 } });

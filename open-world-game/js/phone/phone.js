@@ -6,8 +6,10 @@ import { CONTACTS, MISSIONS } from '../game/missions.js';
 import { STATIONS, ringtone } from '../core/audio.js';
 import { fmt } from '../game/economy.js';
 import { drawLandmarks } from '../ui/minimap.js';
+import { GANGS } from '../game/gangs.js';
 
 const ICONS = {
+  gang: '<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z" fill="#fff"/><path d="M8 12l3 3 5-6" fill="none" stroke="#1d5c2a" stroke-width="2.2"/>',
   map: '<path d="M4 6l5-2 6 2 5-2v14l-5 2-6-2-5 2z" fill="none" stroke="#fff" stroke-width="2"/><path d="M9 4v14M15 6v14" stroke="#fff" stroke-width="2"/>',
   contacts: '<circle cx="12" cy="9" r="4" fill="#fff"/><path d="M4 21c1-5 15-5 16 0" fill="#fff"/>',
   messages: '<path d="M3 5h18v11H8l-5 4z" fill="#fff"/>',
@@ -20,7 +22,7 @@ const ICONS = {
 };
 const APPS = [
   ['map', 'מפה', '#2fa36b'], ['contacts', 'אנשי קשר', '#3f8cff'], ['messages', 'הודעות', '#34c759'], ['camera', 'מצלמה', '#5b6170'],
-  ['music', 'מוסיקה', '#ff375f'], ['missions', 'משימות', '#ff9f0a'], ['cars', 'הרכבים שלי', '#8e5cf7'], ['flight', 'אימון טיסה', '#0a84ff'], ['settings', 'הגדרות', '#6e7480'],
+  ['music', 'מוסיקה', '#ff375f'], ['missions', 'משימות', '#ff9f0a'], ['cars', 'הרכבים שלי', '#8e5cf7'], ['gang', 'כנופיות', '#1f7a35'], ['flight', 'אימון טיסה', '#0a84ff'], ['settings', 'הגדרות', '#6e7480'],
 ];
 const WALLS = ['linear-gradient(160deg,#1d2b64,#f8cdda)', 'linear-gradient(160deg,#0f2027,#2c5364)', 'linear-gradient(160deg,#ff7e5f,#2b1055)', 'linear-gradient(160deg,#134e5e,#71b280)'];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -195,6 +197,34 @@ export class Phone {
           ${v.driver === 'player' ? '' : `<span class="pbtns"><button type="button" class="pcall" data-nav="${i}">נווט</button><button type="button" class="pcall" data-bring="${i}">הבא אליי ₪200</button></span>`}</div>`).join('') : '<div class="pempty">עוד אין לך רכבים. כל רכב שנהגת בו נשמר כאן.</div>'}</div>`;
         s.querySelectorAll('[data-nav]').forEach((b) => { b.onclick = () => { const v = cars[+b.dataset.nav]; g.gps.set({ x: v.x, z: v.z, name: v.T.name, radius: 6 }, g.playerPos()); this.show('map'); }; });
         s.querySelectorAll('[data-bring]').forEach((b) => { b.onclick = () => { const v = cars[+b.dataset.bring]; const m = g.deliverVehicle(v); g.toast(m, 3); this.show('cars'); }; });
+        break;
+      }
+      case 'gang': {
+        // street gangs: pick a crew and join, call your boys, give orders, or leave (X) and be a normal person again
+        const Gs = g.gangs, me = Gs.member, mine = me && Gs.info(me);
+        const turfs = (id) => Gs.turfsOf(id).map((t) => t.name).join(' · ') || 'אין שטח כרגע';
+        if (!mine) {
+          s.innerHTML = head('כנופיות') + `<div class="pgang"><div class="gnote">אתה אדם רגיל — לא שייך לאף כנופיה. בחר למי להצטרף:</div>${GANGS.map((x) => `<div class="gcard" style="--gc:${x.css}">
+            <div class="gname">${x.name}</div><small>${x.id === 'abc' ? 'ירוקים · בנדנות על הפנים · שרשראות' : 'כחולים · כובעים · שרשראות'}</small><small>שטח: ${turfs(x.id)}</small>
+            <button type="button" class="gjoin" data-join="${x.id}">הצטרף ל${x.full}</button></div>`).join('')}</div>`;
+        } else {
+          const n = Gs.followers.filter((p) => p.state !== 'dead').length, rival = Gs.enemyOf(me);
+          s.innerHTML = head('כנופיות') + `<div class="pgang"><div class="gcard mine" style="--gc:${mine.css}"><div class="gname">${mine.name}</div>
+              <small>אתה חבר ב${mine.full} · ${n ? `${n} חבר׳ה איתך` : 'אף אחד לא איתך כרגע'}</small><small>השטח שלכם: ${turfs(me)}</small><small>היריבים: ${rival.full} — ${turfs(rival.id)}</small></div>
+            <button type="button" class="gbtn" data-g="call">👥 קרא לחבר׳ה — בואו אחריי</button>
+            <button type="button" class="gbtn red" data-g="attack">🔫 תקפו!</button>
+            <button type="button" class="gbtn" data-g="hold">✋ חכו כאן</button>
+            <button type="button" class="gbtn" data-g="dismiss">🏠 שלח אותם הביתה</button>
+            <button type="button" class="gx" data-g="leave">✖ צא מהכנופיה</button>
+            <div class="gnote">ברכב: החבר׳ה עולים לרכבים ולאופנועים של הכנופיה ונוסעים אחריך. כשאתה יוצא — הם יוצאים. תחסלו את ${rival.full} בשטח שלהם והשטח שלכם.</div></div>`;
+        }
+        s.querySelectorAll('[data-join]').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); Gs.join(b.dataset.join); this.show('gang'); }; });
+        s.querySelectorAll('[data-g]').forEach((b) => { b.onclick = (e) => {
+          e.stopPropagation(); const k = b.dataset.g;
+          const msg = k === 'call' ? Gs.call() : k === 'attack' ? Gs.attack() : k === 'hold' ? Gs.hold() : k === 'dismiss' ? Gs.dismiss() : (Gs.leave(false), null);
+          if (msg) g.toast(msg, 3);
+          this.show('gang');
+        }; });
         break;
       }
       case 'settings': {

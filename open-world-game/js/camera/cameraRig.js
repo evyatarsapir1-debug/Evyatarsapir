@@ -67,7 +67,7 @@ export class CameraRig {
       // aiming a weapon: over-the-right-shoulder camera, the body turns with the crosshair
       this.aimK = damp(this.aimK || 0, player.armed && player.aimT > 0 && player.state === 'foot' ? 1 : 0, 8, dt);
       this.scopeK = damp(this.scopeK || 0, this.aimMode === 'scope' ? 1 : 0, 10, dt);
-      const fovWant = this.aimMode === 'scope' ? 14 : this.aimMode === 'aim' ? 44 : 62;
+      const fovWant = this.aimMode === 'scope' ? 14 : this.aimMode === 'aim' ? 44 : 62 + 8 * (this.skyK || 0);   // wider while skydiving
       if (Math.abs(this.camera.fov - fovWant) > 0.05) { this.camera.fov = damp(this.camera.fov, fovWant, 10, dt); this.camera.updateProjectionMatrix(); }
       if (this.aimK > 0.01) {
         const k = this.aimK, rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw);
@@ -79,6 +79,14 @@ export class CameraRig {
       }
       // gentle auto-follow while walking
       if (this.idle > 2 && player.speed > 1) this.yaw = dampAngle(this.yaw, player.facing, 0.8, dt);
+      // free fall: above and behind you looking down at the ground far below, a wider lens, the wind shaking it
+      this.skyK = damp(this.skyK || 0, player.skydive ? 1 : player.parachute ? 0.45 : 0, 3, dt);
+      if (this.skyK > 0.01) {
+        const k = this.skyK;
+        dist += ((player.skydive ? 4.6 : 9.5) - dist) * k; ty += (player.skydive ? -0.9 : 2.2) * k; lam = 30; this.ceiling = null;   // under the canopy: frame you and the wing
+        if (this.idle > 0.6) { this.yaw = dampAngle(this.yaw, player.facing, 2.2, dt); this.pitch = damp(this.pitch, player.skydive ? 0.62 : 0.22, 2, dt); }
+        if (player.skydive) this.shake = Math.max(this.shake, Math.min(0.22, Math.abs(player.vy) / 260));
+      }
     }
     this.target.set(tx, ty, tz);
     if (this.first) { this.smoothTarget.copy(this.target); this.first = false; }

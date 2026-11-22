@@ -137,7 +137,7 @@ export class Vehicle {
     this.y += this.vy * dt;
     const airborne = this.y > ground + 0.3;
     if (this.y < ground) { this.y = ground; this.vy = Math.max(0, this.vy); }
-    if (this.y > 260) { this.y = 260; this.vy = Math.min(0, this.vy); }
+    if (this.y > 1100) { this.y = 1100; this.vy = Math.min(0, this.vy); }   // high enough to jump out above the clouds
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     const rx = -fz, rz = fx;
     let vf = this.vx * fx + this.vz * fz, vs = this.vx * rx + this.vz * rz;
