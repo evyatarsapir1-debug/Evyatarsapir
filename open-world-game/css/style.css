@@ -21,6 +21,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 .ld-logo span { color: #ffb347; }
 .ld-cap { position: absolute; z-index: 101; left: 0; right: 0; top: max(18px, env(safe-area-inset-top)); text-align: center; font: 700 clamp(15px, 2.6vw, 22px) "Rubik", "Assistant", Arial, sans-serif; color: #fff; text-shadow: 0 2px 8px #000; opacity: 0; transition: opacity .8s; direction: rtl; }
 .ld-cap.on { opacity: .92; }
+/* only the percentage, large and clean in the corner (no caption, bar, spinner or text) */
+#loading .ld-cap, #loading .ld-spin, #loading .ld-prog .bar, #loading #loadText { display: none !important; }
+#loading .ld-pct { font: 800 clamp(30px, 5.2vw, 46px)/1 "Rubik", "Assistant", Arial, sans-serif; letter-spacing: 1px; color: #fff; text-shadow: 0 2px 0 #000a, 0 0 18px #0009; min-width: 0; font-variant-numeric: tabular-nums; direction: ltr; }
 .ld-prog { position: absolute; z-index: 101; right: max(22px, env(safe-area-inset-right)); bottom: max(24px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: auto auto; align-items: center; gap: 6px 12px; direction: rtl; }
 .ld-spin { width: 26px; height: 26px; border-radius: 50%; border: 3px solid #ffffff33; border-top-color: #fff; animation: ldspin 0.9s linear infinite; grid-row: span 2; }
 @keyframes ldspin { to { transform: rotate(360deg); } }

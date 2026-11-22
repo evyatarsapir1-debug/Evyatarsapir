@@ -1248,13 +1248,13 @@ check('skydiving: "open parachute" opens the canopy, you glide down and land saf
   const mid = await ip.evaluate(() => ({ shown: document.getElementById('loading').classList.contains('show'), slides: document.querySelectorAll('#loading .ld-slide').length, cap: document.getElementById('ldCap').textContent, state: window.__game?.state }));
   await ip.screenshot({ path: `${OUT}/00-intro.png` });
   await ip.waitForFunction(() => window.__game?.state === 'playing', null, { timeout: 90000 });
-  const end = await ip.evaluate(async () => ({ log: window.__pctLog, at: performance.now() / 1000, pauseBtn: !!document.getElementById('pauseBtn'), pauseScreen: !!document.getElementById('pause'),
+  const end = await ip.evaluate(async () => ({ log: window.__pctLog, at: performance.now() / 1000, extras: ['#ldCap', '#loading .bar', '#loadText', '#loading .ld-spin'].some((q) => { const e = document.querySelector(q); return e && getComputedStyle(e).display !== 'none'; }), pauseBtn: !!document.getElementById('pauseBtn'), pauseScreen: !!document.getElementById('pause'),
     imgs: await Promise.all([...document.querySelectorAll('.ld-slide')].map((s) => new Promise((r) => { const i = new Image(); i.onload = () => r(i.naturalWidth); i.onerror = () => r(0); i.src = s.style.backgroundImage.slice(5, -2); }))) }));
   await ip.keyboard.press('Escape'); await ip.waitForTimeout(400);
   const escState = await ip.evaluate(() => __game.state);
   const pcts = end.log.map((e) => e[0]), t90 = end.log.find((e) => e[0] === '90%')?.[1] || 0;
   const gaps = end.log.slice(2).map((e, i) => e[1] - end.log[i + 1][1]);
-  check('entry: GTA-style loading screen with pictures from the game and a changing caption', mid.shown && mid.slides >= 6 && !!mid.cap && end.imgs.every((w) => w > 0), JSON.stringify({ ...mid, imgs: end.imgs }));
+  check('entry: GTA-style loading screen with pictures from the game (no caption / bar - only the percentage)', mid.shown && mid.slides >= 6 && end.imgs.every((w) => w > 0) && !end.extras, JSON.stringify({ ...mid, imgs: end.imgs, extras: end.extras }));
   check('entry: 10% every 3 seconds up to 90%', ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%'].every((p) => pcts.includes(p)) && gaps.every((g) => g > 2.6 && g < 3.4) && !pcts.includes('100%'), JSON.stringify(end.log.map((e) => [e[0], +e[1].toFixed(1)])));
   check('entry: after 90% it waits 3 + 5 seconds and goes straight into the game', end.at - t90 > 7.3 && end.at - t90 < 10.5, `90% at ${t90.toFixed(1)}s, playing at ${end.at.toFixed(1)}s`);
   check('no pause button / pause menu in the game (Escape does not stop it)', !end.pauseBtn && !end.pauseScreen && escState === 'playing', JSON.stringify({ pauseBtn: end.pauseBtn, pauseScreen: end.pauseScreen, escState }));

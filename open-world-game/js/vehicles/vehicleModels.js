@@ -32,8 +32,12 @@ export const shared = {
 // its column (turns with the steering), front seats with headrests, rear bench, centre console with gear lever,
 // rear-view mirror. Seats sit on the floor line (top of the lower body).
 function carInterior(parts, body, o) {
-  const { W, clear, lowH, cabZ, cabL, cabH, rear } = o, y = clear + lowH, S = shared;
+  const { W, clear, lowH, cabZ, cabL, cabH, rear, prof } = o, y = clear + lowH, S = shared;
   const fz = cabZ + cabL * 0.02;
+  // room under the glass at z (height above the floor line): the windshield and rear window slope in, so nothing may
+  // stick out through them (straight-line estimate of the curved glass, a little on the safe side)
+  const H = prof ? prof.top - y - 0.06 : cabH * 0.9;
+  const room = (z) => !prof ? H : z > prof.fT ? H * Math.max(0, (prof.fB - z) / (prof.fB - prof.fT)) : z < prof.rT ? H * Math.max(0, (z - prof.rB) / (prof.rT - prof.rB)) : H;
   // everything inside stays below the roof: seat backs and headrests scale with the cabin height
   const vs = Math.max(0.4, Math.min(1, (cabH - 0.08) / 0.82)), bh = 0.58 * vs, hr = 0.17 * vs;
   for (const sx of [-1, 1]) {
@@ -44,24 +48,32 @@ function carInterior(parts, body, o) {
     m(box(0.03, bh * 0.86, 0.125), S.stitch, body, x, y + 0.06 + bh / 2, fz - 0.265, false).rotation.x = -0.12; // centre seam
   }
   if (rear) {
-    const rz = cabZ - cabL * 0.3;
-    m(box(W * 0.78, 0.12, 0.46), S.leather, body, 0, y + 0.02, rz, false);
-    m(box(W * 0.78, bh * 0.86, 0.12), S.leather, body, 0, y + 0.06 + bh * 0.43, rz - 0.26, false).rotation.x = -0.15;
-    for (const sx of [-1, 0, 1]) m(box(0.22, hr * 0.8, 0.08), S.leather, body, sx * W * 0.26, y + 0.08 + bh * 0.86 + hr * 0.4, rz - 0.3, false);
+    // rear bench: as far back as the sloping rear window allows (headrests below the glass), and narrow enough to stay
+    // inside the side windows that lean in towards the roof
+    let rz = cabZ - cabL * 0.3, rb = bh * 0.86, rh = hr * 0.8;
+    const need = () => 0.08 + rb + rh + 0.03;
+    while (room(rz - 0.34) < need() && rz < fz - 0.8) rz += 0.03;
+    if (room(rz - 0.34) < need()) { const k = Math.max(0.45, (room(rz - 0.34) - 0.11) / (rb + rh)); rb *= k; rh *= k; }
+    m(box(W * 0.7, 0.12, 0.46), S.leather, body, 0, y + 0.02, rz, false);
+    m(box(W * 0.7, rb, 0.12), S.leather, body, 0, y + 0.06 + rb / 2, rz - 0.26, false).rotation.x = -0.15;
+    for (const sx of [-1, 0, 1]) m(box(0.2, rh, 0.08), S.leather, body, sx * W * 0.24, y + 0.08 + rb + rh / 2, rz - 0.3, false);
   }
-  // dashboard, instruments, centre screen, vents
-  const dz = cabZ + cabL * 0.44;
-  m(box(W * 0.86, 0.2, 0.42), S.cabin, body, 0, y + 0.18, dz, false);
-  m(box(W * 0.86, 0.05, 0.3), S.cabin, body, 0, y + 0.3, dz + 0.06, false).rotation.x = 0.25;
-  m(box(0.3, 0.1, 0.02), S.gauge, body, W * 0.22, y + 0.32, dz - 0.2, false).rotation.x = -0.35;
-  m(box(0.24, 0.14, 0.02), S.screen, body, 0, y + 0.3, dz - 0.21, false).rotation.x = -0.3;
-  for (const sx of [-1, 1]) m(box(0.1, 0.04, 0.02), S.dark, body, sx * W * 0.36, y + 0.24, dz - 0.215, false);
+  // dashboard, instruments, centre screen, vents: tucked in under the base of the windshield
+  const dTop = 0.3, dDepth = 0.36;
+  let dFront = cabZ + cabL * 0.44 + 0.21;
+  while (room(dFront) < dTop + 0.03 && dFront > cabZ + cabL * 0.3 + dDepth) dFront -= 0.02;
+  const dk = Math.min(1, room(dFront) / (dTop + 0.03)), dz = dFront - dDepth / 2;
+  m(box(W * 0.84, 0.2 * dk, dDepth), S.cabin, body, 0, y + 0.08 + 0.1 * dk, dz, false);
+  m(box(W * 0.84, 0.05, dDepth * 0.7), S.cabin, body, 0, y + 0.08 + 0.22 * dk, dz - 0.03, false).rotation.x = 0.25;
+  m(box(0.3, 0.1, 0.02), S.gauge, body, W * 0.22, y + 0.06 + 0.24 * dk, dz - dDepth / 2 - 0.01, false).rotation.x = -0.35;
+  m(box(0.24, 0.14, 0.02), S.screen, body, 0, y + 0.04 + 0.24 * dk, dz - dDepth / 2 - 0.01, false).rotation.x = -0.3;
+  for (const sx of [-1, 1]) m(box(0.1, 0.04, 0.02), S.dark, body, sx * W * 0.34, y + 0.06 + 0.17 * dk, dz - dDepth / 2 - 0.01, false);
   // centre console + gear lever
   m(box(0.2, 0.18, cabL * 0.32), S.cabin, body, 0, y + 0.05, fz + 0.08, false);
   m(new THREE.CylinderGeometry(0.012, 0.012, 0.14, 6), S.chrome, body, 0, y + 0.2, fz + 0.18, false);
   m(new THREE.SphereGeometry(0.03, 8, 6), S.dark, body, 0, y + 0.28, fz + 0.18, false);
   // rear-view mirror
-  m(box(0.22, 0.06, 0.02), S.dark, body, 0, y + cabH * 0.78, cabZ + cabL * 0.4, false);
+  { let mz = cabZ + cabL * 0.4; while (room(mz) < H * 0.82 && mz > cabZ) mz -= 0.02; m(box(0.22, 0.06, 0.02), S.dark, body, 0, y + Math.min(cabH * 0.78, room(mz) - 0.06), mz, false); }
   // steering wheel on a column (a group, so it can turn and is not merged with the body)
   const col = new THREE.Group(); col.position.set(W * 0.22, y + 0.3, cabZ + cabL * 0.3); col.rotation.x = -1.15; body.add(col);
   m(new THREE.CylinderGeometry(0.025, 0.03, 0.24, 8), S.cabin, col, 0, -0.12, 0, false);
@@ -196,7 +208,7 @@ function glassHouse(T, W, base, cabZ, cabL, cabH, sporty) {
     g.applyQuaternion(q); g.translate((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2);
     return g;
   };
-  return { glass, roof, pillars, pillar };
+  return { glass, roof, pillars, pillar, prof: { fB, fT, rT, rB, base, top } };
 }
 
 // Merge the static meshes of the body by material (fewer draw calls) and build a one-mesh LOD for distance.
@@ -426,7 +438,7 @@ export function buildVehicleModel(type, color) {
         m(G.roof, paint, body, 0, 0, 0);
         for (const [a, b] of G.pillars) m(G.pillar(a, b), paint, body, 0, 0, 0, false);
         if (T.van) for (const sx of [-1, 1]) m(box(0.04, cabH * 0.75, cabL * 0.55), paint, body, sx * W * 0.395, clear + lowH + cabH * 0.42, cabZ - cabL * 0.2);
-        carInterior(parts, body, { W, clear, lowH, cabZ, cabL, cabH, rear: !sporty && !T.pickup && cabL > 1.9 });
+        carInterior(parts, body, { W, clear, lowH, cabZ, cabL, cabH, rear: !sporty && !T.pickup && cabL > 1.9, prof: G.prof });
       }
       if (T.pickup) {
         // open cargo bed behind the cab

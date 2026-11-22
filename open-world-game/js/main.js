@@ -171,7 +171,7 @@ class Game {
     };
     const show = (pct) => { $('loadPct').textContent = pct + '%'; $('loadBar').style.width = pct + '%'; };
     next(); show(0);
-    const slideT = setInterval(next, 5800);
+    const slideT = setInterval(next, 4400);   // eight pictures across the ~35 s
     // read the real clock (not a tick counter), so a busy phone that delays a timer never stretches the intro
     const t0 = performance.now();
     return new Promise((resolve) => {
@@ -697,6 +697,9 @@ class Game {
       const prev = pts.get(e.pointerId);
       pts.set(e.pointerId, [e.clientX, e.clientY]);
       if (pts.size === 1) {
+        // a finger always wobbles a little while tapping: the map only starts to pan after a real drag
+        if (downAt && !dragging && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 14) return;
+        dragging = true;
         const k = devicePixelRatio / this.minimap.fullScale;
         this.fullView.x -= (e.clientX - prev[0]) * k; this.fullView.z -= (e.clientY - prev[1]) * k;
         this.drawFullMap();
@@ -707,17 +710,21 @@ class Game {
         pinch = d;
       }
     });
-    let downAt = null;
-    c.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
+    let downAt = null, downT = 0, dragging = false, multi = false;
+    c.addEventListener('pointerdown', (e) => { if (pts.size > 1) multi = true; if (pts.size === 1) { downAt = [e.clientX, e.clientY]; downT = performance.now(); dragging = false; multi = false; } });
     const up = (e) => {
-      // a tap (not a drag) marks a GPS destination there
-      if (pts.size === 1 && downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 8) {
+      // a tap (not a drag or a pinch) marks a GPS destination there
+      const tap = e.type === 'pointerup' && pts.size === 1 && !multi && !dragging && downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) < 18;
+      if (tap) {
         const r = c.getBoundingClientRect(), k = devicePixelRatio / this.minimap.fullScale;
-        const x = this.fullView.x + (e.clientX - r.left - r.width / 2) * k, z = this.fullView.z + (e.clientY - r.top - r.height / 2) * k;
+        const x = this.fullView.x + (downAt[0] - r.left - r.width / 2) * k, z = this.fullView.z + (downAt[1] - r.top - r.height / 2) * k;
         this.gps.set({ x, z, name: 'נקודה במפה', radius: 15 }, this.playerPos());
         this.drawFullMap();
+        this.toast('📍 יעד סומן — הדרך בסגול', 1.6);
+        this.audio.mech?.('dry');
       }
-      pts.delete(e.pointerId); pinch = 0; downAt = null;
+      pts.delete(e.pointerId); pinch = 0;
+      if (!pts.size) { downAt = null; dragging = false; }
     };
     c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
     c.addEventListener('wheel', (e) => { e.preventDefault(); zoom(e.deltaY > 0 ? 1.2 : 0.83); }, { passive: false });

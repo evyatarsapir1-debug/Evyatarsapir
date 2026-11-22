@@ -331,7 +331,7 @@ export class Player {
   _entering(dt, world) {
     const v = this.vehicle, s = this.seq;
     s.t += dt;
-    if (v.jacking) v.sync(dt);   // a car taken from traffic is not updated by anyone else while you pull the driver out: animate its door here
+    v.sync(dt);   // a parked car (or one taken from traffic) is not updated by anyone else while you get in: animate its door here
     if (s.phase === 'walk') {
       const dp = v.doorPoint();
       const dx = dp.x - this.x, dz = dp.z - this.z, d = Math.hypot(dx, dz);
@@ -349,7 +349,7 @@ export class Player {
       v.doorTarget = 1;
       this.facing = dampAngle(this.facing, v.heading + Math.PI / 2 * 0 - Math.PI / 2, 10, dt);
       this.model.animate(dt, { speed: 0, grounded: true, mode: 'foot', doorReach: true });
-      if (s.t > (s.jack ? 0.6 : 0.35)) {
+      if (s.t > (s.jack ? 0.75 : 0.6)) {   // the door swings open first (and stays open while you climb in)
         if (s.jack) { s.phase = 'yank'; s.t = 0; world.onYank?.(v, s.jack); }
         else { s.phase = 'sit'; s.t = 0; }
       }
@@ -482,6 +482,7 @@ export class Player {
   _exiting(dt, world) {
     const v = this.vehicle, s = this.seq;
     s.t += dt;
+    v.sync(dt);   // the door opens and closes even on a car nobody else is updating
     if (s.phase === 'open') {
       v.doorTarget = 1;
       this.model.animate(dt, { speed: 0, mode: v.parts.seatMode, doorReach: true });
@@ -509,7 +510,8 @@ export class Player {
       if (k >= 1) { s.phase = 'close'; s.t = 0; v.doorTarget = 0; }
     } else if (s.phase === 'close') {
       this.model.animate(dt, { speed: 0, grounded: true, mode: 'foot' });
-      if (s.t > 0.25) {
+      if (s.t > 0.4) {
+        v.doorAngle = 0; v.sync(0.016);   // door shut (a parked car is not animated after you walk away)
         v.driver = null; this.lastVehicle = v; this.vehicle = null; this.ignoreVehicle = null;
         this.state = 'foot'; this.seq = null; this.vx = this.vz = this.vy = 0; this.grounded = true;
       }
