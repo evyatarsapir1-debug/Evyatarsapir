@@ -153,6 +153,7 @@ class Game {
     this.state = 'intro';
     await this._intro;
     if (hasSave()) this.continueGame(); else this.newGame();
+    this.chars.enter();   // into the city the way a character switch looks: from the sky down onto you
   }
 
   // GTA-style loading: pictures from the game fade into each other with a slow pan; the counter climbs 10% every

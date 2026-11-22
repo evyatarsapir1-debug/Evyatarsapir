@@ -160,6 +160,14 @@ export class Characters {
     document.body.classList.add('switching');
     g.audio.mech?.('draw');
   }
+  // entering the game (after the loading screen): the same shot as a character switch - high above the city looking
+  // straight down, a glide across the rooftops, then down onto your character
+  enter() {
+    const g = this.game, P = g.player, a = (P.facing || 0) + Math.PI * 0.75;
+    this.sw = { id: this.active, t: 1.0, applied: true, entry: true, c0: g.camera.position.clone(), from: new THREE.Vector3(P.x + Math.sin(a) * 170, 0, P.z + Math.cos(a) * 170), to: new THREE.Vector3(P.x, 0, P.z), h: 240 };
+    g.state = 'switching';
+    document.body.classList.add('switching');
+  }
   frame(dt) {
     const g = this.game, s = this.sw, cam = g.camera;
     if (!s) { g.state = 'playing'; return; }
@@ -184,14 +192,15 @@ export class Characters {
       this.sw = null; document.body.classList.remove('switching');
       g.state = 'playing'; g.input.endFrame(); g.clock.getDelta();
       this.flash.classList.remove('on'); void this.flash.offsetWidth; this.flash.classList.add('on');
-      g.toast(`עכשיו אתה ${this.current.name}`, 2);
-      g.save();
+      if (!s.entry) { g.toast(`עכשיו אתה ${this.current.name}`, 2); g.save(); }
       return;
     }
     cam.position.copy(pos); cam.lookAt(look);
     g.chunks.update(pos.x, pos.z);
     g.env.update(new THREE.Vector3(pos.x, 0, pos.z), dt, cam);
-    g.player.model.animate(dt, { speed: 0, grounded: true, mode: 'foot' });
-    g.player.object.position.set(g.player.x, g.player.y, g.player.z);
+    if (!g.player.attached) {   // (in a car the player rides with it)
+      g.player.model.animate(dt, { speed: 0, grounded: true, mode: 'foot' });
+      g.player.object.position.set(g.player.x, g.player.y, g.player.z);
+    }
   }
 }
