@@ -44,9 +44,10 @@ export class Economy {
     this.gang = null; this.gangPrev = null;   // street gang you joined (per character)
     this.turf = {};                            // gang neighbourhoods that changed hands: { turfId: gangId }
     this.vest = null;           // { type, armor 0..100 }
+    this.gear = null;           // selected non-weapon gear ('chute')
     this.log = [];
   }
-  toJSON() { return { money: this.money, health: this.health, items: this.items, weapons: this.weapons, equipped: this.equipped, wardrobe: this.wardrobe, startOutfit: this.startOutfit, ownedCars: this.ownedCars, flightSchool: this.flightSchool || 0, heists: this.heists || {}, gang: this.gang || null, gangPrev: this.gangPrev || null, turf: this.turf || {}, vest: this.vest || null }; }
+  toJSON() { return { money: this.money, health: this.health, items: this.items, weapons: this.weapons, equipped: this.equipped, wardrobe: this.wardrobe, startOutfit: this.startOutfit, ownedCars: this.ownedCars, flightSchool: this.flightSchool || 0, heists: this.heists || {}, gang: this.gang || null, gangPrev: this.gangPrev || null, turf: this.turf || {}, vest: this.vest || null, gear: this.gear || null }; }
   load(o) {
     this.reset();
     if (!o) return;
@@ -60,6 +61,7 @@ export class Economy {
     this.weapons = o.weapons || {}; this.equipped = o.equipped && this.weapons[o.equipped] ? o.equipped : null;
     this.gang = o.gang || null; this.gangPrev = o.gangPrev || null; this.turf = o.turf || {};
     this.vest = o.vest && VESTS[o.vest.type] ? o.vest : null;
+    this.gear = o.gear || null;
   }
   ownsCloth(id) { return this.wardrobe.some((w) => w.id === id); }
   addCloth(it) { if (!this.ownsCloth(it.id)) this.wardrobe.push({ id: it.id, name: it.name, swatch: it.swatch, patch: it.patch }); }

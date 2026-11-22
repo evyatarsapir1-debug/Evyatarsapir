@@ -99,8 +99,7 @@ function catalogue(kind, ctx) {
       break;
     }
     case 'equipment':
-      out.push({ id: 'flashlight', name: 'פנס', desc: 'מדליק אור קדימה בלילה (L / כפתור "פנס")', price: 220, owned: econ.items.flashlight, buy: () => { econ.items.flashlight = true; return 'קנית פנס. לחץ L כדי להדליק'; } });
-      out.push({ id: 'parachute', name: 'מצנח', desc: 'נפתח לבד כשנופלים מגובה (גג, מסוק)', price: 900, buy: () => { econ.items.parachute++; return 'מצנח נוסף לתיק'; } });
+      out.push({ id: 'parachute', name: 'מצנח', desc: 'בציוד (G). קפיצה מגובה / ממסוק: "פתח מצנח"', price: 900, buy: () => { econ.items.parachute++; return 'מצנח נוסף לתיק'; } });
       out.push({ id: 'repair', name: 'ערכת תיקון לרכב', desc: 'מתקנת את הרכב שאתה נוהג בו (מהתיק)', price: 600, buy: () => { econ.items.repairKit++; return 'ערכת תיקון נוספה לתיק'; } });
       out.push({ id: 'snack2', name: '🍫 חטיף ובקבוק מים', desc: 'נכנס לתיק', price: 20, buy: () => { econ.addFood('snack'); econ.addFood('drink'); return 'נוסף לתיק'; } });
       break;

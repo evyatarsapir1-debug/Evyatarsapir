@@ -185,6 +185,9 @@ function villaSpec(b, F, spec, piece, lamp, furn, C, y0) {
   piece(F, spec, 'nightstand', -8.85, 0.35, y1, '+d'); piece(F, spec, 'nightstand', -6.15, 0.35, y1, '+d');
   piece(F, spec, 'wardrobe', -hl + 0.4, 4.2, y1, '+a', 0xe8e1d4); piece(F, spec, 'wardrobe', -hl + 0.4, 5.45, y1, '+a', 0xe8e1d4); piece(F, spec, 'wardrobe', -hl + 0.4, 6.7, y1, '+a', 0xe8e1d4);
   spec.wardrobe = { pt: F.pt(-hl + 1.5, 5.45), y: y1 };
+  // a second wardrobe downstairs, right by the front door (no need to go up to change clothes)
+  piece(F, spec, 'wardrobe', 3.4, 0.35, y0, '+d', 0xe8e1d4);
+  spec.wardrobes = [spec.wardrobe, { pt: F.pt(3.4, 1.3), y: y0 }];
   // study (middle front) + guest bedroom (right front) + upstairs lounge (back right)
   piece(F, spec, 'desk', -1.5, 0.45, y1, '+d'); piece(F, spec, 'chair', -1.5, 1.2, y1, '-d'); piece(F, spec, 'bookcase', 0.2, 0.25, y1, '+d');
   piece(F, spec, 'bed', 8.5, 1.3, y1, '+d', 0x7fa6c4); piece(F, spec, 'nightstand', 7.15, 0.35, y1, '+d'); piece(F, spec, 'wardrobe', hl - 0.4, 3.6, y1, '-a');
@@ -504,14 +507,8 @@ function stockedShop(F, spec, C, y0, H, L, D, hl, cw, sign) {
   if (type !== 'equip') { label(-hl + 0.3, (D - 0.6) / 2, 2.15, 2.2, sign, false); return; }
   // ---- equipment / electronics: the things it sells, by sections on the right wall
   const aw = hl - 0.03, d0 = 1.0;
-  // flashlights: a pegboard with flashlights hanging in rows
-  box(aw - 0.03, aw, d0, d0 + 1.6, 0.9, 2.0, 0xa08a6c);
-  for (const y of [1.2, 1.5, 1.8]) for (let d = d0 + 0.15; d < d0 + 1.5; d += 0.22) {
-    box(aw - 0.09, aw - 0.04, d, d + 0.05, y - 0.2, y, 0x1d1d1f); box(aw - 0.1, aw - 0.03, d - 0.01, d + 0.06, y, y + 0.06, 0xd4a017);
-  }
-  label(aw - 0.05, d0 + 0.8, 2.15, 1.5, 'פנסים', true);
   // parachute packs on wall hooks
-  const d1 = d0 + 1.9;
+  const d1 = d0 + 0.2;
   for (let i = 0; i < 4; i++) { const d = d1 + i * 0.45, c = [0x4f5a32, 0xe67e22, 0x2e3b4a, 0x4f5a32][i];
     box(aw - 0.3, aw - 0.05, d, d + 0.36, 0.95, 1.6, c); box(aw - 0.33, aw - 0.3, d + 0.06, d + 0.1, 0.95, 1.6, 0x111111); box(aw - 0.33, aw - 0.3, d + 0.26, d + 0.3, 0.95, 1.6, 0x111111); box(aw - 0.22, aw - 0.12, d + 0.1, d + 0.26, 1.6, 1.68, 0x8a9096, 'metal'); }
   label(aw - 0.05, d1 + 0.9, 2.15, 1.5, 'מצנחים', true);

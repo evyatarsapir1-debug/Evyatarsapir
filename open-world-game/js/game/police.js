@@ -65,7 +65,7 @@ export class Police {
   }
   _sees(x, z, y, pos, r) {
     const d = Math.hypot(pos.x - x, pos.z - z);
-    return d < 18 || (d < r && this._los(x, z, pos.x, pos.z, (y || 0) + 1.5, pos.y + 1.4));
+    return d < 12 || (d < r && this._los(x, z, pos.x, pos.z, (y || 0) + 1.5, pos.y + 1.4));
   }
 
   // A* over the street network (junction nodes every 100 m) from the road nearest to (x0,z0) to the one nearest (x1,z1)
@@ -147,7 +147,7 @@ export class Police {
     for (const c of this.cars) {
       const dP = Math.hypot(pos.x - c.x, pos.z - c.z);
       if (dP > 420) { this._remove(c); continue; }
-      const sees = !c.wrecked && this._sees(c.x, c.z, c.y, pos, 70);
+      const sees = !c.wrecked && this._sees(c.x, c.z, c.y, pos, 55);
       if (sees) seen = true;
       if (dP < 25) reached = true;
       // goal: you (while they know where you are) or a search point around where you were last seen
@@ -241,13 +241,19 @@ export class Police {
     }
     // ---- escaping: out of sight -> the stars blink. They give up after 50 s without seeing you,
     //      or after 50 s in which no officer managed to get to you (you are out of their reach)
-    this.unseen = seen ? 0 : this.unseen + dt;
+    // a glimpse of you no longer wipes out your escape: it only costs some of the time you have been out of sight
+    if (seen) { if (this.unseen > 0 && !this.wasSeen) this.unseen = Math.max(0, this.unseen - 20); else if (reached || this.unseen < 1) this.unseen = 0; }
+    else this.unseen += dt;
+    this.wasSeen = seen;
     this.noReach = reached ? 0 : (this.noReach || 0) + dt;
     if (seen) this.lastKnown = { x: pos.x, z: pos.z };
     if (this.unseen > this.escapeTime) this.clear('התחמקת! הכוכבים נעלמו — המשטרה הפסיקה לחפש אותך.');
     else if (this.noReach > this.escapeTime) this.clear('המשטרה לא הצליחה להגיע אליך — הם עזבו. הכוכבים נעלמו.');
+    // three minutes after your last shots, if they have not caught up with you, they give up the chase
+    else if ((this.sinceCrime ?? 0) > this.giveUpTime && !reached) this.clear('3 דקות והמשטרה לא תפסה אותך — הם עזבו. הכוכבים נעלמו.');
   }
-  get escapeTime() { return 90; }   // a minute and a half out of sight (or out of reach) and the police give up
+  get escapeTime() { return 90; }    // a minute and a half out of sight (or out of reach) and the police give up
+  get giveUpTime() { return 180; }   // and never more than three minutes after the last shots unless they have you cornered
 
   // cars that gave up: siren off, drive away from you, then disappear out of the way
   _leaving(dt, ctx, pos) {
@@ -275,8 +281,9 @@ export class Police {
     const half = this.level - stars >= 0.5;
     // countdown to escape: shown once they lost sight of you (or have not reached you for a while)
     const lost = Math.max(this.unseen > 1.5 ? this.unseen : 0, (this.noReach || 0) > 20 ? this.noReach : 0);
-    const left = lost > 0 ? Math.max(0, Math.ceil(this.escapeTime - lost)) : 0;
-    const html = stars || half ? '<span class="st">' + '★'.repeat(stars) + (half ? '<i>★</i>' : '') + '<s>' + '★'.repeat(5 - stars - (half ? 1 : 0)) + '</s></span>' + (left ? `<b>${this.unseen > 1.5 ? 'מסתתר' : 'מחוץ להישג'} · ${left}</b>` : '') : '';
+    const chase = Math.max(0, this.giveUpTime - (this.sinceCrime ?? 0));   // the three-minute limit counts down too
+    const left = lost > 0 ? Math.max(0, Math.ceil(Math.min(this.escapeTime - lost, chase))) : (this.sinceCrime ?? 0) > 60 ? Math.ceil(chase) : 0;
+    const html = stars || half ? '<span class="st">' + '★'.repeat(stars) + (half ? '<i>★</i>' : '') + '<s>' + '★'.repeat(5 - stars - (half ? 1 : 0)) + '</s></span>' + (left ? `<b>${this.unseen > 1.5 ? 'מסתתר' : lost > 0 ? 'מחוץ להישג' : 'מרדף'} · ${left}</b>` : '') : '';
     if (this.hud.dataset.h !== html) { this.hud.innerHTML = html; this.hud.dataset.h = html; }
     this.hud.classList.toggle('blink', stars > 0 && this.unseen > 1.5);
   }

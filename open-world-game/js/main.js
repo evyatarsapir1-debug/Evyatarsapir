@@ -124,8 +124,6 @@ class Game {
     this.weapons = new WeaponSystem(this.scene, this.statics);
     this.weapons.audio = this.audio;
     this.combat = new Combat(this);
-    this.flashlight = new THREE.SpotLight(0xfff2d8, 0, 40, 0.5, 0.5, 1.2);
-    this.scene.add(this.flashlight, this.flashlight.target);
     this.headlight = new THREE.SpotLight(0xfff4e0, 0, 70, 0.55, 0.45, 1.3);
     this.scene.add(this.headlight, this.headlight.target);
     this.lampLights = [];
@@ -501,17 +499,40 @@ class Game {
   }
   equip(id) {
     this.econ.equipped = id && this.econ.weapons[id] ? id : null;
+    if (this.econ.equipped) this.econ.gear = null;   // a weapon in hand replaces the parachute as selected gear
     this.weapons.attachGun(this.player, this.econ.equipped);
     this.player.armed = !!this.econ.equipped;
     this.player.hold = this.econ.equipped ? WEAPONS[this.econ.equipped].hold : null;
   }
+  // equipment: empty hands -> each weapon you own -> your parachute pack (if you have one) -> back to empty hands
   cycleWeapon() {
     const owned = WEAPON_ORDER.filter((id) => this.econ.weapons[id]);
-    if (!owned.length) { this.toast('אין לך נשק — אפשר לקנות ב"חנות נשקים"', 2.5); return; }
-    const list = [null, ...owned];
-    const i = list.indexOf(this.econ.equipped);
-    this.equip(list[(i + 1) % list.length]);
-    this.toast(this.econ.equipped ? WEAPONS[this.econ.equipped].name : 'ידיים ריקות', 1.5);
+    const chute = this.econ.items.parachute > 0;
+    if (!owned.length && !chute) { this.toast('אין לך ציוד — נשק ב"חנות נשקים", מצנח ב"חנות ציוד"', 2.5); return; }
+    const list = [null, ...owned, ...(chute ? ['chute'] : [])];
+    const cur = this.econ.gear === 'chute' ? 'chute' : this.econ.equipped;
+    const next = list[(list.indexOf(cur) + 1) % list.length];
+    this.econ.gear = next === 'chute' ? 'chute' : null;
+    this.equip(next === 'chute' ? null : next);
+    this.toast(next === 'chute' ? `🪂 מצנח (${this.econ.items.parachute}) — על הגב. קופצים מגובה ו"פתח מצנח"` : next ? WEAPONS[next].name : 'ידיים ריקות', 1.8);
+  }
+  // the parachute pack on your back while it is the selected gear
+  _gearFrame(p) {
+    const show = this.econ.gear === 'chute' && this.econ.items.parachute > 0 && p.state === 'foot' && !p.parachute;
+    if (show && !this._pack) {
+      const g = new THREE.Group(), cloth = new THREE.MeshStandardMaterial({ color: 0x2e3b4a, roughness: 0.85 }), strap = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 });
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.42, 0.14), cloth); body.position.set(0, 0.3, -0.19); g.add(body);
+      const top = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.06, 0.12), new THREE.MeshStandardMaterial({ color: 0xe67e22, roughness: 0.7 })); top.position.set(0, 0.53, -0.19); g.add(top);
+      for (const sx of [-1, 1]) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.46, 0.3), strap); st.position.set(sx * 0.1, 0.3, -0.04); g.add(st); }
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.03), new THREE.MeshStandardMaterial({ color: 0xd62020 })); handle.position.set(0.09, 0.2, 0.12); g.add(handle);
+      g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      this._pack = g;
+    }
+    if (this._pack) {
+      if (this._pack.parent !== p.model.spine) p.model.spine.add(this._pack);
+      this._pack.visible = show;
+    }
+    if (this.econ.gear === 'chute' && !(this.econ.items.parachute > 0)) this.econ.gear = null;   // used it: back to empty hands
   }
   // swap the airport's AI jet for a flyable one at the same spot, and walk the player to its front door
   boardJet(jet, world) {
@@ -654,7 +675,6 @@ class Game {
       const v = p.state === 'driving' ? p.vehicle : this.myVehicleNear(8);
       row(`ערכות תיקון (${E.items.repairKit})`, v ? `ל${v.T.name} (נזק ${Math.round(v.damage)}%)` : 'צריך להיות ליד הרכב שלך', 'לתקן', () => { E.items.repairKit--; v.repair(); return 'הרכב תוקן'; }, E.items.repairKit < 1 || !v);
       row(`מצנחים (${E.items.parachute})`, 'נפתח לבד בנפילה מגובה', '—', () => null, true);
-      if (E.items.flashlight) row('פנס', E.flashlightOn ? 'דולק' : 'כבוי', E.flashlightOn ? 'לכבות' : 'להדליק', () => { E.flashlightOn = !E.flashlightOn; return null; });
       row('ידיים ריקות', '', this.econ.equipped ? 'לבחור' : 'נבחר', () => { this.equip(null); return null; }, !this.econ.equipped);
       for (const id of WEAPON_ORDER) if (E.weapons[id]) row(WEAPONS[id].name, `${E.weapons[id].ammo} יחידות תחמושת`, E.equipped === id ? 'נבחר' : 'לבחור', () => { this.equip(id); return null; }, E.equipped === id);
     };
@@ -883,7 +903,6 @@ class Game {
     const aimingNow = !!(this.econ.equipped && p.state === 'foot' && (this.aiming || input.mouseAim) && !WEAPONS[this.econ.equipped].thrown && !WEAPONS[this.econ.equipped].placed);
     if (aimingNow) p.aimT = Math.max(p.aimT || 0, 0.25);
     this.rig.aimMode = aimingNow ? (this.econ.equipped === 'nz' ? 'scope' : 'aim') : null;
-    if (input.wasPressed('light')) { if (this.econ.items.flashlight) this.econ.flashlightOn = !this.econ.flashlightOn; else this.toast('אין לך פנס — אפשר לקנות בחנות ציוד', 2); }
     input.fireByMouse = p.state === 'driving' && (p.vehicle?.T.tank || p.vehicle?.T.fighter) ? 'hold' : p.state !== 'foot' ? false : this.econ.equipped ? 'hold' : 'tap';
 
     const all = [...this.vehicles.all(), ...this.traffic.cars, ...this.airport.service, ...this.boats.list, ...this.police.cars, ...(this.police.gone || [])];
@@ -937,12 +956,13 @@ class Game {
     }
     // the wardrobe in the villa: change into any clothes you own
     if (!p.prompt && p.state === 'foot') {
-      for (const L of this.interiors.places()) {
-        const w = L.spec.wardrobe;
-        if (!w || Math.abs(w.y - p.y) > 1 || Math.hypot(w.pt[0] - p.x, w.pt[1] - p.z) > 2.0) continue;
-        p.prompt = { key: 'interact', text: 'ארון בגדים' };
-        if (input.wasPressed('interact')) { this.openShop('wardrobe', 'הבית שלי'); input.endFrame(); return; }
-        break;
+      outer: for (const L of this.interiors.places()) {
+        for (const w of L.spec.wardrobes || (L.spec.wardrobe ? [L.spec.wardrobe] : [])) {
+          if (Math.abs(w.y - p.y) > 1 || Math.hypot(w.pt[0] - p.x, w.pt[1] - p.z) > 2.0) continue;
+          p.prompt = { key: 'interact', text: '👕 ארון בגדים — להחליף בגדים' };
+          if (input.wasPressed('interact')) { this.openShop('wardrobe', 'הבית שלי'); input.endFrame(); return; }
+          break outer;
+        }
       }
     }
     // shop counters
@@ -1022,10 +1042,7 @@ class Game {
     this.crashes.update(dt, { vehicles: all, player: p, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.military.update(dt, { player: p, input, vehicles: all, onCrime: (k, x, z) => this.police.crime(k, x, z), camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.rig.update(dt, input, p);
-    // flashlight
-    const fl = this.flashlight, on = this.econ.items.flashlight && this.econ.flashlightOn && p.state !== 'driving';
-    fl.intensity = on ? 60 : 0;
-    if (on) { fl.position.set(p.x, p.y + 1.5, p.z); fl.target.position.set(p.x + Math.sin(p.facing) * 8, p.y + 0.4, p.z + Math.cos(p.facing) * 8); }
+    this._gearFrame(p);
     // flying fast: stream less detail and at most one chunk per frame -> no stutters in the air
     const sky = p.state === 'foot' && (p.skydive || p.parachute) && (p.altitude || 0) > 35;   // skydiving counts as flying too
     const flying = (v && v.isAir && v.airborne && v.y > 35) || sky, high = flying && (v ? v.y : p.y) > 90;
@@ -1091,7 +1108,7 @@ class Game {
     {
       // weapon HUD: rounds in the magazine / spare rounds, and a reload indicator
       const W = wid && WEAPONS[wid], inv = wid && this.econ.weapons[wid];
-      const txt = W && p.state === 'foot' ? (W.mag ? `${W.name} · ${inv.mag ?? Math.min(inv.ammo, W.mag)} / ${Math.max(0, inv.ammo - (inv.mag ?? Math.min(inv.ammo, W.mag)))}${this.weapons.reloading ? ' · טוען…' : inv.mag === 0 && inv.ammo > 0 ? ' · לחץ X לטעינה' : ''}` : `${W.name} · ${inv.ammo}`) : '';
+      const txt = !W && this.econ.gear === 'chute' && this.econ.items.parachute > 0 && p.state === 'foot' ? `🪂 מצנח × ${this.econ.items.parachute}` : W && p.state === 'foot' ? (W.mag ? `${W.name} · ${inv.mag ?? Math.min(inv.ammo, W.mag)} / ${Math.max(0, inv.ammo - (inv.mag ?? Math.min(inv.ammo, W.mag)))}${this.weapons.reloading ? ' · טוען…' : inv.mag === 0 && inv.ammo > 0 ? ' · לחץ X לטעינה' : ''}` : `${W.name} · ${inv.ammo}`) : '';
       if ($('weaponHud').textContent !== txt) $('weaponHud').textContent = txt;
       const rb = $('tReload'); if (rb) rb.classList.toggle('show', !!(W?.mag && p.state === 'foot' && inv.ammo > (inv.mag ?? 0) && (inv.mag ?? 0) < W.mag));
     }
@@ -1129,7 +1146,6 @@ class Game {
       $('runBtn').classList.toggle('on', p.sprint);
       $('tFire').classList.toggle('show', mode === 'foot' && p.state === 'foot');
       const fl = this.econ.equipped ? 'ירי' : 'אגרוף'; if ($('tFire').textContent !== fl) $('tFire').textContent = fl;
-      $('tLight').classList.toggle('show', !!this.econ.items.flashlight);
       { const can = !!wid && p.state === 'foot' && !WEAPONS[wid].thrown && !WEAPONS[wid].placed; $('tAim').classList.toggle('show', can); $('tAim').classList.toggle('on', !!this.aiming); const t = wid === 'nz' ? 'כוונת' : 'כוון'; if ($('tAim').textContent !== t) $('tAim').textContent = t; }
       $('joyHint').style.display = this.input.joy.id === null && !v && this.playTime < 30 ? 'block' : 'none';
     }

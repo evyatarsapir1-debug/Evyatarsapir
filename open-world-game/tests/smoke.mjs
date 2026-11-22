@@ -1217,6 +1217,36 @@ const calls = await g(() => { __game.renderer.render(__game.scene, __game.camera
 console.log(`(draw calls on low quality: ${calls})`);
 await g(() => __game.save());
 check('game saves progress', await g(() => !!localStorage.getItem('azura_city_save_v1')));
+// ---------------------------------------------------------------- police give up after 3 minutes; wardrobe at home; parachute as gear; no flashlight
+const misc = await g(async () => {
+  const game = __game, P = game.player, Pol = game.police;
+  const step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  // a chase where they keep spotting you but never catch you: they leave ~3 minutes after the last shots
+  game.teleport(520, 520, 0); step(20); Pol.clear(); Pol.setWanted(2, P.x, P.z);
+  let gaveUp = -1;
+  for (let k = 1; k <= 30 && gaveUp < 0; k++) { game.teleport(520 + (k % 2 ? 90 : -60) + (k % 3) * 25, 520, 0); step(30 * 8, () => { game.econ.health = 100; Pol.arrestT = 0; }); if (!Pol.level) gaveUp = k * 8; }
+  Pol.clear(); game.econ.health = 100;
+  // wardrobe downstairs at home
+  const { VILLA } = await import('./js/world/layout.js');
+  game.teleport(VILLA.door.x, VILLA.door.z + 3, 0); step(60);
+  const L = game.interiors.places().find((q) => q.spec.wardrobes); const w = L?.spec.wardrobes[1];
+  if (w) { game.teleport(w.pt[0], w.pt[1], 0, w.y); step(10); }
+  const wPrompt = P.prompt?.text || ''; game.input.pressed.add('interact'); step(2);
+  const wOpen = game.state === 'shop'; game.shop.close(); step(2);
+  // parachute in the equipment cycle
+  const keepW = game.econ.weapons; game.econ.weapons = {}; game.equip(null); game.econ.items.parachute = 1; game.cycleWeapon(); step(3);
+  const gear = game.econ.gear, hud = document.getElementById('weaponHud').textContent, pack = !!game._pack?.visible;
+  game.cycleWeapon(); step(2); game.econ.weapons = keepW;
+  // flashlight is gone (shop and button)
+  game.openShop('equipment', 'חנות ציוד'); const flash = /פנס/.test(document.getElementById('shopPanel').textContent); game.shop.close();
+  game.teleport(530, 545, 0); step(20);
+  return { gaveUp, wPrompt, wOpen, gear, hud, pack, flash, lightBtn: !!document.getElementById('tLight') };
+});
+check('police: a chase in which they keep seeing you but never catch you ends about 3 minutes after the last shots', misc.gaveUp >= 150 && misc.gaveUp <= 200, JSON.stringify({ gaveUp: misc.gaveUp }));
+check('home: a wardrobe downstairs by the door - change into the clothes you bought', misc.wPrompt.includes('ארון') && misc.wOpen, JSON.stringify({ prompt: misc.wPrompt, open: misc.wOpen }));
+check('gear: the parachute is part of the equipment (G) - the pack shows on your back; no flashlight in the game', misc.gear === 'chute' && misc.hud.includes('מצנח') && misc.pack && !misc.flash && !misc.lightBtn, JSON.stringify(misc));
+
 // ---------------------------------------------------------------- skydiving: jump out of a helicopter high above the clouds
 const sky = await g(() => {
   const game = __game, P = game.player;
