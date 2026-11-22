@@ -1256,6 +1256,25 @@ check('police: a chase in which they keep seeing you but never catch you ends ab
 check('home: a wardrobe downstairs by the door - change into the clothes you bought', misc.wPrompt.includes('ארון') && misc.wOpen, JSON.stringify({ prompt: misc.wPrompt, open: misc.wOpen }));
 check('gear: the parachute is part of the equipment (G) - the pack shows on your back; no flashlight in the game', misc.gear === 'chute' && misc.hud.includes('מצנח') && misc.pack && !misc.flash && !misc.lightBtn, JSON.stringify(misc));
 
+// ---------------------------------------------------------------- bank door guards (armed, carry the vault keys) + the crew button
+const guards = await g(() => {
+  const game = __game, P = game.player, H = game.heist;
+  const step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.police.clear(); game.econ.health = 100;
+  const I = H.info('central'); game.teleport(I.start.pt[0], I.start.pt[1], Math.PI, I.start.y + 0.6); step(90);
+  const gd = game.peds.peds.filter((q) => q.doorGuard);
+  const look = gd.map((q) => ({ gun: !!q.app.gun, model: !!q.cm, rifle: q.weaponKind === 'rifle', vest: !!q.cm?.vest?.visible }));
+  // the crew button: hidden when you are not in a gang, there (and calling) when you are
+  const btn = document.getElementById('gangBtn'), hidden = getComputedStyle(btn).display === 'none';
+  game.gangs.join('abc'); step(2); const shown = getComputedStyle(btn).display !== 'none';
+  btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); step(5); const called = game.gangs.followers.length;
+  game.gangs.leave(false, true); game.econ.gangCars = {}; game.teleport(530, 545, 0); step(20);
+  return { n: gd.length, look, hidden, shown, called };
+});
+check('bank: two armed guards stand at the entrance (full body, uniform, vest, rifle)', guards.n === 2 && guards.look.every((l) => l.gun && l.model && l.rifle && l.vest), JSON.stringify(guards));
+check('gangs: a crew button on the screen while you are in a gang - tap it and your boys come', guards.hidden && guards.shown && guards.called >= 4, JSON.stringify({ hidden: guards.hidden, shown: guards.shown, called: guards.called }));
+
 // ---------------------------------------------------------------- skydiving: jump out of a helicopter high above the clouds
 const sky = await g(() => {
   const game = __game, P = game.player;

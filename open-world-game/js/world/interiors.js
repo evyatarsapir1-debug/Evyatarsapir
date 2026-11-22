@@ -1144,7 +1144,9 @@ function bankSpec(b, F, spec, piece, lamp, furn) {
   // customers in the lobby and guards patrolling it
   const lp = [F.pt(aL + 1, 1.5), F.pt(hl - 2, 1.6), F.pt(0, dc - 1.2), F.pt(aL + 2, dc - 1.4), F.pt(hl - 3, dc - 1.4)];
   spec.wander = { points: lp, n: K === 'local' ? 3 : K === 'gold' ? 4 : 5 };
-  spec.guards = { points: [F.pt(aL, 1.2), F.pt(hl - 1.2, 1.2), F.pt(hl - 1.2, dc - 1.0), F.pt(aL, dc - 1.0)], n: K === 'local' ? 1 : K === 'gold' ? 3 : 2, y: yG };
+  // two armed security guards standing at the entrance, one each side of the door, facing whoever comes in; they carry
+  // the vault keys
+  spec.doorGuards = [-1, 1].map((sx) => ({ pt: F.pt(sx * 1.9, 1.0), yaw: Math.atan2(-F.fx, -F.fz), y: yG }));
   // ---- upper floors
   if (K === 'classic') {
     const y = floors[1];

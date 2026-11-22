@@ -501,6 +501,15 @@ body.touch #heistHud div.done, body.touch #heistHud div:not(.cur):not(.loot) { d
 body.tuning #hud > *:not(#toast), body.tuning #touch > *:not(#joystick) { display: none !important; }
 
 /* three playable characters: switch button, wheel, transition */
+/* call your crew: round button in the crew colour under the character button (only while you are in a gang) */
+#gangBtn { position: absolute; top: max(218px, calc(env(safe-area-inset-top) + 206px)); right: 10px; width: 48px; height: 48px; border-radius: 50%; display: none;
+  flex-direction: column; align-items: center; justify-content: center; gap: 0; padding: 0; pointer-events: auto; color: #fff;
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--gc, #2f9e44) 80%, #fff 0%), color-mix(in srgb, var(--gc, #2f9e44) 70%, #000)); border: 2px solid #ffffffcc; box-shadow: 0 3px 10px #0008; }
+#gangBtn.show { display: flex; }
+#gangBtn span { font-size: 17px; line-height: 1; }
+#gangBtn b { font: 800 9px/1 "Rubik", Arial, sans-serif; margin-top: 2px; text-shadow: 0 1px 2px #000; }
+#gangBtn.with::after { content: attr(data-n); position: absolute; top: -4px; left: -4px; min-width: 18px; height: 18px; border-radius: 9px; background: #fff; color: #111; font: 800 11px/18px Arial, sans-serif; text-align: center; }
+body.shopping #gangBtn, body.switching #gangBtn, body.tuning #gangBtn { display: none !important; }
 #charBtn { position: absolute; top: max(164px, calc(env(safe-area-inset-top) + 152px)); right: 12px; width: 44px; height: 44px; border-radius: 50%; border: none;
   background: #0007; color: #fff; font-size: 20px; pointer-events: auto; }
 #charWheel { position: fixed; inset: 0; z-index: 45; display: none; align-items: center; justify-content: center; background: radial-gradient(circle, #0008, #000c); direction: rtl; }

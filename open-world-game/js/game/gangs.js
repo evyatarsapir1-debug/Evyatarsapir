@@ -95,6 +95,13 @@ export class Gangs {
     this.inside = null; this.serial = 0;
     this.followers = []; this.order = 'follow'; this.convoy = []; this.trail = []; this.trailS = 0;
     this.models = new Set(); this._cmBudget = 0;
+    // the call-your-crew button on the right of the screen (always there while you are in a gang)
+    if (typeof document !== 'undefined' && document.getElementById('hud')) {
+      const b = document.createElement('button'); b.id = 'gangBtn'; b.type = 'button'; b.setAttribute('aria-label', 'קרא לחבר׳ה');
+      b.innerHTML = '<span>📣</span><b>חבר׳ה</b>';
+      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); if (this.game.state !== 'playing') return; const m = this.call(); if (m) this.game.toast(m, 3); });
+      document.getElementById('hud').appendChild(b); this.btn = b;
+    }
   }
   // ------------------------------------------------------------------ state
   get member() { const id = this.game.econ.gang; return id ? (OLD_IDS[id] || id) : null; }
@@ -123,7 +130,8 @@ export class Gangs {
   _attachModel(p) {
     const cm = new CharacterModel(p.modelApp);
     this.game.scene.add(cm.root); p.cm = cm; p.cmOn = true; this.models.add(p);
-    const kind = p.app.gun ? (p.gangRole === 'guard' ? 'rifle' : 'pistol') : p.app.knife ? 'knife' : null;
+    const kind = p.app.gun ? (p.gangRole === 'guard' || p.doorGuard ? 'rifle' : 'pistol') : p.app.knife ? 'knife' : null;
+    if (p.doorGuard) cm.setVest(0x1b1b1d);   // bank security: protective vest over the uniform
     if (kind) { p.weapon = npcWeapon(kind); p.weaponKind = kind; cm.arms[1].elbow.add(p.weapon); p.weapon.visible = false; }
   }
   _dropModel(p) {
@@ -134,8 +142,9 @@ export class Gangs {
   }
   _models(dt) {
     const g = this.game, cam = g.camera.position;
+    for (const p of [...this.models]) if (!this.game.peds.peds.includes(p)) this._dropModel(p);   // people who left the area
     this._cmBudget = 3;                                 // build at most three models per frame (no stutter when a crew appears)
-    const all = [...this.followers, ...Object.values(this.crews).flatMap((c) => c.members)];
+    const all = [...this.followers, ...Object.values(this.crews).flatMap((c) => c.members), ...this.game.peds.peds.filter((q) => q.doorGuard && q.modelApp)];   // + the armed guards at the bank doors
     for (const p of all) {
       const d = Math.hypot(p.x - cam.x, p.z - cam.z);
       if (!p.cm && d < 130 && this._cmBudget-- > 0) this._attachModel(p);
@@ -157,9 +166,9 @@ export class Gangs {
       R.position.set(p.x, p.y + (down ? 0.13 : 0), p.z);
       R.rotation.order = 'YXZ';
       R.rotation.set(down ? -Math.PI / 2 : 0, down ? (p.fallYaw ?? p.yaw) + Math.PI : p.yaw, 0);
-      const armed = !!p.weapon && !down && (p.gunOut || p.state === 'gangFight' || (p.state === 'copChase' && p.copChase));
+      const armed = !!p.weapon && !down && (p.doorGuard || p.gunOut || p.state === 'gangFight' || (p.state === 'copChase' && p.copChase));
       if (p.weapon) p.weapon.visible = armed;
-      const aim = armed && p.weaponKind !== 'knife' ? 2 : 0;   // guns held level and pointed ahead (never muzzle-up)
+      const aim = armed && p.weaponKind !== 'knife' ? (p.doorGuard && !p.copChase && p.pose !== 'aimGun' ? 1 : 2) : 0;   // guns held level and pointed ahead; guards on duty hold theirs low
       cm.animate(dt, { speed: down ? 0 : (p.speed || 0), grounded: true, mode: 'foot', aim, hold: aim ? (p.weaponKind === 'rifle' ? 'rifle' : 'pistol') : null, aimPitch: 0, recoil: p.recoilT > 0 ? p.recoilT : 0, stance: !armed && (p.state === 'gangFight' || p.state === 'fight'), draw: 1, reload: 0, holster: 0 });
       if (p.recoilT > 0) p.recoilT -= dt;
     }
@@ -554,6 +563,13 @@ export class Gangs {
     }
     this._followers(dt, pos);
     this._models(dt);
+    if (this.btn) {
+      const G = this.member && BY_ID[this.member];
+      this.btn.classList.toggle('show', !!G);
+      if (G && this.btn.dataset.g !== G.id) { this.btn.dataset.g = G.id; this.btn.style.setProperty('--gc', G.css); }
+      const n = this.followers.filter((p) => p.state !== 'dead').length; const t = n ? String(n) : '';
+      if (this.btn.dataset.n !== t) { this.btn.dataset.n = t; this.btn.classList.toggle('with', !!n); }
+    }
   }
 
   _followers(dt, pos) {

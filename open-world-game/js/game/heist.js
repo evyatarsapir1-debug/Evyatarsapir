@@ -92,7 +92,7 @@ export class Heists {
       const k = A.keyObj;
       if (k && near([k.position.x, k.position.z], k.userData.y0 ?? k.position.y, 1.6)) return { text: '🔑 קח את המפתח', action: () => { this.game.scene.remove(k); A.keyObj = null; A.hasKey = true; this.game.audio.mech?.('in'); this.game.toast('🔑 יש לך את מפתח הכספת! גש לדלת הכספת ולחץ ״פתח״', 3); } };
       // the key holder gave up (hands raised): take the key off him
-      const h = A.keyHolder;
+      const h = (A.keyHolders || []).find((q) => q.state === 'surrender' && near([q.x, q.z], q.y, 1.8)) || A.keyHolder;
       if (h && h.state === 'surrender' && near([h.x, h.z], h.y, 1.8)) return { text: '🔑 קח ממנו את מפתח הכספת', action: () => { A.hasKey = true; this.game.peds.say(h, 'קח, קח! רק אל תירה', 2.2); this.game.toast('🔑 יש לך את מפתח הכספת!', 2.5); this.game.audio.mech?.('in'); } };
     }
     for (const t of this.targets()) {
@@ -317,7 +317,10 @@ export class Heists {
   _assignKey(A) {
     const b = A.b, peds = this.game.peds.peds;
     const staff = peds.filter((p) => p.state !== 'dead' && Math.abs(p.x - b.x) < b.w / 2 && Math.abs(p.z - b.z) < b.d / 2 && (p.app.guard || p.state === 'shopkeeper' || (p.state === 'surrender' && p.shopKey)));
-    A.keyHolder = staff.length && Math.random() < 0.75 ? staff.sort((a, c) => (c.app.guard ? 1 : 0) - (a.app.guard ? 1 : 0))[Math.floor(Math.random() * Math.min(2, staff.length))] : null;
+    // the two guards at the door always carry vault keys (otherwise one of the staff might)
+    const door = staff.filter((p) => p.doorGuard);
+    A.keyHolders = door.length ? door : staff.length && Math.random() < 0.75 ? [staff.sort((a, c) => (c.app.guard ? 1 : 0) - (a.app.guard ? 1 : 0))[Math.floor(Math.random() * Math.min(2, staff.length))]] : [];
+    A.keyHolder = A.keyHolders[0] || null;
     A.staff = staff; A.hasKey = false; A.keyObj = null; A.noKeyTold = false;
   }
   _vaultKey(dt, A) {
@@ -328,7 +331,7 @@ export class Heists {
     for (const p of A.staff || []) {
       if (p.state !== 'dead' || p.searched) continue;
       p.searched = true;
-      if (p === A.keyHolder) {
+      if ((A.keyHolders || [A.keyHolder]).includes(p) && !A.keyObj) {
         const m = new THREE.Group();
         const gold = new THREE.MeshStandardMaterial({ color: 0xe8c040, metalness: 1, roughness: 0.25, emissive: 0x6a4a08, emissiveIntensity: 0.8 });
         const ring = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 8, 16), gold); ring.rotation.x = Math.PI / 2; m.add(ring);

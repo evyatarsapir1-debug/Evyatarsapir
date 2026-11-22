@@ -270,6 +270,7 @@ export class Pedestrians {
       (L.spec.staff || []).forEach((c, i) => want.set(`${key}:s${i}`, { x: c.pt[0], z: c.pt[1], y: c.y, yaw: c.yaw, state: c.sit ? 'resident' : 'shopkeeper', guard: !!c.guard, mech: !!c.mech }));
       // bank security guards patrolling the lobby
       if (L.spec.guards) { const G = L.spec.guards; for (let i = 0; i < G.n; i++) want.set(`${key}:g${i}`, { x: G.points[i % G.points.length][0], z: G.points[i % G.points.length][1], y: G.y, yaw: i, state: 'wander', pts: G.points, seats: [], guard: true, bank: true }); }
+      (L.spec.doorGuards || []).forEach((d, i) => want.set(`${key}:dg${i}`, { x: d.pt[0], z: d.pt[1], y: d.y, yaw: d.yaw, state: 'guard', guard: true, bank: true, doorGuard: true }));
       (L.spec.outdoor || []).forEach((c, i) => want.set(`${key}:o${i}`, { x: c.pt[0], z: c.pt[1], y: c.y, yaw: c.yaw, state: 'shopkeeper', phone: i === 1 }));
       if (L.spec.wander) {
         const pts = L.spec.wander.points;
@@ -296,6 +297,7 @@ export class Pedestrians {
       if (w.guard) this._guardLook(p);
       if (w.mech) { Object.assign(p.app, { shirt: 0xe36414, pants: 0xe36414, shoes: 0x2a2a2a, long: false }); p.phone = false; p.suitcase = false; this._colors(); }   // mechanic overalls
       if (w.bank) p.inBank = true;
+      if (w.doorGuard) { p.modelApp = { skin: [1, 3, 2, 4][i_dg(k)], hairStyle: 'buzz', hairColor: 0, top: 'jacket', topColor: 1, bottom: 'pants', bottomColor: 1, shoes: 1, shoeStyle: 'boot', hat: 'cap', hatColor: 1, beard: k.endsWith('0') ? 'stubble' : 'short', glasses: 'none', height: 1.06, build: 1.12 }; p.doorGuard = true; p.app.gun = true; p.yaw = w.yaw; p.homeSpot = { x: w.x, z: w.z, yaw: w.yaw, state: 'guard', y: w.y }; p.baseYaw = w.yaw; p.hp = p.maxHp = 14; p.temper = 'fight'; }
       if (w.soldier) {
         // soldier: olive uniform, helmet (the short-hair cap in olive), dark boots
         Object.assign(p.app, { shirt: 0x4b5320, pants: 0x4b5320, shoes: 0x1f1f1f, hair: 0x3f4a2c, long: false, bald: false, soldier: true });
@@ -933,7 +935,9 @@ export class Pedestrians {
       return 'knock';
     }
     // police officers never run away: hit one and he comes after you
-    if ((p.app.cop || p.app.soldier) && p.state !== 'knocked') { p.state = 'copChase'; p.copChase = true; p.chaseTo = null; p.gunOut = true; p.angryT = 40; if (p.app.soldier) p.app.gun = true; this.say(p, p.app.soldier ? this.rng.pick(['עצור! אש!', 'חייל מותקף!']) : this.rng.pick(['עצור! משטרה!', 'אתה עצור!', 'ידיים למעלה!']), 1.8); return 'hit'; }
+    if ((p.app.cop || p.app.soldier || p.doorGuard) && p.state !== 'knocked') { p.state = 'copChase'; p.copChase = true; p.chaseTo = null; p.gunOut = true; p.angryT = 40; if (p.app.soldier) p.app.gun = true; this.say(p, p.app.soldier ? this.rng.pick(['עצור! אש!', 'חייל מותקף!']) : p.doorGuard ? this.rng.pick(['אבטחה! עצור!', 'ירי בכניסה!', 'זרוק את הנשק!']) : this.rng.pick(['עצור! משטרה!', 'אתה עצור!', 'ידיים למעלה!']), 1.8);
+      if (p.doorGuard) for (const o of this.peds) if (o !== p && o.doorGuard && o.state !== 'dead' && Math.hypot(o.x - p.x, o.z - p.z) < 20) { o.state = 'copChase'; o.copChase = true; o.chaseTo = null; o.gunOut = true; o.angryT = 40; }   // his partner at the door joins in
+      return 'hit'; }
     if (p.state !== 'fight' && p.state !== 'knocked') {
       // fighters fight back; some others get angry enough to fight too
       if (!p.app.long && (p.temper === 'fight' || (p.temper !== 'call' && this.rng.chance(0.3) && p.hp > 4))) {
@@ -1231,4 +1235,5 @@ export class Pedestrians {
 }
 
 function capGeo(g) { return g; }
+const i_dg = (k) => (k.charCodeAt(k.length - 1) || 0) % 4;   // door guards: a different face each
 const LIMB_KEYS = new Set(['uArm', 'lArm', 'hand', 'uLeg', 'lLeg', 'foot']);
