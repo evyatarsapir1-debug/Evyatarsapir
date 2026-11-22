@@ -382,34 +382,74 @@ export class Gangs {
   }
   _seatRiders(grp, v) { grp.riders.forEach((p, i) => { p.state = 'convoy'; p.cmOn = true; p.carRef = v; p.seatSide = i ? -1 : 1; }); }
   // crew arriving: their rides start a block or two away and drive the streets to you, park, and everybody gets out
+  // crew arriving: their rides start a block or two away and drive the STREETS to you (right-hand lane, junction to
+  // junction), then park in a neat column along the curb of your street - never across sidewalks or through buildings
   _arrive(fresh) {
-    const g = this.game, pos = g.playerPos(), P0 = g.player;
+    const g = this.game, pos = g.playerPos();
+    const spot = g.roadsideSpot(pos.x, pos.z);   // the kerb of the street next to you
+    if (!spot) { for (const grp of this._groups(fresh)) for (const p of grp.riders) { p.state = 'follow'; } return; }
+    const J = this._junction(spot.x, spot.z);
+    // along the kerb (the street's own direction), pointing away from the junction; lat = the kerb's sideways offset
+    let ux = Math.sin(spot.heading), uz = Math.cos(spot.heading);
+    if ((spot.x - J.x) * ux + (spot.z - J.z) * uz < 0) { ux = -ux; uz = -uz; }
+    // column of parking places along the kerb (cars 7.5 m apart, bikes 4.5 m), kept clear of the junctions
+    const groups = this._groups(fresh), gaps = groups.map((gr) => (gr.kind === 'moto' ? 4.5 : 7.5));
+    const total = gaps.reduce((a, b) => a + b, 0), t0 = (spot.x - J.x) * ux + (spot.z - J.z) * uz;
+    let front = Math.min(86, Math.max(14 + total, t0 + total / 2));
+    const parks = []; let t = front;
+    for (const gp of gaps) { parks.push({ x: J.x + ux * t + (spot.x - J.x - ux * t0), z: J.z + uz * t + (spot.z - J.z - uz * t0), h: Math.atan2(ux, uz) }); t -= gp; }
+    // where they come from: a kerb spot a block or two away, behind you
     const back = (pos.facing ?? 0) + Math.PI;
     let start = null;
-    for (let k = 0; k < 8 && !start; k++) { const a = back + (k - 3.5) * 0.5, d = 80 + k * 6; start = g.roadsideSpot(pos.x + Math.sin(a) * d, pos.z + Math.cos(a) * d); }
-    if (!start) start = { x: pos.x + Math.sin(back) * 60, z: pos.z + Math.cos(back) * 60, heading: back + Math.PI };
-    const route = g.police?._route?.(start.x, start.z, pos.x, pos.z) || [];
-    this.arrivals = this._groups(fresh).map((grp, k) => {
-      const v = this._ride(grp.kind, start.x - Math.sin(start.heading) * k * 9, start.z - Math.cos(start.heading) * k * 9, start.heading);
+    for (let k = 0; k < 10 && !start; k++) { const a = back + (k - 4.5) * 0.45, d = 120 + k * 8; const s0 = g.roadsideSpot(pos.x + Math.sin(a) * d, pos.z + Math.cos(a) * d); if (s0 && Math.hypot(s0.x - pos.x, s0.z - pos.z) > 70) start = s0; }
+    if (!start) start = { x: spot.x - ux * 120, z: spot.z - uz * 120, heading: Math.atan2(ux, uz) };
+    const nodes = (g.police?._route?.(start.x, start.z, J.x, J.z) || []).map((n) => ({ x: n.x, z: n.z }));
+    if (!nodes.length || Math.hypot(nodes[nodes.length - 1].x - J.x, nodes[nodes.length - 1].z - J.z) > 1) nodes.push({ x: J.x, z: J.z });
+    this.arrivals = groups.map((grp, k) => {
+      const path = this._lanePath([{ x: start.x, z: start.z }, ...nodes, parks[k]]);
+      const v = this._ride(grp.kind, path.pts[0].x, path.pts[0].z, 0);
       this._seatRiders(grp, v);
-      const pa = back + Math.PI + (k - 2) * 0.55;   // parking spots spread around in front of you
-      return { v, riders: grp.riders, k, route: route.map((n) => ({ x: n.x, z: n.z })), park: { x: pos.x + Math.sin(pa) * (9 + (k % 2) * 4), z: pos.z + Math.cos(pa) * (9 + (k % 2) * 4) }, wait: k * 0.9 };
+      return { v, riders: grp.riders, k, path, s: -k * 9, spd: 0, park: parks[k] };
     });
-    void P0;
+  }
+  _junction(x, z) { return { x: Math.round(x / P) * P, z: Math.round(z / P) * P }; }
+  // a polyline through the points, shifted into the right-hand lane on every street (corners meet at the lane corner)
+  _lanePath(pts) {
+    const L = 2.6, out = [];
+    const dir = (a, b) => { const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1; return { x: dx / l, z: dz / l }; };
+    const rn = (d) => ({ x: -d.z, z: d.x });
+    // drop points that are on top of each other
+    const P2 = pts.filter((p, i) => !i || Math.hypot(p.x - pts[i - 1].x, p.z - pts[i - 1].z) > 1.5);
+    P2.forEach((p, i) => {
+      if (i === 0 || i === P2.length - 1) { out.push({ x: p.x, z: p.z }); return; }
+      const din = dir(P2[i - 1], p), dout = dir(p, P2[i + 1]), a = rn(din), b = rn(dout);
+      const straight = din.x * dout.x + din.z * dout.z > 0.7;
+      out.push(straight ? { x: p.x + a.x * L, z: p.z + a.z * L } : { x: p.x + (a.x + b.x) * L, z: p.z + (a.z + b.z) * L });
+    });
+    const cum = [0]; for (let i = 1; i < out.length; i++) cum.push(cum[i - 1] + Math.hypot(out[i].x - out[i - 1].x, out[i].z - out[i - 1].z));
+    return { pts: out, cum, len: cum[cum.length - 1] };
+  }
+  _pathAt(path, s) {
+    const { pts, cum } = path; s = Math.max(0, Math.min(path.len, s));
+    let i = 1; while (i < pts.length - 1 && cum[i] < s) i++;
+    const a = pts[i - 1], b = pts[i], seg = cum[i] - cum[i - 1] || 1, k = (s - cum[i - 1]) / seg;
+    return { x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k, h: Math.atan2(b.x - a.x, b.z - a.z) };
   }
   _arriving(dt) {
     if (!this.arrivals?.length) return;
-    const g = this.game;
     for (const a of this.arrivals) {
-      const v = a.v; if (a.wait > 0) { a.wait -= dt; continue; }
-      while (a.route.length && Math.hypot(a.route[0].x - v.x, a.route[0].z - v.z) < 8) a.route.shift();
-      const t = a.route[0] || a.park, dx = t.x - v.x, dz = t.z - v.z, d = Math.hypot(dx, dz);
-      const last = !a.route.length, sp = last ? Math.min(14, Math.max(2, d * 0.9)) : 16, step = Math.min(d, sp * dt);
-      if (d > 0.05) { v.x += (dx / d) * step; v.z += (dz / d) * step; }
-      let dh = Math.atan2(dx, dz) - v.heading; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); if (d > 1) v.heading += dh * Math.min(1, dt * 5);
-      v.y = heightAt(v.x, v.z, v.y + 1); v.speed = d > 0.3 ? sp : 0; v.vx = v.vz = 0; v.sync(dt);
+      const v = a.v, left = a.path.len - a.s;
+      // drive the route: up to 15 m/s, slowing for the corners and to a stop at the parking place
+      const want = Math.min(15, Math.max(2.5, left * 0.7));
+      a.spd += Math.max(-8 * dt, Math.min(5 * dt, want - a.spd));
+      a.s += a.spd * dt;
+      const at = this._pathAt(a.path, Math.max(0, a.s)), ahead = this._pathAt(a.path, Math.max(0, a.s) + 4);
+      v.x = at.x; v.z = at.z; v.y = heightAt(v.x, v.z, v.y + 1);
+      const h = left < 2 ? a.park.h : Math.atan2(ahead.x - at.x, ahead.z - at.z) || at.h;
+      let dh = h - v.heading; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); v.heading += dh * Math.min(1, dt * 7);
+      v.speed = a.spd; v.vx = v.vz = 0; v.sync(dt);
       for (const p of a.riders) { p.x = v.x; p.z = v.z; p.y = v.y; }
-      if (last && d < 0.6) { this._parkConvoy(a); a.done = true; this._say(['הגענו, אחי', 'אנחנו פה!', 'מה התוכנית?']); }
+      if (left < 0.4) { v.heading = a.park.h; v.speed = 0; v.sync(dt); this._parkConvoy(a); a.done = true; this._say(['הגענו, אחי', 'אנחנו פה!', 'מה התוכנית?']); }
     }
     this.arrivals = this.arrivals.filter((a) => !a.done);
   }
@@ -428,24 +468,26 @@ export class Gangs {
       // their own car / bike if it is parked close by (it pulls in behind you), otherwise one comes round the corner
       const i = free.findIndex((v) => (v.typeKey === 'moto') === (grp.kind === 'moto'));
       const v = i >= 0 ? free.splice(i, 1)[0] : this._ride(grp.kind, at.x, at.z, at.h, at.y);
-      v.convoy = true;
+      v.convoy = true; v.x = at.x; v.z = at.z; v.y = at.y; v.heading = at.h; v.speed = 0; v.sync();   // in line behind you
       this._seatRiders(grp, v);
-      this.convoy.push({ v, riders: grp.riders, k });
+      this.convoy.push({ v, riders: grp.riders, k, s: this.trailS - 11 - k * 9.5 });
     });
     this._say(['עולים!', 'כולם לרכבים!', 'סע, אנחנו מאחוריך']);
   }
   _trailPush(x, z, y) { const L = this.trail, last = L[L.length - 1]; this.trailS += last ? Math.hypot(x - last.x, z - last.z) : 0; L.push({ x, z, y, s: this.trailS }); }
   _drive(dt, pv) {
     this._trail(pv);
+    const vmax = Math.abs(pv.speed) + 12;
     for (const c of this.convoy) {
-      const v = c.v, want = this._at(this.trailS - 11 - c.k * 9.5); if (!want) continue;
-      // close the gap smoothly (never faster than you + a bit), turning along the road you drove
-      const dx = want.x - v.x, dz = want.z - v.z, d = Math.hypot(dx, dz);
-      const vmax = Math.abs(pv.speed) + 6, step = Math.min(d, vmax * dt * 1.15);
-      if (d > 40) { v.x = want.x; v.z = want.z; }
-      else if (d > 0.01) { v.x += (dx / d) * step; v.z += (dz / d) * step; }
-      v.y = want.y; v.speed = d > 0.3 ? step / Math.max(dt, 1e-3) : 0; v.vx = v.vz = 0;
-      let dh = want.h - v.heading; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); v.heading += dh * Math.min(1, dt * 6);
+      // every ride keeps its own place on the road you drove and moves along it - the same corners, the same lane
+      const want = this.trailS - 11 - c.k * 9.5, prev = c.s;
+      c.s = Math.max(c.s ?? want, Math.min(want, (c.s ?? want) + vmax * dt));
+      if (want - c.s > 60) c.s = want - 60;   // fell far behind (you raced off): catch up out of sight
+      const at = this._at(c.s), ahead = this._at(c.s + 3); if (!at) continue;
+      const v = c.v; v.x = at.x; v.z = at.z; v.y = at.y;
+      const h = Math.hypot(ahead.x - at.x, ahead.z - at.z) > 0.2 ? Math.atan2(ahead.x - at.x, ahead.z - at.z) : v.heading;
+      let dh = h - v.heading; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); v.heading += dh * Math.min(1, dt * 8);
+      v.speed = (c.s - prev) / Math.max(dt, 1e-3); v.vx = v.vz = 0;
       v.sync(dt);
       for (const p of c.riders) { p.x = v.x; p.z = v.z; p.y = v.y; }
     }

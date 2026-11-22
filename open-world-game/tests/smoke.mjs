@@ -1101,7 +1101,8 @@ const gang = await g(() => {
   document.querySelector('[data-join="abc"]').click(); const joined = game.econ.gang, chain = !!P.model.app.chain;
   document.querySelector('[data-g="call"]').click(); game.phone.toggle(false);
   const arrivals = (Gs.arrivals || []).map((a) => [a.v.typeKey, a.riders.length]);
-  step(30 * 18); const near = Gs.followers.filter((f) => Math.hypot(f.x - P.x, f.z - P.z) < 9).length;
+  step(30 * 30); const near = Gs.followers.filter((f) => Math.hypot(f.x - P.x, f.z - P.z) < 12).length;
+  const parkedOnRoad = (Gs.rides || []).every((v) => Math.min(Math.abs(v.x - Math.round(v.x / 100) * 100), Math.abs(v.z - Math.round(v.z / 100) * 100)) < 6.5);
   const ownF = Gs.followers[0], ownHp = ownF.hp; game.peds.hit(ownF, P, 5, false); const ownSafe = ownF.hp === ownHp;
   // drive: they ride behind in the crew's cars / bikes, and get out when you do
   const v = game.spawnVehicleNear('sedan', 503.5, 515); v.x = 503.5; v.z = 515; v.heading = 0; v.sync(); step(5);
@@ -1111,7 +1112,7 @@ const gang = await g(() => {
   game.input.pressed.add('vehicle'); step(90); step(30 * 3);
   const out = Gs.convoy.length === 0 && Gs.followers.every((f) => f.state !== 'convoy'), nearAfter = Gs.followers.filter((f) => Math.hypot(f.x - P.x, f.z - P.z) < 9).length;
   // war: take the BC neighbourhood
-  game.teleport(118, 905, 0); step(150); Gs.call(); step(30 * 16);
+  game.teleport(118, 905, 0); step(150); Gs.call(); step(30 * 26);
   Gs.attack();
   for (let k = 0; k < 90 && !(game.econ.turf || {}).south; k++) step(30, () => { game.econ.health = 100; });
   const owner = (game.econ.turf || {}).south;
@@ -1119,11 +1120,11 @@ const gang = await g(() => {
   game.phone.toggle(true); game.phone.show('gang'); document.querySelector('[data-g="leave"]').click(); game.phone.toggle(false);
   const left = game.econ.gang, crewLeft = Gs.followers.length;
   game.econ.turf = {}; game.econ.health = 100; game.teleport(530, 545, 0); step(30);
-  return { ...counts, looks, inside, calm, chase, hurt, apps, joined, chain, near, arrivals, ownSafe, gift: (game.econ.gangCars || {}).abc, convoy, convoyColor, behind, out, nearAfter, owner, left, crewLeft, zones: (game.minimap.zones || []).length };
+  return { ...counts, looks, inside, calm, chase, hurt, apps, joined, chain, near, arrivals, ownSafe, parkedOnRoad, gift: (game.econ.gangCars || {}).abc, convoy, convoyColor, behind, out, nearAfter, owner, left, crewLeft, zones: (game.minimap.zones || []).length };
 });
 check('gangs: ABC (green) and BC (blue) turfs with signs; full-body members with bandanas, chains and weapons; crew cars and bikes in the crew colour', gang.spawned >= 10 && gang.gang === 'abc' && gang.cars >= 3 && gang.bikes >= 2 && gang.carColor === 0x1f7a35 && gang.signs === 4 && gang.looks.models >= 8 && gang.looks.bandanas >= 6 && gang.looks.chains === gang.spawned && gang.looks.weaponMeshes >= 6 && gang.inside === 'north' && gang.zones === 2, JSON.stringify(gang));
 check('gangs: walking right up to them is fine (no shooting) - hurt one and the crew comes for you and shoots', gang.calm && gang.chase >= 2 && gang.hurt > 0, JSON.stringify({ calm: gang.calm, chase: gang.chase, hurt: gang.hurt }));
-check('gangs: phone app - join a crew (their colour, chain and a car in the crew colour); call your boys: 3 cars x2 and 2 bikes drive to you, they get out and follow; you cannot hurt your own', gang.apps && gang.joined === 'abc' && gang.chain && gang.gift && JSON.stringify(gang.arrivals) === JSON.stringify([['muscle', 2], ['suv', 2], ['sedan', 2], ['moto', 1], ['moto', 1]]) && gang.near >= 5 && gang.ownSafe, JSON.stringify({ apps: gang.apps, joined: gang.joined, gift: gang.gift, arrivals: gang.arrivals, near: gang.near, ownSafe: gang.ownSafe }));
+check('gangs: phone app - join a crew (their colour, chain and a car in the crew colour); call your boys: 3 cars x2 and 2 bikes drive to you, they get out and follow; you cannot hurt your own', gang.apps && gang.joined === 'abc' && gang.chain && gang.gift && JSON.stringify(gang.arrivals) === JSON.stringify([['muscle', 2], ['suv', 2], ['sedan', 2], ['moto', 1], ['moto', 1]]) && gang.near >= 5 && gang.ownSafe && gang.parkedOnRoad, JSON.stringify({ apps: gang.apps, joined: gang.joined, gift: gang.gift, arrivals: gang.arrivals, near: gang.near, ownSafe: gang.ownSafe, parkedOnRoad: gang.parkedOnRoad }));
 check('gangs: in a car the crew rides behind you in the crew cars, and gets out when you do', gang.convoy >= 2 && gang.convoyColor === 0x1f7a35 && gang.behind.every((b) => b < -3) && gang.out && gang.nearAfter >= 2, JSON.stringify({ convoy: gang.convoy, behind: gang.behind, out: gang.out, nearAfter: gang.nearAfter }));
 check('gangs: "attack!" - the crew fights the rival gang and the neighbourhood is taken over; X in the app leaves the gang', gang.owner === 'abc' && gang.left === null && gang.crewLeft === 0, JSON.stringify({ owner: gang.owner, left: gang.left, crewLeft: gang.crewLeft }));
 
