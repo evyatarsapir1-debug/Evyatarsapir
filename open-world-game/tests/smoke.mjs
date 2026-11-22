@@ -1271,6 +1271,7 @@ check('skydiving: "open parachute" opens the canopy, you glide down and land saf
 
 // ---------------------------------------------------------------- GTA-style entry: loading pictures, 10% every 3 s, into the game, no pause menu
 {
+  await page.evaluate(() => __game.renderer.setAnimationLoop(null));   // the main test page stops drawing so the timing below is not starved of CPU
   const ip = await browser.newPage({ viewport: { width: 844, height: 390 } });
   ip.on('pageerror', (e) => errors.push('intro pageerror: ' + e.message));
   await ip.addInitScript(() => { localStorage.clear(); localStorage.setItem('azura_city_settings_v1', JSON.stringify({ quality: 'low' }));
