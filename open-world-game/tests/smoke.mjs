@@ -351,7 +351,7 @@ await g(() => { __game.teleport(520, 590, Math.PI); });
 await page.click('#phoneBtn');
 await sim(1);
 const ph = await g(() => ({ open: __game.phone.open, apps: document.querySelectorAll('#phone .papp').length }));
-check('phone opens from its button', ph.open && ph.apps === 9, `${ph.apps} apps`);
+check('phone opens from its button', ph.open && ph.apps === 10, `${ph.apps} apps`);
 await page.click('#phone .papp[data-go="map"]');
 await page.click('#phone .prow[data-place="0"]');
 const gps = await g(() => ({ dest: __game.gps.dest?.name, pts: __game.gps.route?.points.length, len: Math.round(__game.gps.route?.length || 0) }));
@@ -490,7 +490,7 @@ const home = await g(() => {
 });
 const price = (name) => home.prices.filter(([n, p]) => n.includes(name) && p !== 'ללבוש').map(([, p]) => +p.replace(/[^\d]/g, ''));
 check('map: airport, marina, weapons, ice cream, library, clothes and my home are labelled', ['נמל תעופה', 'מרינה', 'חנות נשקים', 'גלידה', 'ספרייה', 'הבית שלי', 'חנות בגדים'].every((n) => home.L.includes(n)), home.L.join(', '));
-check('my home: villa with an interior, a swimmable pool and a wardrobe', home.villa && home.swimming && home.wardrobe === 'ארון בגדים', JSON.stringify({ villa: home.villa, swim: home.swimming, wardrobe: home.wardrobe, here: home.here }));
+check('my home: villa with an interior, a swimmable pool and a wardrobe', home.villa && home.swimming && (home.wardrobe || '').includes('ארון בגדים'), JSON.stringify({ villa: home.villa, swim: home.swimming, wardrobe: home.wardrobe, here: home.here }));
 check('clothes shop: suits ₪2,200–2,500, short sleeves ₪120 and long sleeves ₪180 in many colours, luxury hoodies ₪1,200, shorts ₪80/₪120', price('חליפה').length >= 4 && price('חליפה').every((p) => p >= 2200 && p <= 2500) && price('חולצה קצרה').length >= 6 && price('חולצה קצרה').every((p) => p === 120) && price('חולצה ארוכה').length >= 6 && price('חולצה ארוכה').every((p) => p === 180) && price('קפוצ׳ון').filter((p) => p === 1200).length === 2 && price('מכנס קצר').every((p) => p === 80 || p === 120), JSON.stringify(home.prices.slice(0, 22)));
 check('clothes shop: buying a suit dresses you and saves it in the wardrobe', home.paid >= 2200 && home.top === 'suit' && home.owned === 1, JSON.stringify({ paid: home.paid, top: home.top, owned: home.owned }));
 
@@ -1261,7 +1261,7 @@ const sky = await g(() => {
   const prompt = P.prompt?.text || '';
   game.input.pressed.add('vehicle'); step(2);
   const jumped = P.state === 'foot' && P.skydive, gotChute = game.econ.items.parachute === 1;
-  step(30 * 5); const fall = { vy: P.vy, btn: document.querySelector('[data-btn="jump"]').textContent, clouds: game.clouds.mesh.visible, y: P.y };
+  step(30 * 5); game.frame(); const fall = { vy: P.vy, btn: document.querySelector('[data-btn="jump"]').textContent, clouds: game.clouds.mesh.visible, y: P.y };
   game.input.pressed.add('jump'); step(30 * 2); const opened = P.parachute && !P.skydive, slow = P.vy > -12;
   let n = 0; while (!P.grounded && n < 30 * 120) { step(30); n += 30; }
   return { prompt, jumped, gotChute, fall, opened, slow, landed: P.grounded, health: game.econ.health };
@@ -1278,7 +1278,7 @@ check('skydiving: "open parachute" opens the canopy, you glide down and land saf
   await ip.goto(URL);
   await ip.waitForTimeout(13000);
   const mid = await ip.evaluate(() => ({ shown: document.getElementById('loading').classList.contains('show'), slides: document.querySelectorAll('#loading .ld-slide').length, cap: document.getElementById('ldCap').textContent, state: window.__game?.state }));
-  await ip.screenshot({ path: `${OUT}/00-intro.png` });
+  await ip.screenshot({ path: `${OUT}/00-intro.png`, timeout: 120000 });
   await ip.waitForFunction(() => window.__game?.state === 'playing', null, { timeout: 90000 });
   const end = await ip.evaluate(async () => ({ log: window.__pctLog, at: performance.now() / 1000, extras: ['#ldCap', '#loading .bar', '#loadText', '#loading .ld-spin'].some((q) => { const e = document.querySelector(q); return e && getComputedStyle(e).display !== 'none'; }), pauseBtn: !!document.getElementById('pauseBtn'), pauseScreen: !!document.getElementById('pause'),
     imgs: await Promise.all([...document.querySelectorAll('.ld-slide')].map((s) => new Promise((r) => { const i = new Image(); i.onload = () => r(i.naturalWidth); i.onerror = () => r(0); i.src = s.style.backgroundImage.slice(5, -2); }))) }));

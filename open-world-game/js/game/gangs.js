@@ -322,7 +322,7 @@ export class Gangs {
     this._say(COME);
     return `👥 ${this.followers.length} חברים מ${G.full} בדרך אליך — ${this._rideText(this.followers.length)}`;
   }
-  _enlist(p) { p.follower = true; p.state = 'follow'; p.copChase = false; p.gunOut = false; p.hp = p.maxHp = 12; p.temper = 'fight'; this.followers.push(p); }
+  _enlist(p) { p.follower = true; p.state = 'follow'; p.copChase = false; p.gunOut = false; p.hp = p.maxHp = 20; p.temper = 'fight'; this.followers.push(p); }
   attack() {
     if (!this.followers.length) return 'קודם קרא לחבר׳ה';
     const pos = this.game.playerPos(), enemies = this._enemies(pos, 90);
@@ -539,7 +539,7 @@ export class Gangs {
       const from = new THREE.Vector3(p.x + Math.sin(p.yaw) * 0.5, p.y + 1.4, p.z + Math.cos(p.yaw) * 0.5);
       const to = new THREE.Vector3(target.x + (Math.random() - 0.5) * 1.4, target.y + 1.1, target.z + (Math.random() - 0.5) * 1.4);
       g.weapons.npcShot(from, to, p.weaponKind === 'rifle' ? 'rifle' : 'pistol', g.audio);
-      if (Math.random() < (d < 14 ? 0.5 : 0.32)) g.peds.hit(target, p, shooterIsEnemy ? 2.5 : 3);
+      if (Math.random() < (d < 14 ? 0.5 : 0.32)) g.peds.hit(target, p, shooterIsEnemy ? 1.6 : 3.5);   // your crew is tougher than the rivals
     } else if (!p.app.gun && d < 1.6) {
       p.atkT = 0.85 + Math.random() * 0.4; p.hitT = 0.25;
       g.peds.hit(target, p, p.app.knife ? 3 : 2); g.audio.impact?.(2);
