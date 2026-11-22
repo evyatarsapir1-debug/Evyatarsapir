@@ -57,7 +57,11 @@ function npcWeapon(kind) {
   } else if (kind === 'knife') {
     add(0.022, 0.03, 0.1, POLY, 0, -0.3, 0.0); const b = add(0.006, 0.026, 0.13, BLADE, 0, -0.3, 0.11); b.scale.set(1, 1, 1);
   }
-  return g;
+  // held in the hand with the barrel along the forearm: with the arms out in front the weapon points straight ahead
+  // (level), the grip down in the fist - not standing up on end
+  const hand = new THREE.Group(); hand.position.set(0, -0.3, 0.0); hand.rotation.x = Math.PI / 2;
+  g.position.set(0, 0.3, 0); hand.add(g);
+  return hand;
 }
 
 // ------------------------------------------------------------------ looks
@@ -107,7 +111,9 @@ export class Gangs {
     peds.hit = (p, src, dmg, kick) => {
       // your own crew: no damage from you - they only tell you off
       if (src === Pl && p.gangId && p.gangId === this.member) { if (!(p.sayT > 0)) peds.say(p, ['אחי! אנחנו באותה כנופיה', 'וואו, תירגע אחי', 'אני איתך, לא נגדך!'][Math.floor(Math.random() * 3)], 1.8); return false; }
-      const r = hit(p, src, dmg, kick); if (r && src === Pl && p.gangId) this.provoke(p.gangId, 'hit', p); return r;
+      const r = hit(p, src, dmg, kick); if (r && src === Pl && p.gangId) this.provoke(p.gangId, 'hit', p);
+      if (r && src && src !== Pl && p.follower && !src.follower && src.x !== undefined) src.aggroT = 30;   // whoever hits one of your boys becomes a target
+      return r;
     };
     peds._runOver = (p, v, sp, ctx) => { if (v.driver === 'player' && p.gangId && p.gangId === this.member) return; run(p, v, sp, ctx); if (v.driver === 'player' && p.gangId) this.provoke(p.gangId, 'car', p); };
     if (this.game.econ.gang && OLD_IDS[this.game.econ.gang]) this.game.econ.gang = OLD_IDS[this.game.econ.gang];
@@ -153,7 +159,7 @@ export class Gangs {
       R.rotation.set(down ? -Math.PI / 2 : 0, down ? (p.fallYaw ?? p.yaw) + Math.PI : p.yaw, 0);
       const armed = !!p.weapon && !down && (p.gunOut || p.state === 'gangFight' || (p.state === 'copChase' && p.copChase));
       if (p.weapon) p.weapon.visible = armed;
-      const aim = armed && p.weaponKind !== 'knife' ? (p.pose === 'aimGun' ? 2 : 1) : 0;
+      const aim = armed && p.weaponKind !== 'knife' ? 2 : 0;   // guns held level and pointed ahead (never muzzle-up)
       cm.animate(dt, { speed: down ? 0 : (p.speed || 0), grounded: true, mode: 'foot', aim, hold: aim ? (p.weaponKind === 'rifle' ? 'rifle' : 'pistol') : null, aimPitch: 0, recoil: p.recoilT > 0 ? p.recoilT : 0, stance: !armed && (p.state === 'gangFight' || p.state === 'fight'), draw: 1, reload: 0, holster: 0 });
       if (p.recoilT > 0) p.recoilT -= dt;
     }
@@ -345,6 +351,20 @@ export class Gangs {
     if (!quiet) return 'החבר׳ה הלכו הביתה';
   }
   _say(lines) { const p = this.followers.find((q) => q.state !== 'dead' && q.state !== 'convoy'); if (p) this.game.peds.say(p, lines[Math.floor(Math.random() * lines.length)], 2); }
+  // people who are going for you or your crew right now
+  _threats(pos, dt) {
+    const me = this.member, out = [];
+    for (const p of this.game.peds.peds) {
+      if (p.aggroT > 0) p.aggroT -= dt;
+      if (p.state === 'dead' || p.follower || (p.gangId && p.gangId === me)) continue;
+      const d = Math.hypot(p.x - pos.x, p.z - pos.z);
+      if ((p.aggroT > 0 && d < 60)                                            // hit one of your boys
+        || (p.state === 'fight' && d < 14)                                    // brawling with you
+        || (p.app?.cop && p.copChase && d < 35)                               // officers coming for you
+        || (p.gangId && d < 90 && Object.values(this.crews).some((c) => c.spawned && c.G?.id === p.gangId && c.hostile > 0))) out.push(p);   // a rival crew after you
+    }
+    return out;
+  }
   _enemies(pos, r) {
     const me = this.member; if (!me) return [];
     return Object.values(this.crews).filter((c) => c.spawned && c.G.id !== me).flatMap((c) => c.members).filter((p) => p.state !== 'dead' && Math.hypot(p.x - pos.x, p.z - pos.z) < r);
@@ -550,14 +570,21 @@ export class Gangs {
     if (road && !this.convoy.length) this._board(pv);
     if (road && this.convoy.length) { this._drive(dt, pv); return; }
     if (!road && this.convoy.length) { for (const c of this.convoy) this._parkConvoy(c); this.convoy = []; this._say(['הגענו!', 'יאללה, יוצאים', 'מה התוכנית?']); }
-    const facing = pos.facing ?? 0, enemies = this.order === 'attack' ? this._enemies(pos, 90) : [];
+    // your crew defends you without being told: anyone who goes for you or for them is a target. "Attack!" also sends
+    // them at the rival crew when nobody started anything
+    const facing = pos.facing ?? 0;
+    const threats = this._threats(pos, dt);
+    const enemies = this.order === 'attack' ? [...new Set([...this._enemies(pos, 90), ...threats])] : threats;
+    for (const crew of Object.values(this.crews)) if (crew.spawned && crew.hostile > 0 && threats.some((t) => crew.members.includes(t))) crew.war = true;   // they started it on their turf: it can be taken
+    if (threats.length && !this._defendSaid) { this._defendSaid = true; this._say(['מישהו נוגע בך?!', 'עליהם!', 'אף אחד לא נוגע באח שלנו!']); }
+    if (!threats.length) this._defendSaid = false;
     let slot = 0;
     for (const p of this.followers) {
       if (p.state === 'dead' || p.state === 'convoy') continue;   // still riding in (arriving): the ride decides
       if (['flee', 'hide', 'surrender', 'callHelp', 'surprised', 'evade', 'dodge', 'walk', 'idle', 'talk', 'goHome', 'copChase'].includes(p.state)) p.state = 'follow';
       if (DOWN.includes(p.state) || p.state === 'getup') continue;
       // fight: each one picks the nearest rival
-      if (this.order === 'attack' && enemies.length) {
+      if (enemies.length) {
         if (p.state !== 'gangFight' || !p.target || p.target.state === 'dead') {
           p.target = enemies.reduce((b, e) => (Math.hypot(e.x - p.x, e.z - p.z) < Math.hypot(b.x - p.x, b.z - p.z) ? e : b), enemies[0]);
           p.state = 'gangFight'; p.gunOut = !!p.app.gun;
