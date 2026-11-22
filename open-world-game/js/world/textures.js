@@ -180,6 +180,33 @@ export function bumpOf(t) {
 }
 
 
+// Far-away buildings (seen from the air / the distance): one neutral facade - floors of windows with frames and a
+// floor band - tinted per building by its vertex colour, plus a matching night map with some windows lit.
+export function getFarFacade() {
+  return cache.farFacade ||= (() => {
+    const [c, g] = canvas(256, 256), r = new RNG(77);
+    g.fillStyle = '#efede8'; g.fillRect(0, 0, 256, 256);
+    for (let y = 0; y < 4; y++) {
+      g.fillStyle = 'rgba(0,0,0,0.10)'; g.fillRect(0, y * 64 + 58, 256, 6);           // floor band
+      for (let x = 0; x < 4; x++) {
+        const grd = g.createLinearGradient(x * 64, y * 64, x * 64 + 40, y * 64 + 44);
+        const b = 70 + r.int(0, 30); grd.addColorStop(0, `rgb(${b - 25},${b - 5},${b + 25})`); grd.addColorStop(1, `rgb(${b - 45},${b - 30},${b - 5})`);
+        g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x * 64 + 9, y * 64 + 11, 46, 40);  // frame / reveal
+        g.fillStyle = grd; g.fillRect(x * 64 + 11, y * 64 + 13, 42, 36);
+        g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(x * 64 + 31, y * 64 + 13, 2, 36);
+      }
+    }
+    return tex(c);
+  })();
+}
+export function getFarFacadeLit() {
+  return cache.farFacadeLit ||= (() => {
+    const [c, g] = canvas(256, 256), r = new RNG(78);
+    g.fillStyle = '#000'; g.fillRect(0, 0, 256, 256);
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { const k = r.float(); if (k < 0.4) { g.fillStyle = k < 0.08 ? '#bfd4ff' : k < 0.3 ? '#ffd98a' : '#ffc070'; g.fillRect(x * 64 + 11, y * 64 + 13, 42, 36); } }
+    return tex(c);
+  })();
+}
 export function getRoof() {
   return cache.roof ||= (() => { const [c, g] = canvas(128, 128); noise(g, 128, 128, '#8b8b88', 30, 2500, 2, 11); return tex(c); })();
 }

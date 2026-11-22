@@ -807,6 +807,7 @@ class Game {
     this.fx?.update(L, this.env.hour);
     const n = L.night, M = this.mats;
     for (const st of ['glass', 'office', 'concrete', 'plaster', 'brick', 'industrial', 'storefront']) M['f_' + st].emissiveIntensity = Math.pow(n, 1.6) * (st === 'storefront' ? 1.1 : 0.75);   // lights come on gradually; lit windows glow, not blaze
+    if (M.farWall) M.farWall.emissiveIntensity = Math.pow(n, 1.6) * 0.75;   // far buildings light up at night too
     M.lamp.emissiveIntensity = 0.6 + n * 2.6;
     M.signs.emissiveIntensity = 0.15 + n * 0.9;
     vehicleMats.head.emissiveIntensity = 0.4 + n * 3;
@@ -1045,7 +1046,7 @@ class Game {
     this._gearFrame(p);
     // flying fast: stream less detail and at most one chunk per frame -> no stutters in the air
     const sky = p.state === 'foot' && (p.skydive || p.parachute) && (p.altitude || 0) > 35;   // skydiving counts as flying too
-    const flying = (v && v.isAir && v.airborne && v.y > 35) || sky, high = flying && (v ? v.y : p.y) > 90;
+    const flying = (v && v.isAir && v.airborne && v.y > 35) || sky, high = flying && (v ? v.y : p.y) > 150;
     // high up only the low-detail world is needed (it is real geometry and looks right from the air)
     if (this.baseRadius) this.chunks.radius = high ? 0 : flying ? Math.min(this.baseRadius, 230) : this.baseRadius;
     this.chunks.maxNearPerFrame = flying ? 1 : 99;

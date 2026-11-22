@@ -27,6 +27,7 @@ export function makeMaterials() {
     lamp: new THREE.MeshStandardMaterial({ color: 0xfff3d6, emissive: 0xffe2a8, emissiveIntensity: 0.6 }),
     bulb: new THREE.MeshBasicMaterial({ color: 0xffffff }),
     far: new THREE.MeshLambertMaterial({ vertexColors: true }),
+    farWall: new THREE.MeshLambertMaterial({ vertexColors: true, map: T.getFarFacade(), emissive: 0xffffff, emissiveMap: T.getFarFacadeLit(), emissiveIntensity: 0 }),
   };
   for (const s of ['glass', 'office', 'concrete', 'plaster', 'brick', 'industrial', 'storefront']) {
     const glass = s === 'glass';

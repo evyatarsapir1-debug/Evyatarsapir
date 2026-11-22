@@ -32,6 +32,7 @@ const HELLO = ['אחי!', 'מה המצב?', 'הבית שלך פה', 'כבוד', 
 const COME = ['אנחנו איתך!', 'מאחוריך, אחי', 'בוא נזוז', 'סע, אנחנו אחריך'];
 const GO = ['קדימה! עליהם!', 'זה השטח שלנו עכשיו!', 'אל תשאירו אף אחד!', 'יאללה!'];
 const SKINS = [0, 1, 2, 3, 4];
+const _seat = new THREE.Vector3();
 const DOWN = ['dead', 'knocked', 'down', 'thrown', 'fall', 'dazed'];
 
 // ------------------------------------------------------------------ crew weapons (generic game props)
@@ -103,8 +104,12 @@ export class Gangs {
     if (this._hooked) return; this._hooked = true;
     const peds = this.game.peds, Pl = this.game.player;
     const hit = peds.hit.bind(peds), run = peds._runOver.bind(peds);
-    peds.hit = (p, src, dmg, kick) => { const r = hit(p, src, dmg, kick); if (r && src === Pl && p.gangId) this.provoke(p.gangId, 'hit', p); return r; };
-    peds._runOver = (p, v, sp, ctx) => { run(p, v, sp, ctx); if (v.driver === 'player' && p.gangId) this.provoke(p.gangId, 'car', p); };
+    peds.hit = (p, src, dmg, kick) => {
+      // your own crew: no damage from you - they only tell you off
+      if (src === Pl && p.gangId && p.gangId === this.member) { if (!(p.sayT > 0)) peds.say(p, ['אחי! אנחנו באותה כנופיה', 'וואו, תירגע אחי', 'אני איתך, לא נגדך!'][Math.floor(Math.random() * 3)], 1.8); return false; }
+      const r = hit(p, src, dmg, kick); if (r && src === Pl && p.gangId) this.provoke(p.gangId, 'hit', p); return r;
+    };
+    peds._runOver = (p, v, sp, ctx) => { if (v.driver === 'player' && p.gangId && p.gangId === this.member) return; run(p, v, sp, ctx); if (v.driver === 'player' && p.gangId) this.provoke(p.gangId, 'car', p); };
     if (this.game.econ.gang && OLD_IDS[this.game.econ.gang]) this.game.econ.gang = OLD_IDS[this.game.econ.gang];
   }
 
@@ -123,15 +128,25 @@ export class Gangs {
   }
   _models(dt) {
     const g = this.game, cam = g.camera.position;
-    this._cmBudget = 2;                                 // build at most two models per frame (no stutter when a crew appears)
+    this._cmBudget = 3;                                 // build at most three models per frame (no stutter when a crew appears)
     const all = [...this.followers, ...Object.values(this.crews).flatMap((c) => c.members)];
     for (const p of all) {
       const d = Math.hypot(p.x - cam.x, p.z - cam.z);
-      if (!p.cm && d < 80 && p.state !== 'convoy' && this._cmBudget-- > 0) this._attachModel(p);
-      else if (p.cm && d > 100) this._dropModel(p);
+      if (!p.cm && d < 130 && this._cmBudget-- > 0) this._attachModel(p);
+      else if (p.cm && d > 150) this._dropModel(p);
       if (!p.cm) continue;
-      const cm = p.cm, R = cm.root, hidden = p.state === 'convoy';
-      R.visible = !hidden; if (hidden) continue;
+      const cm = p.cm, R = cm.root;
+      if (p.state === 'convoy') {
+        // riding with the crew: sitting in the car (driver / passenger seat) or on the bike, visible through the glass
+        const v = p.carRef; R.visible = !!v; if (!v) continue;
+        const seat = v.parts.seat, side = p.seatSide || 1;
+        _seat.set(seat.x * side, seat.y, seat.z); v.object.updateMatrixWorld(); v.object.localToWorld(_seat);
+        R.position.copy(_seat); R.rotation.order = 'YXZ'; R.rotation.set(0, v.heading, 0);
+        if (p.weapon) p.weapon.visible = false;
+        cm.animate(dt, { speed: Math.abs(v.speed || 0), mode: v.parts.seatMode || 'drive', steer: 0 });
+        continue;
+      }
+      R.visible = true;
       const down = DOWN.includes(p.state);
       R.position.set(p.x, p.y + (down ? 0.13 : 0), p.z);
       R.rotation.order = 'YXZ';
@@ -259,7 +274,14 @@ export class Gangs {
     g.econ.gangPrev = { topColor: Pl.model.app.topColor, chain: !!Pl.model.app.chain };
     Pl.model.setAppearance({ ...Pl.model.app, topColor: G.top, chain: true });
     for (const crew of Object.values(this.crews)) if (crew.G?.id === id) { crew.hostile = 0; const L = crew.members.find((m) => m.gangRole === 'leader' && m.state !== 'dead'); if (L) g.peds.say(L, 'ברוך הבא למשפחה. מעכשיו אתה איתנו.', 3); }
-    g.toast(`🤝 הצטרפת ל${G.full}! בטלפון: "קרא לחבר׳ה" — והם באים אחריך`, 4.5);
+    // welcome present: a car in the crew colour, parked next to you and registered to you
+    const gifts = (g.econ.gangCars ||= {});
+    if (!gifts[id]) {
+      gifts[id] = true;
+      const pos = g.playerPos(), v = g.spawnVehicleNear('muscle', pos.x + 4, pos.z + 4);
+      if (v) { v.setColor(G.car); v.rebuildLod?.(); v.owned = true; const ref = { type: 'muscle', color: G.car }; g.econ.ownedCars.push(ref); v.ownedRef = ref; v.gang = id; }
+      g.toast(`🤝 הצטרפת ל${G.full}! קיבלת מכונית ${id === 'abc' ? 'ירוקה' : 'כחולה'} של הכנופיה — היא חונה לידך. בטלפון: "קרא לחבר׳ה"`, 5);
+    } else g.toast(`🤝 הצטרפת ל${G.full}! בטלפון: "קרא לחבר׳ה" — והם באים אחריך`, 4.5);
     g.save();
   }
   leave(kicked, quiet) {
@@ -274,7 +296,7 @@ export class Gangs {
   }
 
   // ------------------------------------------------------------------ your crew: call, orders, dismiss
-  call(n = 4) {
+  call(n = 8) {
     const g = this.game, id = this.member, G = BY_ID[id]; if (!G) return 'אתה לא בכנופיה';
     this.followers = this.followers.filter((p) => p.state !== 'dead' && this.game.peds.peds.includes(p));
     const need = n - this.followers.length;
@@ -294,8 +316,11 @@ export class Gangs {
     }
     g.peds._colors();
     this.order = 'follow';
+    // the ones who came from around the block arrive in the crew's cars and bikes, driving to you through the streets
+    const fresh = this.followers.filter((f) => f.state !== 'dead' && !local.includes(f));
+    if (fresh.length && g.player.state === 'foot') this._arrive(fresh);
     this._say(COME);
-    return `👥 ${this.followers.length} חברים מ${G.full} באים אחריך`;
+    return `👥 ${this.followers.length} חברים מ${G.full} בדרך אליך — ${this._rideText(this.followers.length)}`;
   }
   _enlist(p) { p.follower = true; p.state = 'follow'; p.copChase = false; p.gunOut = false; p.hp = p.maxHp = 12; p.temper = 'fight'; this.followers.push(p); }
   attack() {
@@ -309,9 +334,11 @@ export class Gangs {
   }
   hold() { if (!this.followers.length) return 'אין חבר׳ה איתך'; this.order = 'wait'; for (const p of this.followers) if (p.state === 'follow') { p.state = 'guard'; p.homeSpot = { x: p.x, z: p.z, yaw: p.yaw, state: 'guard', y: p.y }; } return '✋ החבר׳ה מחכים כאן'; }
   dismiss(quiet) {
-    const peds = this.game.peds;
+    const peds = this.game.peds, g = this.game;
     for (const c of this.convoy) this._parkConvoy(c);
-    this.convoy = [];
+    this.convoy = []; this.arrivals = [];
+    for (const v of this.rides || []) if (v.driver !== 'player') { const L = g.vehicles.kept, i = L.indexOf(v); if (i >= 0) g.vehicles._dispose(v, L); }
+    this.rides = [];
     for (const p of this.followers) { this._dropModel(p); const i = peds.peds.indexOf(p); if (i >= 0) peds.peds.splice(i, 1); }
     peds._colors();
     this.followers = []; this.order = 'follow';
@@ -339,6 +366,53 @@ export class Gangs {
     const a = L[i - 1] || L[0], b = L[i], k = b.s > a.s ? (s - a.s) / (b.s - a.s) : 0;
     return { x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k, y: a.y + (b.y - a.y) * k, h: Math.atan2(b.x - a.x, b.z - a.z) };
   }
+  _groups(riders) {
+    const bikes = riders.length >= 7 ? 2 : riders.length % 2, out = [];
+    const inCars = riders.slice(0, riders.length - bikes);
+    for (let i = 0; i < inCars.length; i += 2) out.push({ kind: ['muscle', 'suv', 'sedan', 'muscle'][out.length % 4], riders: inCars.slice(i, i + 2) });
+    for (const r of riders.slice(riders.length - bikes)) out.push({ kind: 'moto', riders: [r] });
+    return out;
+  }
+  _rideText(n) { const gr = this._groups(new Array(n).fill(0)), c = gr.filter((x) => x.kind !== 'moto').length, b = gr.length - c; return `${c} מכוניות${b ? ` ו־${b} אופנועים` : ''}`; }
+  _ride(kind, x, z, h, y) {
+    const g = this.game, G = BY_ID[this.member];
+    const v = new Vehicle(kind, G.car, x, z, h, y ?? heightAt(x, z));
+    v.gang = G.id; v.convoy = true; v.dmg0 = 0; g.scene.add(v.object); g.vehicles.adopt(v); v.sync();
+    return v;
+  }
+  _seatRiders(grp, v) { grp.riders.forEach((p, i) => { p.state = 'convoy'; p.cmOn = true; p.carRef = v; p.seatSide = i ? -1 : 1; }); }
+  // crew arriving: their rides start a block or two away and drive the streets to you, park, and everybody gets out
+  _arrive(fresh) {
+    const g = this.game, pos = g.playerPos(), P0 = g.player;
+    const back = (pos.facing ?? 0) + Math.PI;
+    let start = null;
+    for (let k = 0; k < 8 && !start; k++) { const a = back + (k - 3.5) * 0.5, d = 80 + k * 6; start = g.roadsideSpot(pos.x + Math.sin(a) * d, pos.z + Math.cos(a) * d); }
+    if (!start) start = { x: pos.x + Math.sin(back) * 60, z: pos.z + Math.cos(back) * 60, heading: back + Math.PI };
+    const route = g.police?._route?.(start.x, start.z, pos.x, pos.z) || [];
+    this.arrivals = this._groups(fresh).map((grp, k) => {
+      const v = this._ride(grp.kind, start.x - Math.sin(start.heading) * k * 9, start.z - Math.cos(start.heading) * k * 9, start.heading);
+      this._seatRiders(grp, v);
+      const pa = back + Math.PI + (k - 2) * 0.55;   // parking spots spread around in front of you
+      return { v, riders: grp.riders, k, route: route.map((n) => ({ x: n.x, z: n.z })), park: { x: pos.x + Math.sin(pa) * (9 + (k % 2) * 4), z: pos.z + Math.cos(pa) * (9 + (k % 2) * 4) }, wait: k * 0.9 };
+    });
+    void P0;
+  }
+  _arriving(dt) {
+    if (!this.arrivals?.length) return;
+    const g = this.game;
+    for (const a of this.arrivals) {
+      const v = a.v; if (a.wait > 0) { a.wait -= dt; continue; }
+      while (a.route.length && Math.hypot(a.route[0].x - v.x, a.route[0].z - v.z) < 8) a.route.shift();
+      const t = a.route[0] || a.park, dx = t.x - v.x, dz = t.z - v.z, d = Math.hypot(dx, dz);
+      const last = !a.route.length, sp = last ? Math.min(14, Math.max(2, d * 0.9)) : 16, step = Math.min(d, sp * dt);
+      if (d > 0.05) { v.x += (dx / d) * step; v.z += (dz / d) * step; }
+      let dh = Math.atan2(dx, dz) - v.heading; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); if (d > 1) v.heading += dh * Math.min(1, dt * 5);
+      v.y = heightAt(v.x, v.z, v.y + 1); v.speed = d > 0.3 ? sp : 0; v.vx = v.vz = 0; v.sync(dt);
+      for (const p of a.riders) { p.x = v.x; p.z = v.z; p.y = v.y; }
+      if (last && d < 0.6) { this._parkConvoy(a); a.done = true; this._say(['הגענו, אחי', 'אנחנו פה!', 'מה התוכנית?']); }
+    }
+    this.arrivals = this.arrivals.filter((a) => !a.done);
+  }
   _board(pv) {
     // they run to the crew's rides: two to a car, one to a bike; the rides pull in behind your car
     const g = this.game, G = BY_ID[this.member], riders = this.followers.filter((p) => !DOWN.includes(p.state));
@@ -347,14 +421,16 @@ export class Gangs {
     // seed the trail with a straight run-up behind your car so the rides start in line behind you
     const bx = -Math.sin(pv.heading), bz = -Math.cos(pv.heading);
     for (let d = 60; d >= 0; d -= 1) this._trailPush(pv.x + bx * d, pv.z + bz * d, heightAt(pv.x + bx * d, pv.z + bz * d));
-    const groups = []; for (let i = 0; i < riders.length; i += 2) groups.push(riders.slice(i, i + 2));
-    groups.forEach((grp, k) => {
-      const kind = grp.length === 1 ? 'moto' : k % 2 ? 'suv' : 'muscle';
+    void G;
+    const free = (this.rides || []).filter((v) => g.vehicles.kept.includes(v) && v.driver !== 'player' && !v.wrecked && Math.hypot(v.x - pv.x, v.z - pv.z) < 80);
+    this._groups(riders).forEach((grp, k) => {
       const at = this._at(this.trailS - 11 - k * 9.5);
-      const v = new Vehicle(kind, G.car, at.x, at.z, at.h, at.y);
-      v.gang = G.id; v.convoy = true; v.dmg0 = 0; g.scene.add(v.object); g.vehicles.adopt(v); v.sync();
-      for (const p of grp) { p.state = 'convoy'; p.cmOn = true; p.carRef = v; }
-      this.convoy.push({ v, riders: grp, k });
+      // their own car / bike if it is parked close by (it pulls in behind you), otherwise one comes round the corner
+      const i = free.findIndex((v) => (v.typeKey === 'moto') === (grp.kind === 'moto'));
+      const v = i >= 0 ? free.splice(i, 1)[0] : this._ride(grp.kind, at.x, at.z, at.h, at.y);
+      v.convoy = true;
+      this._seatRiders(grp, v);
+      this.convoy.push({ v, riders: grp.riders, k });
     });
     this._say(['עולים!', 'כולם לרכבים!', 'סע, אנחנו מאחוריך']);
   }
@@ -375,8 +451,9 @@ export class Gangs {
     }
   }
   _parkConvoy(c) {
-    // everybody out: they step out of the doors and the ride stays parked
+    // everybody out: they step out of the doors and the ride stays parked (and is used again next time you drive)
     const v = c.v; v.speed = 0; v.convoy = false;
+    if (!(this.rides ||= []).includes(v)) this.rides.push(v);
     c.riders.forEach((p, i) => {
       const side = i % 2 ? 1 : -1, rx = Math.cos(v.heading) * side * 1.5, rz = -Math.sin(v.heading) * side * 1.5;
       p.x = v.x + rx; p.z = v.z + rz; p.y = heightAt(p.x, p.z); p.carRef = null;
@@ -420,13 +497,17 @@ export class Gangs {
     if (!this.followers.length) { if (this.convoy.length) { for (const c of this.convoy) this._parkConvoy(c); this.convoy = []; } return; }
     const pv = Pl.state === 'driving' ? Pl.vehicle : null;
     const road = pv && !pv.isAir && !pv.isBoat;
+    if (this.arrivals?.length) {
+      if (road) { for (const a of this.arrivals) this._parkConvoy(a); this.arrivals = []; }   // you drove off: they join the convoy instead
+      else { this._arriving(dt); }
+    }
     if (road && !this.convoy.length) this._board(pv);
     if (road && this.convoy.length) { this._drive(dt, pv); return; }
     if (!road && this.convoy.length) { for (const c of this.convoy) this._parkConvoy(c); this.convoy = []; this._say(['הגענו!', 'יאללה, יוצאים', 'מה התוכנית?']); }
     const facing = pos.facing ?? 0, enemies = this.order === 'attack' ? this._enemies(pos, 90) : [];
     let slot = 0;
     for (const p of this.followers) {
-      if (p.state === 'dead') continue;
+      if (p.state === 'dead' || p.state === 'convoy') continue;   // still riding in (arriving): the ride decides
       if (['flee', 'hide', 'surrender', 'callHelp', 'surprised', 'evade', 'dodge', 'walk', 'idle', 'talk', 'goHome', 'copChase'].includes(p.state)) p.state = 'follow';
       if (DOWN.includes(p.state) || p.state === 'getup') continue;
       // fight: each one picks the nearest rival

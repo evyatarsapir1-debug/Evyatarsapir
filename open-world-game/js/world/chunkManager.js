@@ -785,7 +785,8 @@ function buildCellNear(cd, B, bulbs) {
 
 // ---------------------------------------------------------------------------- low detail cell (far LOD)
 const FAR_GROUND = { grass: 0x6f9a4c, field: 0x9bb05a, urban: 0xa9a59c, water: 0x3d7fa6, sand: 0xdcc796, apron: 0x8e8e8a };
-function buildCellFar(cd, F) {
+const _farTree = new THREE.IcosahedronGeometry(1, 0), _farM = new THREE.Matrix4();
+function buildCellFar(cd, F, W = F) {
   const { ox, oz } = cd;
   let gcol = cd.urban ? FAR_GROUND.urban : cd.ground === 'field' ? FAR_GROUND.field : FAR_GROUND.grass;
   if (cd.kind === 'Q') gcol = FAR_GROUND.water;
@@ -800,13 +801,36 @@ function buildCellFar(cd, F) {
     F.floor(x0, z0, x1, z1, 0.02, 0x4a4c50, 50);
   }
   for (const b of cd.buildings) {
-    const top = CURB_H + b.h + (b.house ? Math.min(b.w, b.d) * 0.3 : 0);
-    F.walls(b.x, b.z, b.w, b.d, 0, top, b.color, 50, 50);
-    F.floor(b.x - b.w / 2, b.z - b.d / 2, b.x + b.w / 2, b.z + b.d / 2, top, b.house ? b.roofColor : 0x9a9a98, 50);
+    // walls with rows of windows (same floor height as the close-up buildings), a pitched roof on houses, and on flat
+    // roofs a parapet rim, air-conditioning units and a water tank - so the city reads right from the air
+    if (b.house) {
+      const top = CURB_H + b.h, rise = Math.min(b.w, b.d) * 0.35;
+      W.walls(b.x, b.z, b.w, b.d, 0, top, b.color, 12, 12.8);
+      const alongX = b.w >= b.d, x0 = b.x - b.w / 2 - 0.4, x1 = b.x + b.w / 2 + 0.4, z0 = b.z - b.d / 2 - 0.4, z1 = b.z + b.d / 2 + 0.4;
+      if (alongX) { F.quad([x0, top, z1], [x1, top, z1], [x1, top + rise, b.z], [x0, top + rise, b.z], [0, 0, 1, 0, 1, 1, 0, 1], b.roofColor); F.quad([x1, top, z0], [x0, top, z0], [x0, top + rise, b.z], [x1, top + rise, b.z], [0, 0, 1, 0, 1, 1, 0, 1], b.roofColor); }
+      else { F.quad([x1, top, z1], [x1, top, z0], [b.x, top + rise, z0], [b.x, top + rise, z1], [0, 0, 1, 0, 1, 1, 0, 1], b.roofColor); F.quad([x0, top, z0], [x0, top, z1], [b.x, top + rise, z1], [b.x, top + rise, z0], [0, 0, 1, 0, 1, 1, 0, 1], b.roofColor); }
+      continue;
+    }
+    const top = CURB_H + b.h, hx = b.w / 2, hz = b.d / 2;
+    W.walls(b.x, b.z, b.w, b.d, 0, top, b.color, 12, 12.8);
+    F.floor(b.x - hx, b.z - hz, b.x + hx, b.z + hz, top, 0x8f8e8b, 50);
+    const rim = 0x7d7c79;
+    F.walls(b.x, b.z - hz + 0.2, b.w, 0.4, top, top + 0.9, rim, 50, 50); F.walls(b.x, b.z + hz - 0.2, b.w, 0.4, top, top + 0.9, rim, 50, 50);
+    F.walls(b.x - hx + 0.2, b.z, 0.4, b.d, top, top + 0.9, rim, 50, 50); F.walls(b.x + hx - 0.2, b.z, 0.4, b.d, top, top + 0.9, rim, 50, 50);
+    F.floor(b.x - hx, b.z - hz, b.x + hx, b.z + hz, top + 0.9, rim, 50);
+    if (b.w > 9 && b.d > 9) {
+      const h = (b.x * 7.3 + b.z * 3.1) % 1, n = b.w * b.d > 500 ? 3 : 2;
+      for (let i = 0; i < n; i++) { const ax = b.x + (i - (n - 1) / 2) * Math.min(5, b.w * 0.25), az = b.z + (h - 0.5) * b.d * 0.4; F.walls(ax, az, 2.2, 1.6, top, top + 1.4, 0xb9bcbf, 50, 50); F.floor(ax - 1.1, az - 0.8, ax + 1.1, az + 0.8, top + 1.4, 0xa8abae, 50); }
+      if (b.h > 14) { const tx = b.x + hx * 0.45, tz = b.z - hz * 0.45; F.walls(tx, tz, 2.6, 2.6, top + 1.5, top + 4.2, 0x6e5f52, 50, 50); F.floor(tx - 1.3, tz - 1.3, tx + 1.3, tz + 1.3, top + 4.2, 0x5f5248, 50); }
+    }
   }
   if (cd.garage) { const g = cd.garage; F.walls(g.x, g.z, g.w, g.d, 0, CURB_H + g.levelH * (g.levels - 1) + 1, 0xb8b4ac, 50, 50); }
   let trees = 0;
-  for (const p of cd.props) if ((p.kind === 'tree' || p.kind === 'palm') && trees++ % 3 === 0) F.walls(p.x, p.z, 3.4, 3.4, 2, 6.5, 0x3f7a32, 50, 50);
+  for (const p of cd.props) if ((p.kind === 'tree' || p.kind === 'palm') && trees++ % 2 === 0) {
+    // a round crown on a trunk instead of a green cube
+    F.walls(p.x, p.z, 0.5, 0.5, 0, 3.2, 0x5b4632, 50, 50);
+    _farM.makeScale(2.4, 2.1, 2.4).setPosition(p.x, 4.6, p.z); F.addGeometry(_farTree, _farM, ((trees * 37) % 3) ? 0x3f7a32 : 0x4f8a3a);
+  }
   if (cd.ridge) {
     const r = cd.ridge;
     const step = 20;
@@ -884,11 +908,13 @@ export class ChunkManager {
   }
 
   _buildFar(cx, cz) {
-    const F = new GeoBuilder();
-    for (const cd of this._chunkCells(cx, cz)) buildCellFar(cd, F);
-    const m = new THREE.Mesh(F.build(), this.mats.far);
-    m.matrixAutoUpdate = false; m.updateMatrix();
-    return m;
+    const F = new GeoBuilder(), W = new GeoBuilder();
+    for (const cd of this._chunkCells(cx, cz)) buildCellFar(cd, F, W);
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(F.build(), this.mats.far), new THREE.Mesh(W.build(), this.mats.farWall));
+    g.children.forEach((m) => { m.matrixAutoUpdate = false; m.updateMatrix(); });
+    g.matrixAutoUpdate = false; g.updateMatrix();
+    return g;
   }
 
   _dispose(obj) { obj.traverse((o) => { if (o.geometry && !(o.isInstancedMesh && o.geometry === G.bulb)) o.geometry.dispose(); if (o.isInstancedMesh) o.dispose(); }); }
