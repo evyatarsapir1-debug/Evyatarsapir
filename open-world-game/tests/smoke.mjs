@@ -1180,8 +1180,9 @@ const rob = await g(async () => {
   P.x = c.pt[0] - (c.keeper[0] - c.pt[0]) * 0.8; P.z = c.pt[1] - (c.keeper[1] - c.pt[1]) * 0.8;
   game.econ.weapons.p7 = { ammo: 40 }; game.equip('p7'); step(20);
   const m0 = game.econ.money;
-  step(30 * 7, () => { P.aimT = 1.5; game.aiming = true; P.facing = Math.atan2(k.x - P.x, k.z - P.z); });
-  const started = !!game.robbery.cur || game.robbery.robbed.size > 0, hands = k.state, thrown = game.robbery.cash.length;
+  let thrown = 0;   // most bundles on the floor at once (some may already be picked up when standing close)
+  step(30 * 7, () => { P.aimT = 1.5; game.aiming = true; P.facing = Math.atan2(k.x - P.x, k.z - P.z); thrown = Math.max(thrown, game.robbery.cash.length); });
+  const started = !!game.robbery.cur || game.robbery.robbed.size > 0, hands = k.state;
   for (const cs of [...game.robbery.cash]) { if (!cs.landed) continue; P.x = cs.m.position.x; P.z = cs.m.position.z; step(2, () => { P.aimT = 1.5; }); }
   const got = game.econ.money - m0;
   game.aiming = false; game.equip(null); step(30 * 4);
@@ -1303,9 +1304,9 @@ const guards = await g(() => {
   game.gangs.join('abc'); step(2); const shown = getComputedStyle(btn).display !== 'none';
   btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); step(5); const called = game.gangs.followers.length;
   game.gangs.leave(false, true); game.econ.gangCars = {}; game.teleport(530, 545, 0); step(20);
-  return { n: gd.length, look, hidden, shown, called };
+  return { n: gd.filter((q) => !q.vaultGuard).length, nVault: gd.filter((q) => q.vaultGuard).length, look, hidden, shown, called };
 });
-check('bank: two armed guards stand at the entrance (full body, uniform, vest, rifle)', guards.n === 2 && guards.look.every((l) => l.gun && l.model && l.rifle && l.vest), JSON.stringify(guards));
+check('bank: two armed guards at the entrance + two at the vault (full body, uniform, vest, rifle)', guards.n === 2 && guards.nVault === 2 && guards.look.every((l) => l.gun && l.model && l.rifle && l.vest), JSON.stringify(guards));
 check('gangs: a crew button on the screen while you are in a gang - tap it and your boys come', guards.hidden && guards.shown && guards.called >= 4, JSON.stringify({ hidden: guards.hidden, shown: guards.shown, called: guards.called }));
 
 // ---------------------------------------------------------------- skydiving: jump out of a helicopter high above the clouds
