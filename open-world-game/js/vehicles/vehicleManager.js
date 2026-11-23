@@ -60,7 +60,7 @@ export class VehicleManager {
 
   _dispose(v, list) {
     this.scene.remove(v.object);
-    v.object.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+    v.object.traverse((o) => { if (o.geometry && !o.userData.sharedGeo) o.geometry.dispose(); });
     const i = list.indexOf(v); if (i >= 0) list.splice(i, 1);
   }
 

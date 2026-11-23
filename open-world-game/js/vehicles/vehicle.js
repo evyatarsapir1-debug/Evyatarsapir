@@ -1,7 +1,7 @@
 // Drivable vehicle: arcade physics with grip/drift, curb climbing, collision response and light visual damage.
 import * as THREE from 'three';
 import { VEHICLE_TYPES } from './vehicleTypes.js';
-import { buildVehicleModel } from './vehicleModels.js';
+import { buildVehicleModel, ownGeometry } from './vehicleModels.js';
 import { makeBox, updateBox, obbVs, verticalOverlap } from '../physics/collision.js';
 import { heightAt, WATER_Y } from '../world/terrain.js';
 import { clamp, damp } from '../core/mathx.js';
@@ -390,6 +390,7 @@ export class Vehicle {
     this._dentSum = (this._dentSum || 0) + push; if (this._dentSum > 0.9) return;   // crushed enough
     this.parts.body.traverse((o) => {
       if (!o.isMesh || o.material !== this.parts.paint || !o.geometry?.attributes?.position) return;
+      ownGeometry(o);
       const g = o.geometry, pos = g.attributes.position;
       if (!g.userData.orig) g.userData.orig = pos.array.slice();
       let moved = false;
@@ -436,6 +437,7 @@ export class Vehicle {
     // recolor the merged distance model to the new paint
     const lod = this.parts.lod;
     if (!lod) return;
+    ownGeometry(lod);
     const col = lod.geometry.attributes.color, c = this.parts.baseColor;
     const old = this._lodPaint || this.parts.lodPaint;
     if (!old) return;

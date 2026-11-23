@@ -157,7 +157,7 @@ export class AirportManager {
         this.scene.add(v.object); this.service.push(v);
       }
     } else if (!near && this.service.length) {
-      for (const v of this.service) { v.removed = true; this.scene.remove(v.object); v.object.traverse((o) => o.geometry && o.geometry.dispose()); }
+      for (const v of this.service) { v.removed = true; this.scene.remove(v.object); v.object.traverse((o) => o.geometry && !o.userData.sharedGeo && o.geometry.dispose()); }
       this.service = [];
     }
     for (const v of this.service) {

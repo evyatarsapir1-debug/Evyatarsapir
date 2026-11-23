@@ -377,7 +377,56 @@ function policeBand() {
   return (_band = { side, hood });
 }
 
+// Building a car from scratch (sculpted body, wheels, interior, distance model) costs 25-50 ms - parked and traffic cars
+// spawning while you drive made the game stutter. Each type+colour is now built once and later cars are cheap clones:
+// the meshes share geometry (a dent or a repaint first gives that car its own copy), every car gets its own materials.
+const _modelCache = new WeakMap();   // vehicle type -> built template (never shown itself)
+let _sharedMats = null;
+function _cloneParts(src) {
+  _sharedMats ||= new Set(Object.values(shared).filter((m) => m?.isMaterial));
+  const root = src.root.clone(true), om = new Map(), mm = new Map(), a = [], b = [];
+  src.root.traverse((o) => a.push(o)); root.traverse((o) => b.push(o));
+  a.forEach((o, i) => om.set(o, b[i]));
+  const cm = (m) => { if (!m) return m; if (Array.isArray(m)) return m.map(cm); if (_sharedMats.has(m)) return m; let n = mm.get(m); if (!n) { n = m.clone(); mm.set(m, n); } return n; };
+  for (const o of b) { if (o.material) o.material = cm(o.material); if (o.geometry) o.userData.sharedGeo = true; }
+  const map = (v) => {
+    if (v == null || typeof v !== 'object') return v;
+    if (v.isObject3D) return om.get(v) ?? v;
+    if (v.isMaterial) return cm(v);
+    if (v.isColor || v.isVector3) return v.clone();
+    if (Array.isArray(v)) return v.map(map);
+    if (v.constructor === Object) { const o = {}; for (const k in v) o[k] = map(v[k]); return o; }
+    return v;
+  };
+  const out = {}; for (const k in src) out[k] = map(src[k]);
+  return out;
+}
+// a car about to change its own geometry (dent, recolour of the distance model) takes a private copy first
+export function ownGeometry(o) {
+  if (!o.userData.sharedGeo || !o.geometry) return;
+  o.geometry = o.geometry.clone(); delete o.geometry.userData.orig; o.userData.sharedGeo = false;
+}
+// build a type's template ahead of time (the loading screen does this, so the first car of each kind doesn't stutter)
+export function prewarmVehicleModel(type) { if (type.kind !== 'plane' && !_modelCache.has(type)) _modelCache.set(type, _buildVehicleModel(type, type.colors?.[0] ?? 0x888888)); }
 export function buildVehicleModel(type, color) {
+  if (type.kind === 'plane') return _buildVehicleModel(type, color);
+  // one template per type; another paint colour is just a recolour of the clone (paint + the distance model's vertex colours)
+  let tpl = _modelCache.get(type);
+  if (!tpl) { tpl = _buildVehicleModel(type, color); _modelCache.set(type, tpl); }
+  const P = _cloneParts(tpl);
+  if (color != null && P.paint.color.getHex() !== new THREE.Color(color).getHex()) {
+    const c = new THREE.Color(color), old = P.lodPaint;
+    P.paint.color.copy(c); P.baseColor.copy(c);
+    if (P.lod && old) {
+      ownGeometry(P.lod);
+      const col = P.lod.geometry.attributes.color;
+      if (col) { for (let i = 0; i < col.count; i++) if (Math.abs(col.getX(i) - old.r) < 0.01 && Math.abs(col.getY(i) - old.g) < 0.01 && Math.abs(col.getZ(i) - old.b) < 0.01) col.setXYZ(i, c.r, c.g, c.b); col.needsUpdate = true; }
+      P.lodPaint = c.clone();
+    }
+  }
+  return P;
+}
+function _buildVehicleModel(type, color) {
   if (type.kind === 'plane') return type.fighter ? buildFighter(color) : buildJet(color);
   const T = type, g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);

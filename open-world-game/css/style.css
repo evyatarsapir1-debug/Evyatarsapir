@@ -548,3 +548,16 @@ body:not(.navstrip) #gpsHud { display: none !important; }   /* only for flights 
 
 /* in a shop / fitting room: hide the game buttons and prompts so the clothes are fully visible */
 body.shopping #touch, body.shopping #prompt, body.shopping #charBtn, body.shopping #bagBtn, body.shopping #phoneBtn, body.shopping #weaponHud, body.shopping #toast, body.shopping #stats, body.shopping #pauseBtn, body.shopping #minimap, body.shopping #here, body.shopping #objective { display: none !important; }
+
+/* vault gate code-cracking mini game */
+#codeGame { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; background: #000a; direction: rtl; }
+#codeGame .cg-box { width: min(420px, 92vw); padding: 16px; border-radius: 16px; background: linear-gradient(180deg, #14181e, #0b0d11); border: 1px solid #ffffff22; color: #e8ecef; text-align: center; font-family: "Rubik", Arial, sans-serif; box-shadow: 0 20px 60px #000c; }
+#codeGame .cg-head { font-weight: 800; font-size: 17px; margin-bottom: 8px; }
+#codeGame .cg-col { display: flex; flex-direction: column; align-items: center; gap: 4px; } #codeGame .cg-t { font: 800 20px "Courier New", monospace; color: #7ee08a; }
+#codeGame .cg-dials { display: flex; gap: 10px; justify-content: center; margin: 14px 0 8px; direction: ltr; }
+#codeGame .cg-d { width: 56px; height: 72px; border-radius: 10px; background: #050607; border: 2px solid #2a2f36; font: 800 40px/68px "Courier New", monospace; color: #3a4048; }
+#codeGame .cg-d.on { border-color: #ffb347; color: #ffd27a; box-shadow: 0 0 18px #ff8a3d55; }
+#codeGame .cg-d.ok { border-color: #2fbf5a; color: #7ee08a; } #codeGame .cg-d.bad { border-color: #e5484d; color: #ff8a8a; }
+#codeGame .cg-msg { min-height: 20px; font-size: 13px; opacity: .85; margin-bottom: 10px; }
+#codeGame .cg-btns { display: flex; gap: 8px; } #codeGame .cg-lock { flex: 1; padding: 14px; border-radius: 12px; border: none; background: #ff8a3d; color: #1a0e04; font: 800 18px "Rubik", Arial, sans-serif; }
+#codeGame .cg-x { width: 56px; border-radius: 12px; border: 1px solid #ffffff33; background: #ffffff12; color: #fff; font-size: 18px; }

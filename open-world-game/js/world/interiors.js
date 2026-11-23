@@ -1131,7 +1131,11 @@ function bankSpec(b, F, spec, piece, lamp, furn) {
     }
     lamp(va, (vd0 + d1) / 2, y + h - 0.05); lamp(va, d0 + 1.0, y + h - 0.05);
     info.alarms.push({ pt: F.pt(va, vd0 - 0.2), y: y + 2.9 });
-    return { center: F.pt(va, vd0 + T2 / 2), hingeA: va - 1.25, d: vd0, y, col: doorCol, out: [F.fx, F.fz], lat: [-F.fz, F.fx], loot, outside: F.pt(va, vd0 - 1.6) };
+    // inner bar gate across the vault (opened with a code at its keypad) between the door and the money
+    const gd = vd0 + T2 + 0.9, gh = Math.min(h - 0.1, 2.6);
+    const gateCol = colFromRect(F.rect(ia0, ia1, gd - 0.06, gd + 0.06), y, y + gh, 'vaultgate'); C.push(gateCol);
+    const gate = { p0: F.pt(ia0, gd), p1: F.pt(ia1, gd), y, h: gh, col: gateCol, pad: F.pt(ia0 + 0.6, gd - 0.75), padWall: F.pt(ia0 + 0.25, gd - 0.1) };
+    return { center: F.pt(va, vd0 + T2 / 2), hingeA: va - 1.25, d: vd0, y, col: doorCol, out: [F.fx, F.fz], lat: [-F.fz, F.fx], loot, outside: F.pt(va, vd0 - 1.6), gate };
   };
   // security room on the ground floor (harbor, local), manager's office upstairs (classic), security upstairs (gold)
   if (K === 'harbor' || K === 'local') info.security = secRoom(secA0, secA1, dBack, D, yG, HG);
@@ -1176,6 +1180,8 @@ function bankSpec(b, F, spec, piece, lamp, furn) {
     info.alarms.push({ pt: F.pt(0, 0.6), y: y1 + FH - 0.4 }, { pt: F.pt(0, 0.6), y: y2 + FH - 0.4 });
   }
   if (K === 'classic') info.alarms.push({ pt: F.pt(0, 0.6), y: floors[1] + FH - 0.4 });
+  // two more armed guards in front of the vault door
+  if (info.vault) { const v = info.vault; for (const sx of [-1, 1]) (spec.doorGuards ||= []).push({ pt: [v.outside[0] + v.lat[0] * sx * 1.5, v.outside[1] + v.lat[1] * sx * 1.5], yaw: Math.atan2(-v.out[0], -v.out[1]), y: v.y, vault: true }); }
   spec.bank = info;
 }
 

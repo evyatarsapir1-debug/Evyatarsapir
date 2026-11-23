@@ -143,7 +143,7 @@ export class Gangs {
   _models(dt) {
     const g = this.game, cam = g.camera.position;
     for (const p of [...this.models]) if (!this.game.peds.peds.includes(p)) this._dropModel(p);   // people who left the area
-    this._cmBudget = 3;                                 // build at most three models per frame (no stutter when a crew appears)
+    this._cmBudget = 1;                                 // build at most one model per frame (no stutter when a crew or the bank guards appear)
     const all = [...this.followers, ...Object.values(this.crews).flatMap((c) => c.members), ...this.game.peds.peds.filter((q) => q.doorGuard && q.modelApp)];   // + the armed guards at the bank doors
     for (const p of all) {
       const d = Math.hypot(p.x - cam.x, p.z - cam.z);

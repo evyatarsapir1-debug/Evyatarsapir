@@ -965,6 +965,7 @@ const bank = await g(() => {
     const S = H.stage();
     if (S.type === 'escape') { game.police.clear(); step(3); continue; }
     const t = H.targets().find((q) => !q.taken); if (!t) { step(5); continue; }
+    if (S.type === 'loot' && S.from === 'vault' && H.gates[H.active.id]?.locked) { const gt = I.vault.gate; go(gt.pad, gt.y); H.unlockGate(H.active.id); step(60); continue; }   // the bar gate (code game tested separately)
     if (S.type === 'vault' && !H.active.hasKey) { go(I.start.pt, I.start.y); H.onExplosion({ x: t.pt[0], y: t.y + 1, z: t.pt[1] }); step(30 * 3); game.econ.health = 100; continue; }   // no button: a grenade / sticky bomb on the door blows it
     go(t.pt, t.y); press(); step(Math.ceil(S.dur * 30) + 3);
     if (S.type === 'unlock') step(30 * 6);
@@ -1003,6 +1004,38 @@ const vkey = await g(() => {
   return { dropped, takePrompt, hasKey, prompt };
 });
 check('bank vault: the guard / teller with the key drops it when taken down; with the key the vault opens (or blow it without)', vkey.dropped && vkey.takePrompt.includes('קח את המפתח') && vkey.hasKey && vkey.prompt.includes('פתח עם מפתח'), JSON.stringify(vkey));
+const gold = await g(async () => {
+  const game = __game, P = game.player, H = game.heist, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  game.police.clear(); game.econ.health = 100; game.econ.heists = {}; if (H.active) H.fail('בדיקה');
+  const I = H.info('gold'), v = I.vault; game.teleport(v.outside[0], v.outside[1], 0, v.y + 0.6); step(60);
+  const vg = game.peds.peds.filter((q) => q.vaultGuard && q.state !== 'dead' && Math.hypot(q.x - v.outside[0], q.z - v.outside[1]) < 4).length;
+ 
+  game.teleport(I.start.pt[0], I.start.pt[1], 0, I.start.y + 0.6); step(5);
+  H.onExplosion({ x: v.outside[0], y: v.y + 1, z: v.outside[1] }); step(30 * 4);   // a grenade at the vault door, heist not even started
+  const blown = H.doors.gold?.mode, stage = H.stage()?.type, from = H.stage()?.from;
+  const gt = v.gate; game.teleport(gt.pad[0], gt.pad[1], 0, gt.y + 0.6); game.police.clear(); step(4);
+  const lockedBlocks = !H.gates.gold.open && !!gt; const padPrompt = P.prompt?.text || '';
+  const lootBefore = H.targets().find((q) => !q.taken); game.teleport(lootBefore.pt[0], lootBefore.pt[1], 0, lootBefore.y + 0.6); step(3);
+  const lootPromptLocked = P.prompt?.text || '';
+  game.teleport(gt.pad[0], gt.pad[1], 0, gt.y + 0.6); step(3);
+  game.input.pressed.add('interact'); step(1);
+  const opened = !!document.getElementById('codeGame'), st = H._cg;
+  // play it: stop each rolling digit on the code's digit; one wrong stop first
+  let wrong = 0; if (st) { st.v = (st.code[0] + 1) % 10; document.querySelector('#codeGame .cg-lock').dispatchEvent(new Event('pointerdown')); wrong = st.miss; }
+  for (let i = 0; i < 4 && st; i++) { st.v = st.code[st.i]; document.querySelector('#codeGame .cg-lock')?.dispatchEvent(new Event('pointerdown')); }
+  await new Promise((r) => setTimeout(r, 900));
+  const closed = !document.getElementById('codeGame'), unlocked = H.gates.gold.locked === false; step(60);
+  const gateUp = H.gates.gold.open > 0.9 && gt.col.off !== undefined;
+  const L = [...game.interiors.loaded.values()].find((q) => q.b.bank?.id === 'gold'), colOff = L.spec.bank.vault.gate.col.off;
+  game.teleport(lootBefore.pt[0], lootBefore.pt[1], 0, lootBefore.y + 0.6); step(3);
+  const lootPrompt = P.prompt?.text || '';
+  H.fail('בדיקה'); game.police.clear(); game.econ.heists = {};
+  return { vg, blown, stage, from, padPrompt, lootPromptLocked, opened, wrong, closed, unlocked, gateUp, colOff, lootPrompt, state: game.state };
+});
+check('gold bank: two armed guards at the vault door', gold.vg >= 2, JSON.stringify(gold));
+check('bank vault: a grenade / sticky bomb at the vault door blows it open (any stage, even before the heist started)', gold.blown && gold.blown !== 'closed' && gold.stage === 'loot' && gold.from === 'vault', JSON.stringify(gold));
+check('bank vault: bar gate inside — locked, money unreachable until you crack the code (keypad prompt)', gold.padPrompt.includes('סורגים') && !gold.lootPromptLocked, JSON.stringify(gold));
+check('bank vault: code mini game — stop each digit on the code, mistakes counted, solving lifts the bars and the money is yours', gold.opened && gold.wrong === 1 && gold.closed && gold.unlocked && gold.gateUp && gold.colOff && gold.lootPrompt.length > 0 && gold.state === 'playing', JSON.stringify(gold));
 check('heist: result is saved and the robbed bank closes for a while', bank.rec && bank.saved === 1 && bank.status === 'cooldown');
 
 // ---------------------------------------------------------------- garage: drive onto the turntable, live mods, before/after, pay, save

@@ -97,7 +97,7 @@ export class Traffic {
   remove(v) {
     v.removed = true;
     this.scene.remove(v.object);
-    v.object.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+    v.object.traverse((o) => { if (o.geometry && !o.userData.sharedGeo) o.geometry.dispose(); });
     this.cars.splice(this.cars.indexOf(v), 1);
   }
 

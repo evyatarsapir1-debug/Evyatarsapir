@@ -60,6 +60,7 @@ export class Heists {
     this.game = game;
     this.active = null;               // { id, b, stage, loot, busy, t, timer }
     this.doors = {};                  // bankId -> { open, mode, t, wheel }
+    this.gates = {};                  // bankId -> { locked, open } - the bar gate inside the vault
     this.taken = {};                  // bankId -> Set of loot keys already in your bag
     this.fx = [];
     this._buildHud();
@@ -95,6 +96,11 @@ export class Heists {
       const h = (A.keyHolders || []).find((q) => q.state === 'surrender' && near([q.x, q.z], q.y, 1.8)) || A.keyHolder;
       if (h && h.state === 'surrender' && near([h.x, h.z], h.y, 1.8)) return { text: '🔑 קח ממנו את מפתח הכספת', action: () => { A.hasKey = true; this.game.peds.say(h, 'קח, קח! רק אל תירה', 2.2); this.game.toast('🔑 יש לך את מפתח הכספת!', 2.5); this.game.audio.mech?.('in'); } };
     }
+    const Gt = this.gates[A.id], gate = I?.vault?.gate;
+    if (S.type === 'loot' && S.from === 'vault' && gate && Gt?.locked) {
+      if (near(gate.pad, gate.y, 1.6)) return { text: '🔢 פרוץ את דלת הסורגים (קוד)', action: () => this._codeGame(A.id) };
+      return null;                     // the money is behind the bars until you crack the code
+    }
     for (const t of this.targets()) {
       if (t.taken) continue;
       // the vault: with the key there is an "open" button; without it you blow the door yourself (throw / stick a
@@ -124,6 +130,7 @@ export class Heists {
     const H = HEISTS[id];
     this.active = { id, b: this.bankBuilding(id), stage: 0, loot: 0, busy: null, targets: null, timer: H.timeLimit || null, alarm: false, holdup: loud };
     this.doors[id] = { open: 0, mode: 'closed', t: 0 };
+    this.gates[id] = { locked: true, open: 0 };
     this.taken[id] = new Set();
     this.game.toast(loud ? `🔫 שוד! ${H.stages[0].text}` : `🤫 שוד שקט — ${H.stages[0].text}`, 4);
     if (H.alarmAtStart || loud) this.alarm(loud ? 'holdup' : 'start');
@@ -153,6 +160,8 @@ export class Heists {
       else this.game.gps.clear();
       return;
     }
+    const gate = this.info(this.active.id)?.vault?.gate;
+    if (S.type === 'loot' && S.from === 'vault' && gate && this.gates[this.active.id]?.locked) { this.game.gps.set({ x: gate.pad[0], z: gate.pad[1], name: 'פרוץ את דלת הסורגים', radius: 2, mission: true }, this.game.playerPos()); return; }
     const t = this.targets().find((q) => !q.taken);
     if (t) this.game.gps.set({ x: t.pt[0], z: t.pt[1], name: S.text, radius: 2, mission: true }, this.game.playerPos());
   }
@@ -274,10 +283,81 @@ export class Heists {
       } else if (D.mode === 'blown') {
         D.open = Math.min(1.15, D.open + dt * 4.5);
       }
+      // the bar gate inside: down and locked, slides up into the ceiling once the code is cracked
+      if (I.vault.gate) {
+        const Gt = (this.gates[id] ||= { locked: true, open: 0 });
+        if (!this.active && !Gt.locked && this.status(id).state === 'ready') { Gt.locked = true; Gt.open = 0; }
+        if (!L.vaultGate) L.vaultGate = this._buildGate(I.vault.gate, L.group);
+        Gt.open = Gt.locked ? 0 : Math.min(1, Gt.open + dt * 0.8);
+        L.vaultGate.bars.position.y = Gt.open * (I.vault.gate.h - 0.15);
+        L.vaultGate.light.material.emissive.setHex(Gt.locked ? 0xff2020 : 0x20ff40);
+        I.vault.gate.col.off = Gt.open > 0.6;
+      }
       V.setAngle(D.open * 1.75);   // swings out, towards the corridor
       V.door.rotation.z = D.mode === 'blown' ? Math.min(0.25, D.open * 0.22) : 0;
       I.vault.col.off = D.open > 0.4;
     }
+  }
+  _buildGate(G, parent) {
+    // steel bars across the vault + a keypad on the wall beside them (red light: locked, green: open)
+    const g = new THREE.Group(), bars = new THREE.Group(); g.add(bars);
+    const steel = new THREE.MeshStandardMaterial({ color: 0x8d949b, metalness: 0.9, roughness: 0.3 });
+    const dx = G.p1[0] - G.p0[0], dz = G.p1[1] - G.p0[1], len = Math.hypot(dx, dz), ux = dx / len, uz = dz / len;
+    const n = Math.floor(len / 0.14);
+    const barGeo = new THREE.CylinderGeometry(0.018, 0.018, G.h, 8);
+    for (let i = 0; i <= n; i++) { const t = i / n, m = new THREE.Mesh(barGeo, steel); m.position.set(G.p0[0] + dx * t, G.y + G.h / 2, G.p0[1] + dz * t); m.castShadow = true; bars.add(m); }
+    for (const y of [0.08, G.h * 0.5, G.h - 0.08]) { const r = new THREE.Mesh(new THREE.BoxGeometry(len, 0.06, 0.06), steel); r.position.set((G.p0[0] + G.p1[0]) / 2, G.y + y, (G.p0[1] + G.p1[1]) / 2); r.rotation.y = Math.atan2(-uz, ux); bars.add(r); }
+    const pad = new THREE.Group(); pad.position.set(G.padWall[0], G.y + 1.25, G.padWall[1]); pad.rotation.y = Math.atan2(-uz, ux) + Math.PI / 2; g.add(pad);
+    pad.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.32, 0.05), new THREE.MeshStandardMaterial({ color: 0x1c1f24, metalness: 0.5, roughness: 0.4 })));
+    const keys = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.012), new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.5 })); keys.position.set(0, -0.04, 0.03); pad.add(keys);
+    const light = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff2020, emissiveIntensity: 2 })); light.position.set(0, 0.11, 0.03); pad.add(light);
+    parent.add(g);
+    return { bars, light };
+  }
+  // cracking the gate code: four digits roll on the display; stop each one when it shows the code's digit. Three wrong
+  // stops set off the alarm (you can keep trying)
+  _codeGame(id) {
+    const g = this.game; if (this._cg) return;
+    const code = Array.from({ length: 4 }, () => Math.floor(Math.random() * 10));
+    const el = document.createElement('div'); el.id = 'codeGame';
+    el.innerHTML = `<div class="cg-box"><div class="cg-head">🔢 פריצת קוד — דלת הסורגים</div><div class="cg-dials">${code.map((c, i) => `<div class="cg-col"><b class="cg-t">${c}</b><span class="cg-d" data-i="${i}">0</span></div>`).join('')}</div>
+      <div class="cg-msg">עצור כל ספרה מתגלגלת כשהיא שווה לספרה הירוקה שמעליה</div>
+      <div class="cg-btns"><button type="button" class="cg-lock">🔒 עצור</button><button type="button" class="cg-x">✕</button></div></div>`;
+    document.body.appendChild(el);
+    const dials = [...el.querySelectorAll('.cg-d')], msg = el.querySelector('.cg-msg');
+    const st = this._cg = { i: 0, v: 0, miss: 0, code, el, timer: null };
+    g.state = 'minigame'; document.body.classList.add('shopping');
+    const tick = () => { st.v = (st.v + 1) % 10; dials[st.i].textContent = st.v; };
+    const speed = () => 230 - st.i * 35;
+    const run = () => { clearInterval(st.timer); st.timer = setInterval(tick, speed()); dials.forEach((d, k) => d.classList.toggle('on', k === st.i)); };
+    const close = (ok) => {
+      clearInterval(st.timer); window.removeEventListener('keydown', st.onKey); el.remove(); this._cg = null; document.body.classList.remove('shopping');
+      g.state = 'playing'; g.input.endFrame(); g.clock.getDelta();
+      if (ok) this.unlockGate(id);
+    };
+    const lock = () => {
+      dials[st.i].textContent = st.v;
+      if (st.v === code[st.i]) {
+        dials[st.i].classList.add('ok'); g.audio.mech?.('in'); st.i++; st.v = 0;
+        if (st.i >= 4) { msg.textContent = '✔ הקוד נפרץ — הסורגים עולים!'; clearInterval(st.timer); setTimeout(() => close(true), 700); return; }
+        run();
+      } else {
+        st.miss++; g.audio.mech?.('dry'); dials[st.i].classList.add('bad'); setTimeout(() => dials[st.i]?.classList.remove('bad'), 300);
+        msg.textContent = st.miss >= 3 ? '⚠ יותר מדי טעויות — האזעקה הופעלה! תמשיך לנסות' : `טעות (${st.miss}/3)`;
+        if (st.miss >= 3) this.alarm('code');
+      }
+    };
+    el.querySelector('.cg-lock').addEventListener('pointerdown', (e) => { e.preventDefault(); lock(); });
+    el.querySelector('.cg-x').addEventListener('pointerdown', (e) => { e.preventDefault(); close(false); });
+    st.onKey = (e) => { if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE') { e.preventDefault(); lock(); } if (e.code === 'Escape') close(false); };
+    window.addEventListener('keydown', st.onKey);
+    run();
+  }
+  unlockGate(id) {
+    const Gt = (this.gates[id] ||= { locked: true, open: 0 }); if (!Gt.locked) return;
+    Gt.locked = false; this.game.audio.mech?.('rack'); this.game.audio.impact?.(4);
+    this.game.toast('🔓 דלת הסורגים נפתחת — הכסף שלך!', 2.5);
+    if (this.active?.id === id) { this.active.targets = null; this._gps(); }
   }
   _buildDoor(v, parent) {
     const steel = new THREE.MeshStandardMaterial({ color: 0xaab1b8, metalness: 0.9, roughness: 0.32 });
@@ -349,10 +429,24 @@ export class Heists {
     if (!A.noKeyTold && (A.staff || []).length && A.staff.every((p) => p.searched || p.state === 'dead') && !A.keyObj) { A.noKeyTold = true; g.toast('לאף אחד אין מפתח — תצטרך לפוצץ את דלת הכספת', 3); }
   }
   // a grenade (or any explosive) that goes off right at the vault door blows it open
+  // a grenade / sticky bomb that goes off at a vault door blows it open - whatever stage the robbery is at (it starts
+  // the robbery if you had not yet, and skips the earlier jobs)
   onExplosion(pt) {
-    const A = this.active, S = this.stage(); if (!A || S?.type !== 'vault' || A.wait || A.busy) return;
-    const v = this.info(A.id)?.vault; if (!v) return;
-    if (Math.hypot(pt.x - v.outside[0], pt.z - v.outside[1]) < 3.2 && Math.abs(pt.y - v.y - 1) < 2.5) { this._blast(); A.wait = { kind: 'blown', t: 1.2 }; }
+    const g = this.game;
+    for (const L of g.interiors.loaded.values()) {
+      const I = L.spec.bank, b = L.b, v = I?.vault; if (!v || !b.bank) continue;
+      const d = Math.min(Math.hypot(pt.x - v.outside[0], pt.z - v.outside[1]), Math.hypot(pt.x - v.center[0], pt.z - v.center[1]));
+      if (d > 4.2 || Math.abs(pt.y - v.y - 1) > 3) continue;
+      const id = b.bank.id;
+      if (!this.active) { if (this.status(id).state !== 'ready') return; this.start(id, true); }
+      const A = this.active; if (A.id !== id || A.busy) return;
+      if (this.doors[id] && this.doors[id].mode !== 'closed') return;     // already open
+      const vi = HEISTS[id].stages.findIndex((q) => q.type === 'vault');
+      if (vi >= 0 && A.stage < vi) { A.stage = vi; A.targets = null; A.keyHolder = undefined; }
+      if (this.stage()?.type !== 'vault') return;
+      A.wait = null; this._blast(); A.wait = { kind: 'blown', t: 1.2 };
+      return;
+    }
   }
   _openVault(mode) {
     const D = this.doors[this.active.id];
