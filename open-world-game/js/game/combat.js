@@ -154,7 +154,7 @@ export class Combat {
     const cam = this.game.camera, W = innerWidth, H = innerHeight;
     const live = new Set();
     for (const p of ctx.pedSys.peds) {
-      const show = (p.barT > 0 && p.hp < p.maxHp) || p.state === 'down' || (p.state === 'dead' && p.barT > 0) || p.sayT > 0;
+      const show = p.sayT > 0;   // only what they say: no health bars / status tags over people
       if (!show) continue;
       _v.set(p.x, p.y + 2.15, p.z).project(cam);
       if (_v.z > 1 || Math.abs(_v.x) > 1.1 || Math.abs(_v.y) > 1.1) continue;
@@ -170,11 +170,11 @@ export class Combat {
       el.style.transform = `translate(${(_v.x * 0.5 + 0.5) * W}px, ${(-_v.y * 0.5 + 0.5) * H}px) translate(-50%, -100%)`;
       const say = el.children[0], hp = el.children[1], st = el.children[2];
       say.textContent = p.sayT > 0 ? p.say : ''; say.style.display = p.sayT > 0 ? 'block' : 'none';
-      const showBar = (p.barT > 0 && p.hp < p.maxHp) || p.state === 'down' || (p.state === 'dead' && p.barT > 0);
+      const showBar = false;
       hp.style.display = showBar ? 'block' : 'none';
       hp.firstChild.style.width = `${(p.hp / p.maxHp) * 100}%`;
       hp.firstChild.style.background = p.hp > 4 ? '#6fd36f' : p.hp > 2 ? '#f0c040' : '#f07040';
-      st.textContent = p.state === 'dead' ? 'מת' : p.state === 'down' ? 'מחוץ לקרב' : p.state === 'fight' ? 'נלחם בחזרה' : '';
+      st.textContent = '';
       st.style.display = st.textContent ? 'block' : 'none';
     }
     for (const [p, el] of this.els) if (!live.has(p)) { el.remove(); this.els.delete(p); }

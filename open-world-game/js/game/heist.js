@@ -409,7 +409,7 @@ export class Heists {
     if (A.hasKey) return;
     // someone from the staff went down: search him
     for (const p of A.staff || []) {
-      if (p.state !== 'dead' || p.searched) continue;
+      if ((p.state !== 'dead' && !(p.wounded && p.state === 'knocked')) || p.searched) continue;
       p.searched = true;
       if ((A.keyHolders || [A.keyHolder]).includes(p) && !A.keyObj) {
         const m = new THREE.Group();

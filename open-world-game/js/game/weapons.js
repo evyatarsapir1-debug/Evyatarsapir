@@ -19,6 +19,17 @@ const _q = [];
 const _v = new THREE.Vector3(), _d = new THREE.Vector3();
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
+// Bullets are deadly where they would be for real: the head, the neck and the heart kill on the spot; a hit in the
+// shoulder, an arm, the belly or a leg drops the person to the ground wounded (out of the fight). No health bars.
+export function bodyZone(p, hy, lat) {
+  if (p.state === 'knocked' || p.state === 'dead') return 'vital';      // lying on the ground: any shot finishes it
+  const H = 1.8 * (p.modelApp?.height || 1), f = hy / H;
+  if (f >= 0.85) return 'head';
+  if (f >= 0.62 && lat < 0.11) return 'vital';                          // neck / heart
+  if (f >= 0.7) return 'shoulder';
+  if (f >= 0.5) return lat > 0.2 ? 'arm' : 'belly';
+  return 'leg';
+}
 export class WeaponSystem {
   constructor(scene, statics) {
     this.scene = scene; this.statics = statics;
@@ -236,7 +247,11 @@ export class WeaponSystem {
       if (t < 0 || t > best) continue;
       const cx = origin.x + dir.x * t - p.x, cz = origin.z + dir.z * t - p.z;
       const y = origin.y + dir.y * t;
-      if (cx * cx + cz * cz < 0.25 && y > p.y && y < p.y + 1.85) { best = t; hit = { ped: p }; }
+      if (cx * cx + cz * cz < 0.25 && y > p.y && y < p.y + 1.85) {
+        // where on the body: height up the body and how far off its centre line (sideways, in the person's own frame)
+        const yaw = p.state === 'knocked' || p.state === 'dead' ? (p.fallYaw ?? p.yaw ?? 0) : (p.yaw ?? 0);
+        best = t; hit = { ped: p, zone: bodyZone(p, y - p.y, Math.abs(cx * Math.cos(yaw) - cz * Math.sin(yaw))) };
+      }
     }
     // ground
     for (let s = 2; s < best; s += 2) {
@@ -383,12 +398,20 @@ export class WeaponSystem {
           // gentle aim assist (touch screens): snap to a person right next to the crosshair
           if (!W.thrown && !W.placed && !W.explosive && W.kind !== 'long') {   // no assist for the launcher or the scoped rifle
             let best = 0.12, tgt = null;
+            const C = camera.position;
             for (const ped of ctx.peds) {
               if (ped.state === 'dead') continue;
-              _v.set(ped.x - camera.position.x, ped.y + 1.25 - camera.position.y, ped.z - camera.position.z);
+              _v.set(ped.x - C.x, ped.y + 1.25 - C.y, ped.z - C.z);
               const L = _v.length(); if (L > W.range) continue;
               const ang = Math.acos(Math.min(1, _v.dot(_d) / L));
-              if (ang < best) { best = ang; tgt = _v.clone().normalize(); }
+              if (ang < best) {
+                best = ang;
+                // the point of the crosshair ray at the person's distance, pulled onto the body (not to its centre)
+                const t = _v.dot(_d), px = C.x + _d.x * t, py = C.y + _d.y * t, pz = C.z + _d.z * t;
+                let ox = px - ped.x, oz = pz - ped.z; const ol = Math.hypot(ox, oz), k = ol > 0.2 ? 0.2 / ol : 1; ox *= k; oz *= k;
+                const ty = Math.min(ped.y + 1.75, Math.max(ped.y + 0.15, py));
+                tgt = new THREE.Vector3(ped.x + ox - C.x, ty - C.y, ped.z + oz - C.z).normalize();
+              }
             }
             if (tgt) _d.copy(tgt);
           }
@@ -434,7 +457,7 @@ export class WeaponSystem {
               const v = r.vehicle;
               if (r.point.y > v.y + v.T.H * 0.55 && !v.isAir) { this._shatter(v, r.point); if (v.driverPed) ctx.hitDriver?.(v); }   // through the window
             }
-            if (r.ped) ctx.hitPed?.(r.ped, W.pedDmg || 4);
+            if (r.ped) ctx.hitPed?.(r.ped, W.pedDmg || 4, r.zone);
             for (const ped of ctx.peds) if (ped !== r.ped && Math.hypot(ped.x - player.x, ped.z - player.z) < 35) ctx.scare?.(ped, origin, false);
           }
         } else if (input.wasPressed('fire') && !this.reloading && !(this.drawT > 0)) {

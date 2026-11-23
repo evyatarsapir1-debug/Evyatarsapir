@@ -1307,6 +1307,37 @@ const guards = await g(() => {
   return { n: gd.filter((q) => !q.vaultGuard).length, nVault: gd.filter((q) => q.vaultGuard).length, look, hidden, shown, called };
 });
 check('bank: two armed guards at the entrance + two at the vault (full body, uniform, vest, rifle)', guards.n === 2 && guards.nVault === 2 && guards.look.every((l) => l.gun && l.model && l.rifle && l.vest), JSON.stringify(guards));
+const zones = await g(() => {
+  const game = __game, P = game.player, W = game.weapons;
+  const step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  game.police.clear(); game.econ.health = 100;
+  const I = game.heist.info('central'); game.teleport(I.start.pt[0], I.start.pt[1], Math.PI, I.start.y + 0.6); step(60);
+  const gd = game.peds.peds.filter((q) => q.doorGuard && !q.vaultGuard && q.state !== 'dead');
+  if (gd.length < 2) return { err: 'guards', n: gd.length };
+  const [a, b] = gd;
+  // real bullet rays from 6 m in front of the guard at his head, shoulder and knee
+  const ray = (q, up, side) => {
+    const fx = Math.sin(q.yaw), fz = Math.cos(q.yaw), rx = Math.cos(q.yaw), rz = -Math.sin(q.yaw);
+    const o = { x: q.x + fx * 6, y: q.y + 1.5, z: q.z + fz * 6 }, t = { x: q.x + rx * side, y: q.y + up, z: q.z + rz * side };
+    const L = Math.hypot(t.x - o.x, t.y - o.y, t.z - o.z), d = { x: (t.x - o.x) / L, y: (t.y - o.y) / L, z: (t.z - o.z) / L };
+    return W._ray(o, d, 20, [], [q], null);
+  };
+  const H = 1.8 * (a.modelApp?.height || 1);
+  const zHead = ray(a, H * 0.93, 0).zone, zShoulder = ray(a, H * 0.78, 0.19).zone, zHeart = ray(a, H * 0.72, 0.03).zone, zLeg = ray(a, H * 0.3, 0.1).zone;
+  // shoulder: falls wounded, stops fighting, stays down
+  const rw = game.peds.shot(b, P, 'shoulder'); step(30 * 5);
+  const wounded = { r: rw, st: b.state, w: b.wounded, gun: b.gunOut, chase: b.copChase };
+  const bars = [...document.querySelectorAll('.npctag .hp')].filter((e) => e.style.display !== 'none').length;
+  // head: dead in one shot
+  const rh = game.peds.shot(a, P, zHead); step(3);
+  const headDead = a.state === 'dead';
+  // a second shot on the wounded one finishes it
+  const r2 = game.peds.shot(b, P, ray(b, 0.3, 0).zone || 'leg'); step(3);
+  game.police.clear(); game.econ.health = 100;
+  return { zHead, zShoulder, zHeart, zLeg, rw, wounded, rh, headDead, r2, finished: b.state, bars };
+});
+check('guns: the head and the heart kill in one shot; shoulder / leg are wounds (real bullet rays on a bank guard)', zones.zHead === 'head' && zones.zHeart === 'vital' && zones.zShoulder === 'shoulder' && zones.zLeg === 'leg' && zones.headDead, JSON.stringify(zones));
+check('guns: a wounded guard falls, stops shooting and stays down; another shot finishes him; no health bars', zones.rw === 'wound' && zones.wounded.st === 'knocked' && !zones.wounded.gun && !zones.wounded.chase && zones.finished === 'dead' && zones.bars === 0, JSON.stringify(zones));
 check('gangs: a crew button on the screen while you are in a gang - tap it and your boys come', guards.hidden && guards.shown && guards.called >= 4, JSON.stringify({ hidden: guards.hidden, shown: guards.shown, called: guards.called }));
 
 // ---------------------------------------------------------------- skydiving: jump out of a helicopter high above the clouds

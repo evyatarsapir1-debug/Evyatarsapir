@@ -719,7 +719,7 @@ export class Pedestrians {
         // knocked to the ground (not injured): slides back, lies a moment, then gets up and continues
         speed = 0; pose = 'fall';
         p.x += (p.vx || 0) * dt; p.z += (p.vz || 0) * dt; p.vx *= Math.exp(-5 * dt); p.vz *= Math.exp(-5 * dt);
-        if (p.timer <= 0) { p.state = 'getup'; p.timer = 0.9; }
+        if (p.timer <= 0) { if (p.wounded) { p.state = 'dazed'; p.timer = 14; p.fleeFrom = [ctx.player.x, ctx.player.z]; this.say(p, 'אני צריך רופא...', 2); } else { p.state = 'getup'; p.timer = 0.9; } }
         break;
       }
       case 'getup':
@@ -760,8 +760,8 @@ export class Pedestrians {
       }
       case 'dazed': {
         const [sx, sz] = p.fleeFrom, dx = p.x - sx, dz = p.z - sz, L = Math.hypot(dx, dz) || 1;
-        goal = [p.x + dx / L * 10, p.z + dz / L * 10]; speed = 1.0; pose = 'walk';
-        if (p.timer <= 0) { p.state = this._calm(p); p.timer = 6; p.hp = p.maxHp; p.defeated = false; }
+        goal = [p.x + dx / L * 10, p.z + dz / L * 10]; speed = p.wounded ? 0.6 : 1.0; pose = 'walk';
+        if (p.timer <= 0) { p.state = this._calm(p); p.timer = 6; p.hp = p.maxHp; p.defeated = false; p.wounded = false; }
         break;
       }
       case 'flee': {
@@ -905,6 +905,22 @@ export class Pedestrians {
   }
 
   // a person got hit in a fist fight
+  // a bullet: head / neck / heart -> dead on the spot; anywhere else -> falls wounded (stays down, then limps away;
+  // never back in the fight). A second bullet on someone lying there finishes it.
+  shot(p, src, zone) {
+    if (p.state === 'dead') return false;
+    const lethal = zone === 'head' || zone === 'vital' || p.wounded;
+    if (['down', 'dazed', 'getup'].includes(p.state)) p.state = 'knocked';   // on the ground / getting up: still hittable
+    const r = this.hit(p, src, lethal ? 999 : 0.01, true);
+    if (!r || r === 'dead' || lethal) return r;
+    const dx = p.x - src.x, dz = p.z - src.z, L = Math.hypot(dx, dz) || 1;
+    this._release(p); p.seat = null;
+    p.state = 'knocked'; p.wounded = zone; p.timer = 55 + this.rng.float(0, 15);
+    p.copChase = false; p.gunOut = false; p.aggroT = 0; p.atk = null; p.angryT = 0;
+    p.vx = dx / L * 1.6; p.vz = dz / L * 1.6; p.fallYaw = Math.atan2(-dx, -dz);
+    this.say(p, this.rng.pick(zone === 'leg' ? ['אאאח! הרגל!', 'אני לא יכול לעמוד!'] : zone === 'shoulder' || zone === 'arm' ? ['אאאח! היד!', 'נפגעתי בכתף!'] : ['אאאח... נפגעתי', 'עזרה...']), 2.4);
+    return 'wound';
+  }
   hit(p, src, dmg, kick) {
     if (p.state === 'down' || p.state === 'dazed' || p.state === 'dead' || p.state === 'driving' || p.state === 'pulled' || p.state === 'thrown') return false;
     if (p.state === 'getup') return false;                                  // can't hit someone while they get up
