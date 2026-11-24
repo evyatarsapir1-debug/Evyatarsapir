@@ -1345,9 +1345,10 @@ const realPpl = await g(async () => {
   const kinds = new Set(live.map(([, I]) => I.name)).size;
   // far away: back to the light figures
   game.teleport(900, 200, 0, 0.3); step(10); const after = R.count;
-  return { count: live.length, hidden, animated, onSpot, kinds, after };
+  const cap = { low: 5, medium: 10, high: 16 }[game.settings?.quality] ?? 10;   // how many at once for this quality
+  return { count: live.length, cap, hidden, animated, onSpot, kinds, after };
 });
-check('real people: nearby pedestrians are detailed human models (several different people), animated, in place of the simple figures; far away back to light figures', realPpl.count >= 6 && realPpl.hidden && realPpl.animated >= 6 && realPpl.onSpot && realPpl.kinds >= 3 && realPpl.after <= realPpl.count, JSON.stringify(realPpl));
+check('real people: nearby pedestrians are detailed human models (several different people), animated, in place of the simple figures; far away back to light figures', realPpl.count >= Math.min(6, realPpl.cap) && realPpl.hidden && realPpl.animated >= Math.min(6, realPpl.cap) && realPpl.onSpot && realPpl.kinds >= 3 && realPpl.after <= realPpl.count, JSON.stringify(realPpl));
 const hudCol = await g(() => {
   const r = (id) => { const e = document.getElementById(id); return e ? parseFloat(getComputedStyle(e).top) : null; };   // CSS position (the crew button is hidden outside a gang)
   const before = __game.state; document.querySelector('[data-btn="bag"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));

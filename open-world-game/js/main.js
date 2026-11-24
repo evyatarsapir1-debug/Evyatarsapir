@@ -177,10 +177,11 @@ class Game {
     const t0 = performance.now();
     return new Promise((resolve) => {
       let last = 0, told = false;
-      const warm = Object.values(VEHICLE_TYPES);   // build every car model once behind the pictures (no stutter later)
+      const warm = Object.values(VEHICLE_TYPES);   // build every car model once behind the pictures (no stutter later) -
       const tick = setInterval(() => {
         const t = (performance.now() - t0) / 1000;
-        if (warm.length) { try { prewarmVehicleModel(warm.shift()); } catch (e) { console.warn(e); } }
+        // - during the hold at 90%, so the work never delays the percentages
+        if (t >= 27.3 && warm.length) { try { prewarmVehicleModel(warm.shift()); } catch (e) { console.warn(e); } }
         const pct = Math.min(90, Math.floor(t / 3) * 10);
         if (pct !== last) { last = pct; show(pct); }
         if (t >= 30 && !told) { told = true; $('loadText').textContent = 'נכנס ללוס אנטוס...'; }   // 90% at 27 s, held 3 s
