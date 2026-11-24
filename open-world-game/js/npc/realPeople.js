@@ -67,7 +67,7 @@ function pickMix(q) { const [m, w] = MIX[q] || MIX.medium, sh = (a) => a.map((x)
 const GANG = ['Male_Adult_01', 'Male_Adult_02', 'Male_Adult_03'];   // + their colour: bandana and gold chain
 const POLICE_M = ['Police_Male_01', 'Police_Male_02', 'Police_Male_03', 'Police_Male_04'], POLICE_F = ['Police_Female_01'];
 const SECURITY = ['Security_Male_01'];
-const SOLDIER = ['Military_Male_01', 'Military_Male_02'];
+const SOLDIER = ['Military_Male_01'];   // (Military_Male_02's textures use another naming the converter doesn't pick up yet)
 // pose of the pedestrian AI -> motion clip (m_ / f_ versions picked by the model)
 const CLIP = { walk: 'walk', phoneWalk: 'walk', run: 'run', idle: 'idle', guard: 'idle', talk: 'talk', phone: 'phone', sit: 'sit', surprised: 'nervous', hide: 'crouch' };
 const NAMES = {
