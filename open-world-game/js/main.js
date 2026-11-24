@@ -1176,7 +1176,10 @@ class Game {
       this._mmT = 0;
       this.minimap.draw(v ? v.x : p.x, v ? v.z : p.z, v ? v.heading : p.facing, this.rig.yaw, this.gps.dest ? [{ x: this.gps.dest.x, z: this.gps.dest.z, color: '#b35cff' }] : [], this.gps.route?.points, this.landmarks());
       const ob = $('objective'), st = this.missions.objective();
-      ob.textContent = st ? st.text : ''; ob.classList.toggle('show', !!st);
+      // a new objective shows for 3 seconds, then the banner goes away (the GPS keeps guiding you)
+      const txt = st ? st.text : '';
+      if (txt !== this._objText) { this._objText = txt; this._objUntil = performance.now() + 3000; ob.textContent = txt; }
+      ob.classList.toggle('show', !!txt && performance.now() < this._objUntil);
       const gh = $('gpsHud');
       // the distance + arrow strip at the top only when flying / sailing to another country (France)
       const abroad = this.gps.dest && WG.regionInfo(Math.floor(this.gps.dest.x / 1000), Math.floor(this.gps.dest.z / 1000)).type === 'france';

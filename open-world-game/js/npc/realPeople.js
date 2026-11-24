@@ -49,12 +49,14 @@ const SKIP_STATES = new Set(['driving', 'inside', 'pulled', 'thrown', 'swimmer',
 // how many real people at once / out to what distance, by graphics quality
 const BUDGET = { low: [5, 26], medium: [10, 38], high: [16, 50] };
 
-// Hosted pages often forbid fetching data: URIs (content-security policy), and our glTF JSON keeps its geometry in one.
-// So: fetch the JSON normally, decode that buffer here, and hand the loader one binary glTF (GLB) built in memory.
+// Hosted pages can forbid fetch() (content-security policy) but always allow the page's own module scripts and images.
+// So the glTF data is a module (imported, not fetched), its geometry buffer is decoded here into one binary glTF (GLB)
+// built in memory, and the textures are loaded as plain images.
 async function loadGltf(loader, url) {
-  const J = await (await fetch(url)).json();
+  const mod = await import(new URL(url, document.baseURI).href);
+  const J = { ...mod.default, buffers: (mod.default.buffers || []).map((b) => ({ ...b })) };
   let bin = null;
-  const buf = J.buffers?.[0];
+  const buf = J.buffers[0];
   if (buf?.uri?.startsWith('data:')) {
     const s = atob(buf.uri.slice(buf.uri.indexOf(',') + 1)); bin = new Uint8Array(s.length);
     for (let i = 0; i < s.length; i++) bin[i] = s.charCodeAt(i);
@@ -74,15 +76,19 @@ export class RealPeople {
   constructor(game) {
     this.game = game;
     this.loader = new GLTFLoader();
+    // textures as <img> (TextureLoader), not fetch() + createImageBitmap
+    this.loader.register((parser) => { parser.textureLoader = new THREE.TextureLoader(parser.options.manager); parser.textureLoader.setCrossOrigin('anonymous'); return { name: 'imgTextures' }; });
     this.tpl = new Map();          // avatar name -> { scene, female }
     this.loading = new Set();
     this.failed = new Set();
     this.free = new Map();         // avatar name -> [spare instances]
     this.live = new Map();         // ped -> instance
     this.clips = null;
-    loadGltf(this.loader, BASE + 'anims.json').then((g) => { this.clips = Object.fromEntries(g.animations.map((a) => [a.name, a])); }, (e) => { console.warn('real people: animations', e); this.clips = null; this.off = true; });
+    loadGltf(this.loader, BASE + 'anims.js').then((g) => { this.clips = Object.fromEntries(g.animations.map((a) => [a.name, a])); }, (e) => { console.warn('real people: animations', e); this.clips = null; this.off = true; this._why(e); });
   }
   get count() { return this.live.size; }
+  // if the real models can't load, say why once (so it can be reported) instead of silently showing the old figures
+  _why(e) { if (this._told) return; this._told = true; setTimeout(() => this.game.toast?.(`⚠ הדמויות האמיתיות לא נטענו: ${String(e?.message || e).slice(0, 90)}`, 6), 3000); }
 
   _avatar(p) {
     if (p.rpAvatar) return p.rpAvatar;
@@ -96,11 +102,11 @@ export class RealPeople {
   _load(name) {
     if (this.tpl.has(name) || this.loading.has(name) || this.failed.has(name) || this.loading.size >= 2) return;
     this.loading.add(name);
-    loadGltf(this.loader, `${BASE}av/${name}.json`).then((g) => {
+    loadGltf(this.loader, `${BASE}av/${name}.js`).then((g) => {
       this.loading.delete(name);
       g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; } });
       this.tpl.set(name, { scene: g.scene, female: name.includes('Female') });
-    }, (e) => { console.warn('real people:', name, e); this.loading.delete(name); this.failed.add(name); });
+    }, (e) => { console.warn('real people:', name, e); this.loading.delete(name); this.failed.add(name); this._why(e); });
   }
   _make(name) {
     const spare = this.free.get(name)?.pop(); if (spare) { spare.root.visible = true; this.game.scene.add(spare.root); return spare; }
