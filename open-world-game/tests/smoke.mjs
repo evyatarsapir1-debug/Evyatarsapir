@@ -959,6 +959,8 @@ const bank = await g(() => {
   const idle = !H.active;                                   // just walking in starts nothing
   go(I.drawers[0].pt, I.drawers[0].y); step(2);            // slip behind the counter: the robbery begins
   const started = !!H.active, alarm = H.active?.alarm, stars = game.police.level;
+  // the armed guards fight back now: take them down first, as a player would (head shots)
+  for (const q of game.peds.peds) if (q.doorGuard && q.state !== 'dead') game.peds.shot(q, P, 'head');
   step(10); let peopleReacted = game.peds.peds.filter((q) => q.heistReacted).length;
   let guard = 0;
   while (H.active && guard++ < 30) {
@@ -976,7 +978,7 @@ const bank = await g(() => {
   const lootGone = L?.lootObj ? Object.values(L.lootObj).filter((o) => !o.grp.visible).length : 0, lootAll = L?.lootObj ? Object.keys(L.lootObj).length : 0;
   const paid = game.econ.money - m0, rec = (game.econ.heists || {}).local, status = H.status('local').state;
   game.save(); const saved = JSON.parse(localStorage.getItem('azura_city_save_v1')).econ.heists?.local?.count;
-  return { banks, sizes, prompt, idle, lootGone, lootAll, started, alarm, stars, done: !H.active, paid, rec: !!rec, status, saved, peopleReacted, reward: document.getElementById('heistReward').classList.contains('show') };
+  return { banks, sizes, prompt, idle, lootGone, lootAll, started, alarm, stars, done: !H.active, paid, rec: !!rec, status, saved, peopleReacted, reward: document.getElementById('heistReward').classList.contains('show'), guardsDown: game.peds.peds.filter((q) => q.doorGuard).every((q) => q.state === 'dead') };
 });
 check('banks: four different banks you can enter (vault, security room, tellers)', bank.banks.every(Boolean) && bank.sizes === 4, JSON.stringify(bank.banks));
 check('heist: no "start" button — walking in is fine, robbing (behind the counter / weapon out) starts it', !bank.prompt.includes('התחל שוד') && bank.idle && bank.started, bank.prompt);
@@ -1332,7 +1334,7 @@ const guards = await g(() => {
 });
 check('bank: two armed guards at the entrance + two at the vault (full body, uniform, vest, rifle)', guards.n === 2 && guards.nVault === 2 && guards.look.every((l) => l.gun && l.model && l.rifle && l.vest), JSON.stringify(guards));
 const hudCol = await g(() => {
-  const r = (id) => document.getElementById(id)?.getBoundingClientRect().top;
+  const r = (id) => { const e = document.getElementById(id); return e ? parseFloat(getComputedStyle(e).top) : null; };   // CSS position (the crew button is hidden outside a gang)
   const before = __game.state; document.querySelector('[data-btn="bag"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
   for (let i = 0; i < 2; i++) { __game.time += 1 / 30; __game._playFrame(1 / 30); }
   const opened = __game.state === 'bag', rows = [...document.querySelectorAll('#bagPanel .srow b')].map((e) => e.textContent).join(' | ');
