@@ -6,6 +6,7 @@ const _navDir = new THREE.Vector3();
 import { heightAt, surfaces } from './world/terrain.js';
 import { Pedestrians } from './npc/pedestrians.js';
 import { RealPeople } from './npc/realPeople.js';
+import { Jobs } from './game/jobs.js';
 import { InteriorManager } from './world/interiorManager.js';
 import { Economy, fmt, FOODS, VESTS } from './game/economy.js';
 import { PostFX } from './render/postfx.js';
@@ -115,6 +116,7 @@ class Game {
     this.chars = new Characters(this);
     this.gangs = new Gangs(this);
     this.realPeople = new RealPeople(this);   // detailed human models for the people near the camera
+    this.jobs = new Jobs(this);               // phone app: jobs and shifts
     this.robbery = new Robbery(this);
     this.voices = new Voices(this); this.peds.voice = this.voices;
     this.vehicleTypes = VEHICLE_TYPES;
@@ -942,7 +944,7 @@ class Game {
     if (hp && input.wasPressed('interact')) { input.pressed.delete('interact'); hp.action(); }
     // garage: drive slowly onto the turntable inside the workshop
     const tp = p.state === 'driving' ? this.tuning.promptFor(p.vehicle) : null;
-    const gp = !hp ? (this.robbery.promptFor(p) || this.gangs.promptFor(p)) : null;   // kick open a counter door / join or leave a gang
+    const gp = !hp ? (this.robbery.promptFor(p) || this.jobs.promptFor(p) || this.gangs.promptFor(p)) : null;   // kick open a counter door / join or leave a gang
     if (gp && input.wasPressed('interact')) { input.pressed.delete('interact'); gp.action(); }
     if (tp && input.wasPressed('interact')) { input.pressed.delete('interact'); tp.action(); if (this.state === 'tuning') { input.endFrame(); return; } }
     p.update(dt, input, this.rig.yaw, world);
@@ -1059,6 +1061,7 @@ class Game {
     this.gangs.update(dt);
     this._regen(dt);
     this.realPeople.update(dt);
+    this.jobs.update(dt);
     this.robbery.update(dt);
     this.crashes.update(dt, { vehicles: all, player: p, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.military.update(dt, { player: p, input, vehicles: all, onCrime: (k, x, z) => this.police.crime(k, x, z), camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });

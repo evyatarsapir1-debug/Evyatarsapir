@@ -351,7 +351,7 @@ await g(() => { __game.teleport(520, 590, Math.PI); });
 await page.click('#phoneBtn');
 await sim(1);
 const ph = await g(() => ({ open: __game.phone.open, apps: document.querySelectorAll('#phone .papp').length }));
-check('phone opens from its button', ph.open && ph.apps === 10, `${ph.apps} apps`);
+check('phone opens from its button', ph.open && ph.apps === 11, `${ph.apps} apps`);
 await page.click('#phone .papp[data-go="map"]');
 await page.click('#phone .prow[data-place="0"]');
 const gps = await g(() => ({ dest: __game.gps.dest?.name, pts: __game.gps.route?.points.length, len: Math.round(__game.gps.route?.length || 0) }));
@@ -1376,10 +1376,10 @@ const realMe = await g(async () => {
   for (let k = 0; k < 80 && !(R.me && R.me.root.visible); k++) { step(3); await new Promise((r) => setTimeout(r, 300)); }
   const stand = { me: R.me?.name, real: !!R.me?.root.visible, oldHidden: !P.object.visible };
   step(40, () => { game.input.joyY = 1; }); const walk = R.me?.cur; game.input.joyY = 0; step(10);
-  game.econ.weapons.p7 = { ammo: 40 }; game.equip('p7'); step(3); const armedOld = P.object.visible && !R.me.root.visible; game.equip(null); step(3);
-  return { stand, walk, armedOld };
+  game.econ.weapons.p7 = { ammo: 40 }; game.equip('p7'); step(3); const armed = { real: R.me.root.visible, gun: !!R.me.gun?.visible, kind: R.me.gunKind, old: P.object.visible }; game.equip(null); step(3);
+  return { stand, walk, armed };
 });
-check('you are a real person too: walking / standing as the character\'s real model (old figure hidden); with a gun in hand the full figure is used', realMe.stand.me === 'Male_Adult_06' && realMe.stand.real && realMe.stand.oldHidden && realMe.walk === 'walk' && realMe.armedOld, JSON.stringify(realMe));
+check('you are a real person too: walking / standing as the character\'s real model (old figure hidden), and with a gun in your hand', realMe.stand.me === 'Male_Adult_06' && realMe.stand.real && realMe.stand.oldHidden && realMe.walk === 'walk' && realMe.armed.real && realMe.armed.gun && realMe.armed.kind === 'pistol' && !realMe.armed.old, JSON.stringify(realMe));
 const life = await g(async () => {
   const WG = await import('./js/world/worldGen.js'), IN = await import('./js/world/interiors.js'), L = await import('./js/world/layout.js');
   const game = __game, P = game.player, R = game.realPeople, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
@@ -1406,6 +1406,38 @@ check('hospital: reception, emergency room, wards with beds on every floor, elev
 check('shot: six hits and you are still standing, the seventh puts you down', life.down6 > 0 && life.after7 === 1, JSON.stringify({ down6: life.down6, after7: life.after7 }));
 check('health comes back by itself a few seconds after the last hit', life.h3 <= 50 && life.h10 > 55, JSON.stringify({ h3: life.h3, h10: life.h10 }));
 check('eating: the food is in your hand, goes up to the mouth, gets smaller with each bite and is gone at the end', life.held && life.reach < 0.2 && life.smaller && life.gone, JSON.stringify({ reach: life.reach, held: life.held, smaller: life.smaller, gone: life.gone }));
+const jobs = await g(async () => {
+  const game = __game, P = game.player, J = game.jobs, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); game.econ.health = 100; } };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.police.clear(); game.equip(null);
+  const press = () => { const pr = J.promptFor(P); if (pr) pr.action(); return pr?.text || ''; };
+  const at = (x, z) => { game.teleport(x, z, 0); step(4); };
+  const out = {}; const m0 = game.econ.money;
+  // ice cream: pick up at the shop, deliver to the customers
+  J.start('icecream'); at(J.cur.b.door.x, J.cur.b.door.z); step(2); at(J.cur.pick[0], J.cur.pick[1]); out.pick = press();
+  let n = 0; while (J.cur && J.cur.id === 'icecream' && n++ < 5) { const q = J.cur.ped; if (!q) break; at(q.x + 1, q.z); out.give = press(); step(2); }
+  step(60); out.ice = (game.econ.jobs?.icecream?.earned) || 0;
+  // police: the suspect runs, catch him, arrest
+  J.start('police'); step(2); out.uniform = J.job?.uniform;
+  for (let k = 0; k < 40 && !(game.realPeople.me && game.realPeople.me.name === 'Police_Male_01'); k++) { step(3); await new Promise((r) => setTimeout(r, 250)); }
+  out.inUniform = game.realPeople.me?.name;
+  const sus = J.cur.ped; at(sus.x + 10, sus.z); step(10); out.fled = sus.state;
+  at(sus.x + 1, sus.z); out.arrest = press(); J.stop(true);
+  // paramedic: treat the injured person (lying), he gets up
+  J.start('rescue'); step(2); const inj = J.cur.ped; out.lying = inj.state; at(inj.x + 1, inj.z); out.treat = press(); step(30 * 3.5); out.healed = inj.state; J.stop(true);
+  // clerk: customer walks in to the counter, serve
+  J.start('clothes'); at(J.cur.b.door.x, J.cur.b.door.z); step(2); at(J.cur.keeper[0], J.cur.keeper[1]);
+  for (let k = 0; k < 30 * 25 && !(J.cur?.ped?.atCounter); k++) step(1);
+  out.atCounter = !!J.cur?.ped?.atCounter; out.serve = press(); step(30 * 2.5); out.clerkDone = J.cur?.done; J.stop(true);
+  // soldier: patrol the checkpoints
+  J.start('army'); at(J.cur.b.door.x, J.cur.b.door.z); step(2); let pts = 0;
+  while (J.cur && J.cur.step === 'patrol' && pts < 5) { const pt = J.cur.points[J.cur.pi]; at(pt[0], pt[1]); step(3); pts++; }
+  step(60); out.army = (game.econ.jobs?.army?.earned) || 0;
+  out.money = game.econ.money - m0;
+  game.police.clear();
+  return out;
+});
+check('jobs (phone): ice-cream delivery, clothes-shop clerk, police (uniform, catch and arrest), paramedic (treat the injured), soldier patrol - each pays', jobs.pick.includes('גלידות') && jobs.give.includes('גלידה') && jobs.ice >= 360 && jobs.inUniform === 'Police_Male_01' && jobs.fled === 'flee' && jobs.arrest.includes('עצור') && jobs.lying === 'knocked' && jobs.treat.includes('טפל') && jobs.healed !== 'knocked' && jobs.atCounter && jobs.serve.includes('שרת') && jobs.clerkDone === 1 && jobs.army >= 800 && jobs.money > 1500, JSON.stringify(jobs));
 const hudCol = await g(() => {
   const r = (id) => { const e = document.getElementById(id); return e ? parseFloat(getComputedStyle(e).top) : null; };   // CSS position (the crew button is hidden outside a gang)
   const before = __game.state; document.querySelector('[data-btn="bag"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));

@@ -7,8 +7,10 @@ import { STATIONS, ringtone } from '../core/audio.js';
 import { fmt } from '../game/economy.js';
 import { drawLandmarks } from '../ui/minimap.js';
 import { GANGS } from '../game/gangs.js';
+import { JOBS } from '../game/jobs.js';
 
 const ICONS = {
+  jobs: '<rect x="3" y="7" width="18" height="13" rx="2" fill="#fff"/><path d="M9 7V5h6v2" fill="none" stroke="#fff" stroke-width="2"/><path d="M3 12h18" stroke="#9a6b2f" stroke-width="2"/>',
   gang: '<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z" fill="#fff"/><path d="M8 12l3 3 5-6" fill="none" stroke="#1d5c2a" stroke-width="2.2"/>',
   map: '<path d="M4 6l5-2 6 2 5-2v14l-5 2-6-2-5 2z" fill="none" stroke="#fff" stroke-width="2"/><path d="M9 4v14M15 6v14" stroke="#fff" stroke-width="2"/>',
   contacts: '<circle cx="12" cy="9" r="4" fill="#fff"/><path d="M4 21c1-5 15-5 16 0" fill="#fff"/>',
@@ -22,7 +24,7 @@ const ICONS = {
 };
 const APPS = [
   ['map', 'מפה', '#2fa36b'], ['contacts', 'אנשי קשר', '#3f8cff'], ['messages', 'הודעות', '#34c759'], ['camera', 'מצלמה', '#5b6170'],
-  ['music', 'מוסיקה', '#ff375f'], ['missions', 'משימות', '#ff9f0a'], ['cars', 'הרכבים שלי', '#8e5cf7'], ['gang', 'כנופיות', '#1f7a35'], ['flight', 'אימון טיסה', '#0a84ff'], ['settings', 'הגדרות', '#6e7480'],
+  ['music', 'מוסיקה', '#ff375f'], ['missions', 'משימות', '#ff9f0a'], ['cars', 'הרכבים שלי', '#8e5cf7'], ['gang', 'כנופיות', '#1f7a35'], ['jobs', 'עבודות', '#b7791f'], ['flight', 'אימון טיסה', '#0a84ff'], ['settings', 'הגדרות', '#6e7480'],
 ];
 const WALLS = ['linear-gradient(160deg,#1d2b64,#f8cdda)', 'linear-gradient(160deg,#0f2027,#2c5364)', 'linear-gradient(160deg,#ff7e5f,#2b1055)', 'linear-gradient(160deg,#134e5e,#71b280)'];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -221,10 +223,24 @@ export class Phone {
         s.querySelectorAll('[data-join]').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); Gs.join(b.dataset.join); this.show('gang'); }; });
         s.querySelectorAll('[data-g]').forEach((b) => { b.onclick = (e) => {
           e.stopPropagation(); const k = b.dataset.g;
-          const msg = k === 'call' ? Gs.call() : k === 'attack' ? Gs.attack() : k === 'hold' ? Gs.hold() : k === 'dismiss' ? Gs.dismiss() : (Gs.leave(false), null);
+          const msg = k === 'call' ? Gs.call() : k === 'attack' ? Gs.attack() : k === 'hold' ? Gs.hold() : k === 'dismiss' ? (Gs.followers.length ? Gs.sendHome() : 'אין חבר׳ה איתך') : (Gs.leave(false), null);
           if (msg) g.toast(msg, 3);
           this.show('gang');
         }; });
+        break;
+      }
+      case 'jobs': {
+        // jobs: pick one and work a shift; police / army / paramedic put you in uniform
+        const Jb = g.jobs, cur = Jb.job, C = Jb.cur, stats = g.econ.jobs || {};
+        s.innerHTML = head('עבודות') + `<div class="pgang">${cur ? `<div class="gcard mine" style="--gc:#b7791f"><div class="gname">${cur.icon} ${cur.name}</div>
+            <small>במשמרת · ${C.done}/${cur.n} ${cur.per}ים · הרווחת ${fmt(C.earned)}</small><small>${cur.desc}</small></div>
+            <button type="button" class="gx" data-job="stop">✖ סיים משמרת</button>` : '<div class="gnote">בחר עבודה — משמרת קצרה, כסף על כל משימה ובונוס בסוף.</div>'}
+          ${JOBS.map((j) => `<div class="gcard" style="--gc:#b7791f"><div class="gname">${j.icon} ${j.name}</div><small>${j.desc}</small>
+            <small>${fmt(j.pay)} ל${j.per} · ${j.n} במשמרת${j.uniform ? ' · עם מדים' : ''}${stats[j.id] ? ` · ${stats[j.id].shifts} משמרות, ${fmt(stats[j.id].earned)}` : ''}</small>
+            ${cur?.id === j.id ? '' : `<button type="button" class="gjoin" data-job="${j.id}">התחל משמרת</button>`}</div>`).join('')}</div>`;
+        s.querySelectorAll('[data-job]').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); const k = b.dataset.job;
+          if (k === 'stop') Jb.stop(); else { const m = Jb.start(k); if (m) g.toast(m, 3); else this.toggle(false); }
+          if (this.open) this.show('jobs'); }; });
         break;
       }
       case 'settings': {

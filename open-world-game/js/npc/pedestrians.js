@@ -559,7 +559,7 @@ export class Pedestrians {
         // a gang member walking / running behind the player (target spot set by the gang system every frame)
         const t = p.followTo; if (!t) { p.state = 'guard'; break; }
         const d = Math.hypot(t.x - p.x, t.z - p.z);
-        if (d > 1.0) { goal = [t.x, t.z]; speed = d > 7 ? 5.0 : d > 2.5 ? 2.8 : 1.4; if (!p.follower && p.gangId) speed = Math.min(speed, p.leaveT ? 2.0 : 1.35); pose = speed > 3 ? 'run' : 'walk'; }   // a gang member strolling on his corner / walking off just walks
+        if (d > 1.0) { goal = [t.x, t.z]; speed = d > 7 ? 5.0 : d > 2.5 ? 2.8 : 1.4; if (!p.follower && (p.gangId || p.walkOnly)) speed = Math.min(speed, p.leaveT ? 2.0 : 1.35); pose = speed > 3 ? 'run' : 'walk'; }   // a gang member strolling on his corner / walking off just walks
         else { speed = 0; pose = 'idle'; if (t.yaw !== undefined) p.yaw = dampAngle(p.yaw, t.yaw, 5, dt); }
         break;
       }
