@@ -989,6 +989,7 @@ const vkey = await g(() => {
   const game = __game, P = game.player, H = game.heist, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); game.econ.health = 100; } };
   game.police.clear(); game.econ.health = 100; game.econ.heists = {};
   const I = H.info('central'); game.teleport(I.start.pt[0], I.start.pt[1], Math.PI, I.start.y + 0.6); step(60);
+  window.__failWhy = null; const _f = H.fail.bind(H); H.fail = (r) => { window.__failWhy = r + ' (hp ' + Math.round(game.econ.health) + ', stars ' + game.police.level + ')'; return _f(r); };
   H.start('central', false); const A = H.active;
   A.stage = 1; A.targets = null; A.keyHolder = undefined;   // central: 0 security, 1 vault
   step(2);
@@ -1000,7 +1001,9 @@ const vkey = await g(() => {
   game.teleport(A.keyObj.position.x, A.keyObj.position.z, 0, A.keyObj.position.y + 0.5); step(3);
   const takePrompt = P.prompt?.text || ''; game.input.pressed.add('interact'); step(2);
   const hasKey = A.hasKey;
-  const t = H.targets()[0]; game.teleport(t.pt[0], t.pt[1], 0, t.y + 0.6); step(3);
+  const t = H.targets()[0]; H.fail = _f;
+  if (!t) return { err: 'the robbery ended: ' + window.__failWhy, dropped, takePrompt, hasKey };
+  game.teleport(t.pt[0], t.pt[1], 0, t.y + 0.6); step(3);
   const prompt = P.prompt?.text || '';
   H.fail('בדיקה'); game.police.clear(); game.econ.heists = {};
   return { dropped, takePrompt, hasKey, prompt };
