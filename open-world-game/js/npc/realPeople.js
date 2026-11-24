@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 
-const BASE = './assets/people/';
+const BASE = './assets/people/web/';   // glTF JSON + texture images (the host serves neither .glb nor .bin)
 // (the sports models are in swimwear: kept for the beach, not used on the streets)
 const MEN = ['Male_Adult_01', 'Male_Adult_02', 'Male_Adult_03', 'Male_Adult_04', 'Male_Adult_05', 'Male_Adult_06', 'Business_Male_01'];
 const WOMEN = ['Female_Adult_01', 'Female_Adult_02', 'Female_Adult_03', 'Female_Adult_04', 'Female_Adult_05', 'Female_Adult_06', 'Business_Female_01'];
@@ -34,7 +34,7 @@ export class RealPeople {
     this.free = new Map();         // avatar name -> [spare instances]
     this.live = new Map();         // ped -> instance
     this.clips = null;
-    this.loader.load(BASE + 'anims.glb', (g) => { this.clips = Object.fromEntries(g.animations.map((a) => [a.name, a])); }, undefined, () => { this.clips = null; this.off = true; });
+    this.loader.load(BASE + 'anims.json', (g) => { this.clips = Object.fromEntries(g.animations.map((a) => [a.name, a])); }, undefined, () => { this.clips = null; this.off = true; });
   }
   get count() { return this.live.size; }
 
@@ -48,7 +48,7 @@ export class RealPeople {
   _load(name) {
     if (this.tpl.has(name) || this.loading.has(name) || this.failed.has(name) || this.loading.size >= 2) return;
     this.loading.add(name);
-    this.loader.load(`${BASE}av/${name}.glb`, (g) => {
+    this.loader.load(`${BASE}av/${name}.json`, (g) => {
       this.loading.delete(name);
       g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; } });
       this.tpl.set(name, { scene: g.scene, female: name.includes('Female') });
