@@ -264,7 +264,7 @@ body.navon #elevPanel { top: calc(max(10px, env(safe-area-inset-top)) + 52px); }
 .tbtns { position: absolute; right: max(8px, env(safe-area-inset-right)); bottom: max(8px, env(safe-area-inset-bottom)); display: none; gap: 8px;
   grid-auto-rows: min-content; align-items: end; justify-items: center; }
 .tbtns.show { display: grid; }
-.tbtns.foot { direction: ltr; grid-template-columns: 72px 58px 58px; grid-template-areas: "cyc light ." "rel fire ." "jump run aim"; }   /* reload above jump, aim beside run */
+.tbtns.foot { direction: ltr; grid-template-columns: 72px 58px 58px; grid-template-areas: ". cyc ." "rel fire ." "jump run aim"; }   /* gear right above the punch / fire button, reload above jump, aim beside run */
 .tbtns.drive { direction: ltr; grid-template-columns: 58px 58px 48px; grid-template-areas: "can cam ." "brake gas horn"; }   /* no handbrake button: the horn takes its place */
 .tbtns.heli { grid-template-columns: 58px 58px 48px; grid-template-areas: ". . cam" "brake gas ."; }
 .tbtns.plane { direction: ltr; grid-template-columns: 70px 70px 56px; grid-template-areas: "brake gas fir"; align-items: center; justify-items: center; }   /* plane: only gas (green) and brake (red), + missile on fighters */
