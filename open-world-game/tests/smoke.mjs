@@ -1141,7 +1141,7 @@ const gang = await g(() => {
   game.econ.health = 100; game.teleport(114, 114, 0); step(90);
   const C = Gs.crews.north;
   const counts = { spawned: C.members.length, gang: C.G.id, cars: C.cars.filter((v) => v.typeKey !== 'moto').length, bikes: C.cars.filter((v) => v.typeKey === 'moto').length, carColor: C.cars[0]?.parts.baseColor.getHex(), signs: (C.signs || []).length };
-  const looks = { models: C.members.filter((m) => m.cm).length, bandanas: C.members.filter((m) => m.modelApp.mask === 'bandana').length, chains: C.members.filter((m) => m.modelApp.chain).length, guns: C.members.filter((m) => m.app.gun).length, weaponMeshes: C.members.filter((m) => m.weapon).length };
+  const looks = { models: C.members.filter((m) => m.cm || m.rpOn).length, bandanas: C.members.filter((m) => m.modelApp.mask === 'bandana').length, chains: C.members.filter((m) => m.modelApp.chain).length, guns: C.members.filter((m) => m.app.gun).length, weaponMeshes: C.members.filter((m) => m.weapon || (m.rpOn && m.app.gun)).length };
   const inside = Gs.inside;
   // walking right up to them does nothing - they only talk
   const L = C.members.find((m) => m.gangRole === 'leader'); game.teleport(L.x + 1.2, L.z + 1.2, 0); step(30 * 4);
@@ -1192,6 +1192,23 @@ check('gangs: phone app - join a crew (their colour, chain and a car in the crew
 check('gangs: somebody starts a fight with you - your crew goes for him on its own (no order needed)', gang.defend >= 3 && gang.orderStill === 'follow', JSON.stringify({ defend: gang.defend, order: gang.orderStill }));
 check('gangs: in a car the crew rides behind you in the crew cars, and gets out when you do', gang.convoy >= 2 && gang.convoyColor === 0x1f7a35 && gang.behind.every((b) => b < -3) && gang.out && gang.nearAfter >= 2, JSON.stringify({ convoy: gang.convoy, behind: gang.behind, out: gang.out, nearAfter: gang.nearAfter }));
 check('gangs: "attack!" - the crew fights the rival gang and the neighbourhood is taken over; X in the app leaves the gang', gang.owner === 'abc' && gang.left === null && gang.crewLeft === 0, JSON.stringify({ owner: gang.owner, left: gang.left, crewLeft: gang.crewLeft }));
+
+const gangLife = await g(async () => {
+  const game = __game, Gs = game.gangs, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); game.econ.health = 100; } };
+  game.police.clear(); Gs.join('abc'); game.econ.turf = {}; game.teleport(114, 114, 0); step(60);
+  const C = Gs.crews.north; const states = {};
+  for (let k = 0; k < 20; k++) { step(30); for (const q of C.members) states[q.state] = (states[q.state] || 0) + 1; }
+  const pos = game.playerPos(), near = C.members.filter((q) => Math.hypot(q.x - pos.x, q.z - pos.z) < 8);
+  const staring = near.filter((q) => { const a = Math.atan2(pos.x - q.x, pos.z - q.z) - q.yaw; return Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) < 0.25; }).length;
+  const realGear = [...game.realPeople.live.entries()].filter(([q, I]) => q.gangId && I.gear?.visible).length;
+  const btn = document.getElementById('gangBtn');
+  const followersBefore = Gs.followers.length;
+  btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); step(30 * 3); const called = Gs.followers.length;
+  btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); step(30 * 3); const after = Gs.followers.length;
+  Gs.leave(false, true); game.teleport(530, 545, 0); step(30);
+  return { states, staring, near: near.length, realGear, followersBefore, called, after };
+});
+check('gangs: your crew has a life of its own on the turf (talking, phone, strolling - not staring at you); the button calls them, a second tap sends them home', gangLife.followersBefore === 0 && (gangLife.states.talk || 0) > 0 && ((gangLife.states.phone || 0) + (gangLife.states.follow || 0)) > 0 && gangLife.staring <= Math.max(1, gangLife.near / 3) && gangLife.called >= 4 && gangLife.after === 0, JSON.stringify(gangLife));
 
 // ---------------------------------------------------------------- holding up a shop
 const rob = await g(async () => {

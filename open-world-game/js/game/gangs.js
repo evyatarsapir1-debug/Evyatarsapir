@@ -30,6 +30,7 @@ const WARN = ['אתה לא שייך לפה', 'תמשיך ללכת', 'מה אתה
 const ANGRY = ['תפסו אותו!', 'הוא נגע בנו!', 'עכשיו אתה גמור!', 'אל תיתנו לו לברוח!', 'כולם עליו!'];
 const HELLO = ['אחי!', 'מה המצב?', 'הבית שלך פה', 'כבוד', 'אנחנו איתך'];
 const COME = ['אנחנו איתך!', 'מאחוריך, אחי', 'בוא נזוז', 'סע, אנחנו אחריך'];
+const BYE = ['סבבה, אחי. תקרא אם צריך', 'אנחנו בשכונה', 'יאללה, ביי', 'תתקשר כשצריך'];
 const GO = ['קדימה! עליהם!', 'זה השטח שלנו עכשיו!', 'אל תשאירו אף אחד!', 'יאללה!'];
 const SKINS = [0, 1, 2, 3, 4];
 const _seat = new THREE.Vector3();
@@ -99,7 +100,8 @@ export class Gangs {
     if (typeof document !== 'undefined' && document.getElementById('hud')) {
       const b = document.createElement('button'); b.id = 'gangBtn'; b.type = 'button'; b.setAttribute('aria-label', 'קרא לחבר׳ה');
       b.innerHTML = '<span>📣</span><b>חבר׳ה</b>';
-      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); if (this.game.state !== 'playing') return; const m = this.call(); if (m) this.game.toast(m, 3); });
+      // tap: call the crew; tap again while they are with you: they go back to their own business on the turf
+      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); if (this.game.state !== 'playing') return; const m = this.followers.some((p) => p.state !== 'dead') ? this.sendHome() : this.call(); if (m) this.game.toast(m, 3); });
       document.getElementById('hud').appendChild(b); this.btn = b;
     }
   }
@@ -146,6 +148,7 @@ export class Gangs {
     this._cmBudget = 1;                                 // build at most one model per frame (no stutter when a crew or the bank guards appear)
     const all = [...this.followers, ...Object.values(this.crews).flatMap((c) => c.members), ...this.game.peds.peds.filter((q) => q.doorGuard && q.modelApp)];   // + the armed guards at the bank doors
     for (const p of all) {
+      if (p.rpOn) { if (p.cm) this._dropModel(p); continue; }   // shown as a real person right now
       const d = Math.hypot(p.x - cam.x, p.z - cam.z);
       if (!p.cm && d < 130 && this._cmBudget-- > 0) this._attachModel(p);
       else if (p.cm && d > 150) this._dropModel(p);
@@ -186,7 +189,8 @@ export class Gangs {
     if (w === 'gun') app.gun = true; else if (w === 'knife') app.knife = true; else app.fists = true;
     const p = peds._add({ x, z, state: 'guard', yaw, app, homeSpot: { x, z, yaw, state: 'guard', y: heightAt(x, z) }, keep: true, gangKey: ++this.serial, phone: false, suitcase: false, ...extra });
     p.temper = 'fight'; p.skill = 0.8; p.baseYaw = yaw; p.hp = p.maxHp = role === 'leader' ? 16 : 11; p.gangRole = role; p.gangId = G.id;
-    p.modelApp = modelApp(G, role, i);
+    p.modelApp = modelApp(G, role, i); p.gangColor = G.color; p.gangMask = G.mask;
+    p.home0 = { ...p.homeSpot }; p.lifeT = Math.random() * 6;
     return p;
   }
   _spawn(crew) {
@@ -562,6 +566,7 @@ export class Gangs {
       this._takeover(crew, t === T);
     }
     this._followers(dt, pos);
+    this._leavers(dt);
     this._models(dt);
     if (this.btn) {
       const G = this.member && BY_ID[this.member];
@@ -668,14 +673,66 @@ export class Gangs {
       } else {
         if (p.state === 'copChase' || p.state === 'gangFight') { p.copChase = false; p.gunOut = false; p.target = null; p.state = 'goHome'; p.timer = 0; }
         if (p.state === 'fight' && !hostile) { p.state = 'goHome'; p.timer = 0; }
-        // idle: they only stare and talk - nobody is attacked just for walking past
-        if (p.state === 'guard' && (d >= 7 || Pl.state !== 'foot') && p.baseYaw !== undefined) p.homeSpot.yaw = p.baseYaw;
-        if (p.state === 'guard' && d < 7 && Pl.state === 'foot') {
-          p.homeSpot.yaw = Math.atan2(pos.x - p.x, pos.z - p.z);
+        // their own life on the corner (they don't turn to stare at you); a word when you walk right past
+        this._life(crew, p, dt);
+        if (d < 5 && Pl.state === 'foot' && (p.state === 'guard' || p.state === 'talk')) {
           if (!p.sayT || p.sayT <= 0) { p.toldT = (p.toldT || 0) - dt; if (p.toldT <= 0) { p.toldT = 9 + Math.random() * 6; const L = mine ? HELLO : WARN; peds.say(p, L[Math.floor(Math.random() * L.length)], 2); } }
         }
       }
     }
+  }
+  // a gang member's day on the turf: hanging out with the others, talking (to each other / on the phone), strolling
+  // around the corner and back. Nobody stands frozen or follows you with his eyes.
+  _life(crew, p, dt) {
+    const peds = this.game.peds, H = p.home0 || p.homeSpot; if (!H) return;
+    if (['walk', 'goHome', 'idle'].includes(p.state)) { p.state = 'follow'; p.followTo = { x: H.x, z: H.z, yaw: H.yaw }; p.lifeT = 0; }   // after a chat: back to the corner
+    if (p.state === 'follow' && p.followTo && Math.hypot(p.followTo.x - p.x, p.followTo.z - p.z) < 0.7) {
+      p.state = 'guard'; p.homeSpot = { x: p.followTo.x, z: p.followTo.z, yaw: p.followTo.yaw ?? p.yaw, state: 'guard', y: p.y }; p.followTo = null;
+    }
+    p.lifeT = (p.lifeT ?? 0) - dt;
+    if (p.lifeT > 0 || !['guard', 'talk', 'phone'].includes(p.state)) return;
+    const r = Math.random(), buddies = crew.members.filter((q) => q !== p && q.state !== 'dead' && Math.hypot(q.x - p.x, q.z - p.z) < 4);
+    if (r < 0.35 && buddies.length) {               // a chat with one of the guys
+      const q = buddies[Math.floor(Math.random() * buddies.length)];
+      peds._release(p); p.state = 'talk'; p.partner = q; p.timer = 6 + Math.random() * 8; p.lifeT = p.timer + 1;
+      if (q.state === 'guard') { peds._release(q); q.state = 'talk'; q.partner = p; q.timer = p.timer; q.lifeT = p.timer + 1; }
+    } else if (r < 0.5) {                           // on the phone
+      peds._release(p); p.state = 'phone'; p.timer = 5 + Math.random() * 7; p.lifeT = p.timer + 1;
+    } else if (r < 0.75) {                          // a stroll around the corner
+      const a = Math.random() * Math.PI * 2, dd = 3 + Math.random() * 5;
+      p.state = 'follow'; p.followTo = { x: H.x + Math.sin(a) * dd, z: H.z + Math.cos(a) * dd, yaw: a + Math.PI }; p.lifeT = 10 + Math.random() * 8;
+    } else {                                        // back with the group, facing them
+      const cx = crew.members.reduce((s, q) => s + q.x, 0) / crew.members.length, cz = crew.members.reduce((s, q) => s + q.z, 0) / crew.members.length;
+      p.state = 'follow'; p.followTo = { x: H.x, z: H.z, yaw: Math.atan2(cx - H.x, cz - H.z) }; p.lifeT = 8 + Math.random() * 10;
+    }
+  }
+  // the crew goes back to its own business: they say bye and walk off (the ones from the corners go back to them)
+  sendHome() {
+    const g = this.game, peds = g.peds, pos = g.playerPos();
+    for (const c of this.convoy) this._parkConvoy(c);
+    this.convoy = []; this.arrivals = [];
+    const mine = Object.values(this.crews).find((c) => c.spawned && c.G.id === this.member);
+    this.leavers ||= [];
+    this._say(BYE);
+    for (const p of this.followers) {
+      if (p.state === 'dead') continue;
+      p.follower = false; p.target = null; p.gunOut = false; p.copChase = false;
+      if (mine && p.home0 && Math.hypot(p.home0.x - p.x, p.home0.z - p.z) < 150) { mine.members.push(p); p.state = 'follow'; p.followTo = { ...p.home0 }; p.lifeT = 3; continue; }
+      const a = Math.atan2(p.x - pos.x, p.z - pos.z) + (Math.random() - 0.5);   // walk away from you, then they are gone
+      p.state = 'follow'; p.followTo = { x: p.x + Math.sin(a) * 40, z: p.z + Math.cos(a) * 40, yaw: a }; p.leaveT = 14; this.leavers.push(p);
+    }
+    this.followers = []; this.order = 'follow';
+    peds._colors();
+    return '👋 החבר׳ה חוזרים לעניינים שלהם בשכונה — לחץ שוב כדי לקרוא להם';
+  }
+  _leavers(dt) {
+    if (!this.leavers?.length) return;
+    const peds = this.game.peds, cam = this.game.camera.position;
+    this.leavers = this.leavers.filter((p) => {
+      p.leaveT -= dt;
+      if (p.leaveT > 0 && Math.hypot(p.x - cam.x, p.z - cam.z) < 60 && peds.peds.includes(p)) return true;
+      this._dropModel(p); const i = peds.peds.indexOf(p); if (i >= 0) peds.peds.splice(i, 1); return false;
+    });
   }
   // wipe out the rival crew on its own turf (three or fewer left standing - they run) and the neighbourhood is yours
   _takeover(crew, onTurf) {

@@ -6,10 +6,12 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 
+const _v = new THREE.Vector3();
 const BASE = './assets/people/web/';   // glTF JSON + texture images (the host serves neither .glb nor .bin)
 // (the sports models are in swimwear: kept for the beach, not used on the streets)
 const MEN = ['Male_Adult_01', 'Male_Adult_02', 'Male_Adult_03', 'Male_Adult_04', 'Male_Adult_05', 'Male_Adult_06', 'Business_Male_01'];
 const WOMEN = ['Female_Adult_01', 'Female_Adult_02', 'Female_Adult_03', 'Female_Adult_04', 'Female_Adult_05', 'Female_Adult_06', 'Business_Female_01'];
+const GANG = ['Male_Adult_01', 'Male_Adult_02', 'Male_Adult_03'];   // + their colour: bandana and gold chain
 const POLICE_M = ['Police_Male_01', 'Police_Male_02'], POLICE_F = ['Police_Female_01'];
 const SECURITY = ['Security_Male_01'];
 // pose of the pedestrian AI -> motion clip (m_ / f_ versions picked by the model)
@@ -44,7 +46,7 @@ export class RealPeople {
     if (p.rpAvatar) return p.rpAvatar;
     const seed = p.rpSeed ??= Math.floor(Math.random() * 1e6);
     const female = !!p.app?.long;
-    const list = p.app?.cop ? (female ? POLICE_F : POLICE_M) : p.app?.guard ? SECURITY : female ? WOMEN : MEN;
+    const list = p.app?.cop ? (female ? POLICE_F : POLICE_M) : p.app?.guard ? SECURITY : p.gangId ? GANG : female ? WOMEN : MEN;
     // never the same person as one of the playable characters
     const mine = new Set(Object.values(PLAYER_AV)), pool = list.filter((n) => !mine.has(n));
     return (p.rpAvatar = (pool.length ? pool : list)[seed % (pool.length || list.length)]);
@@ -65,18 +67,45 @@ export class RealPeople {
     const mixer = new THREE.AnimationMixer(model), g = T.female ? 1 : 0, actions = {};
     for (const [k, pair] of Object.entries(NAMES)) { const c = this.clips[pair[g]] || this.clips[pair[0]]; if (c) actions[k] = mixer.clipAction(c); }
     this.game.scene.add(root);
-    return { name, root, model, mixer, actions, cur: null };
+    // gang gear (shown for gang members): a bandana in the crew colour around the head and a gold chain
+    const gear = new THREE.Group(); gear.visible = false; this.game.scene.add(gear);
+    const cloth = new THREE.MeshStandardMaterial({ color: 0x2f9e44, roughness: 0.85 });
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.098, 0.102, 0.05, 20, 1, true), cloth); band.material.side = THREE.DoubleSide; gear.add(band);
+    const knot = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.03), cloth); knot.position.set(0, -0.02, -0.105); gear.add(knot);
+    // the top of the head: a bandana wrap (ABC) or a cap with a brim (BC)
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.104, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), cloth); dome.scale.set(1, 0.85, 1.12); gear.add(dome);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.012, 16, 1, false, -Math.PI / 2, Math.PI), cloth); gear.add(brim);
+    const chain = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.007, 6, 28), new THREE.MeshStandardMaterial({ color: 0xd8b448, metalness: 1, roughness: 0.25 }));
+    gear.add(chain);
+    return { name, root, model, mixer, actions, cur: null, gear, band, chain, cloth, dome, brim, knot, head: model.getObjectByName('Bip01_Head'), neck: model.getObjectByName('Bip01_Neck') };
+  }
+  _gear(I, color, mask) {
+    if (!I.gear) return;
+    I.gear.visible = color != null && !!I.head;
+    if (!I.gear.visible) return;
+    if (I.gearColor !== color) { I.cloth.color.setHex(color); I.gearColor = color; }
+    I.root.updateMatrixWorld(true);
+    const yaw = I.root.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw);
+    I.head.getWorldPosition(_v);
+    I.band.position.set(_v.x + fx * 0.025, _v.y + 0.085, _v.z + fz * 0.025); I.band.rotation.set(0, yaw, 0);
+    I.knot.position.set(_v.x - fx * 0.1, _v.y + 0.065, _v.z - fz * 0.1); I.knot.rotation.set(0, yaw, 0); I.knot.visible = mask !== 'cap';
+    I.dome.position.set(_v.x + fx * 0.02, _v.y + 0.1, _v.z + fz * 0.02); I.dome.rotation.set(0, yaw, 0);
+    I.brim.visible = mask === 'cap'; I.brim.position.set(_v.x + fx * 0.115, _v.y + 0.095, _v.z + fz * 0.115); I.brim.rotation.set(0.12, yaw, 0, 'YXZ');
+    (I.neck || I.head).getWorldPosition(_v);
+    I.chain.position.set(_v.x + fx * 0.035, _v.y - 0.035, _v.z + fz * 0.035); I.chain.rotation.set(Math.PI / 2 - 0.35, 0, 0); I.chain.rotation.order = 'YXZ'; I.chain.rotation.y = yaw;
   }
   _release(p) {
     const I = this.live.get(p); if (!I) return;
     this.live.delete(p); p.rpOn = false;
-    I.root.visible = false; this.game.scene.remove(I.root);
+    I.root.visible = false; this.game.scene.remove(I.root); if (I.gear) I.gear.visible = false;
     if (I.cur) { I.actions[I.cur]?.stop(); I.cur = null; }
     let L = this.free.get(I.name); if (!L) this.free.set(I.name, L = []);
     if (L.length < 3) L.push(I);       // keep a few spares to reuse (no rebuild when someone walks back into range)
   }
   _wants(p) {
-    if (p.cm || p.gangId || p.follower || p.doorGuard || p.cordon || p.car || SKIP_STATES.has(p.state)) return null;
+    if (p.doorGuard || p.cordon || p.car || SKIP_STATES.has(p.state)) return null;
+    if (p.cm && !p.gangId) return null;
+    if (p.gangId && (p.gunOut || p.state === 'gangFight' || p.copChase)) return null;   // armed and fighting: the figure with the weapon animations
     return CLIP[p.pose] || null;
   }
 
@@ -145,6 +174,7 @@ export class RealPeople {
       I.root.position.set(p.x, p.y, p.z);
       I.root.rotation.set(0, p.yaw || 0, 0);
       I.mixer.update(dt);
+      this._gear(I, p.gangColor, p.gangMask);
     }
     for (const L of this.free.values()) for (const I of L) I.root.visible = false;
   }
