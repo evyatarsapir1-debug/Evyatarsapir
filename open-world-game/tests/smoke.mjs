@@ -1010,7 +1010,7 @@ const vkey = await g(() => {
 });
 check('bank vault: the guard / teller with the key drops it when taken down; with the key the vault opens (or blow it without)', vkey.dropped && vkey.takePrompt.includes('קח את המפתח') && vkey.hasKey && vkey.prompt.includes('פתח עם מפתח'), JSON.stringify(vkey));
 const gold = await g(async () => {
-  const game = __game, P = game.player, H = game.heist, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const game = __game, P = game.player, H = game.heist, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); game.econ.health = 100; } };
   game.police.clear(); game.econ.health = 100; game.econ.heists = {}; if (H.active) H.fail('בדיקה');
   const I = H.info('gold'), v = I.vault; game.teleport(v.outside[0], v.outside[1], 0, v.y + 0.6); step(60);
   const vg = game.peds.peds.filter((q) => q.vaultGuard && q.state !== 'dead' && Math.hypot(q.x - v.outside[0], q.z - v.outside[1]) < 4).length;
