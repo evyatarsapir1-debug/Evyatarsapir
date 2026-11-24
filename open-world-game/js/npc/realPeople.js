@@ -6,7 +6,28 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 
-const _v = new THREE.Vector3();
+const _v = new THREE.Vector3(), _s = new THREE.Vector3(), _e = new THREE.Vector3(), _h = new THREE.Vector3(), _t = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _d1 = new THREE.Vector3(), _d2 = new THREE.Vector3();
+// turn a bone (in world space) so that the direction from it to its child point goes from 'from' to 'to'
+function aimBone(bone, from, to) {
+  _q.setFromUnitVectors(from.normalize(), to.normalize());
+  bone.getWorldQuaternion(_q2); _q2.premultiply(_q);
+  bone.parent.getWorldQuaternion(_q); _q.invert();
+  bone.quaternion.copy(_q.multiply(_q2)); bone.updateMatrixWorld(true);
+}
+// food you hold while eating (by what it is)
+function foodMesh(F) {
+  const g = new THREE.Group(), m = (c, r = 0.7) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
+  const icon = F?.icon, col = F?.color ?? 0xe2c28a;
+  if (icon === '🍦') { const c = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.11, 12), m(0xd9a35c, 0.85)); c.rotation.x = Math.PI; g.add(c); const b = new THREE.Mesh(new THREE.SphereGeometry(0.038, 12, 8), m(col, 0.5)); b.position.y = 0.06; g.add(b); }
+  else if (icon === '🍕') { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.015, 3, 1, false, 0, 0.7), m(col)); w.rotation.z = Math.PI / 2; g.add(w); }
+  else if (icon === '🍔') { for (const [y, c, h] of [[0, 0xc98a4a, 0.025], [0.025, 0x5a3420, 0.02], [0.04, 0x6aa84f, 0.006], [0.055, 0xd9a35c, 0.03]]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, h, 16), m(c)); p.position.y = y; g.add(p); } }
+  else if (icon === '☕' || icon === '🥤') { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.03, icon === '🥤' ? 0.14 : 0.08, 14), m(icon === '🥤' ? 0xf2f2f2 : 0xffffff, 0.4)); g.add(c); }
+  else if (icon === '🍟') { const box = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.04), m(0xc0392b)); g.add(box); for (let i = 0; i < 6; i++) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.06, 0.008), m(0xf2c94c)); f.position.set(-0.025 + i * 0.01, 0.05, 0); g.add(f); } }
+  else if (icon === '🧆') { const pita = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 10), m(0xe8c995, 0.8)); pita.scale.set(1, 1.25, 0.6); g.add(pita); const top = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), m(0x7a9a3a)); top.position.y = 0.055; top.scale.set(1, 0.5, 0.6); g.add(top); }
+  else { const b = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.07), m(col)); g.add(b); }
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
 const BASE = './assets/people/web/';   // glTF JSON + texture images (the host serves neither .glb nor .bin)
 // (the sports models are in swimwear: kept for the beach, not used on the streets)
 const MEN = ['Male_Adult_01', 'Male_Adult_02', 'Male_Adult_03', 'Male_Adult_04', 'Male_Adult_05', 'Male_Adult_06', 'Business_Male_01'];
@@ -114,8 +135,8 @@ export class RealPeople {
   // figure (which has those animations) is used
   _player(dt) {
     const g = this.game, P = g.player, id = g.chars?.active || 'miguel', name = PLAYER_AV[id] || PLAYER_AV.miguel;
-    const ok = !g.realPeopleOff && P.state === 'foot' && !P.swimming && !P.parachute && !P.skydive && !P.attack && !(P.hitT > 0) && !(P.eatT > 0) && !(P.throwT > 0)
-      && !(P.combatT > 0) && !g.econ?.equipped && g.econ?.gear !== 'chute' && !P.seat && !P.eating && P.object.parent && g.state !== 'switching';
+    const ok = !g.realPeopleOff && P.state === 'foot' && !P.swimming && !P.parachute && !P.skydive && !P.attack && !(P.hitT > 0) && !(P.throwT > 0)
+      && !(P.combatT > 0) && !g.econ?.equipped && g.econ?.gear !== 'chute' && !P.seat && P.object.parent && g.state !== 'switching';
     if (!ok || !this.tpl.has(name)) {
       if (ok) this._load(name);
       if (this.me) { this.me.root.visible = false; if (this.meHid) { P.object.visible = true; this.meHid = false; } }
@@ -131,8 +152,45 @@ export class RealPeople {
     I.root.visible = true;
     I.root.position.copy(P.object.position); I.root.rotation.set(0, P.object.rotation.y, 0);
     I.mixer.update(dt);
+    this._eat(I, P, dt);
     if (P.object.visible) { P.object.visible = false; this.meHid = true; }
     P.realBody = true;
+  }
+
+  // eating for real: the food in your right hand, up to the mouth, a bite (the food gets smaller), chewing while the
+  // hand comes down a little, three bites, then a swallow
+  _eat(I, P, dt) {
+    const on = P.eatT > 0 && P.eating;
+    if (!on) { if (I.food) { this.game.scene.remove(I.food); I.food = null; I.foodOf = null; } return; }
+    const sh = I.model.getObjectByName('Bip01_R_UpperArm'), el = I.model.getObjectByName('Bip01_R_Forearm'), hand = I.model.getObjectByName('Bip01_R_Hand'), head = I.head;
+    if (!sh || !el || !hand || !head) return;
+    if (I.foodOf !== P.eating) { if (I.food) this.game.scene.remove(I.food); I.food = foodMesh(P.eating); I.foodOf = P.eating; I.eat0 = P.eatT; this.game.scene.add(I.food); }
+    const T = I.eat0 - P.eatT, cycle = 1.4, n = Math.min(2, Math.floor(T / cycle)), ph = (T - n * cycle) / cycle, last = P.eatT < 0.45;
+    // how high the hand is: 0 = in front of the chest, 1 = at the mouth
+    const up = last ? Math.max(0, P.eatT / 0.45) * 0.3 : ph < 0.35 ? ph / 0.35 : ph < 0.5 ? 1 : Math.max(0.25, 1 - (ph - 0.5) / 0.3 * 0.75);
+    const bites = n + (ph >= 0.42 ? 1 : 0);
+    I.root.updateMatrixWorld(true);
+    const yaw = I.root.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    head.getWorldPosition(_h);
+    const mouth = _t.set(_h.x + fx * 0.11, _h.y + 0.02, _h.z + fz * 0.11), chest = _d1.set(_h.x + fx * 0.3 - rx * 0.12, _h.y - 0.32, _h.z + fz * 0.3 - rz * 0.12);
+    const target = chest.lerp(mouth, up);
+    // two-bone reach (upper arm, forearm) with the elbow out and down
+    sh.getWorldPosition(_s); el.getWorldPosition(_e); hand.getWorldPosition(_v);
+    const a = _s.distanceTo(_e), b = _e.distanceTo(_v), toT = _d2.copy(target).sub(_s), d = Math.min(a + b - 0.001, Math.max(0.05, toT.length()));
+    toT.setLength(d);
+    const cosA = (a * a + d * d - b * b) / (2 * a * d), ang = Math.acos(Math.max(-1, Math.min(1, cosA)));
+    const pole = new THREE.Vector3(-rx * 0.4, -1, -rz * 0.4).normalize(), axis = new THREE.Vector3().crossVectors(toT, pole).normalize();
+    const elbowDir = toT.clone().normalize().applyAxisAngle(axis, ang), elbowPos = _s.clone().addScaledVector(elbowDir, a);
+    aimBone(sh, _e.clone().sub(_s), elbowPos.clone().sub(_s));
+    el.getWorldPosition(_e); hand.getWorldPosition(_v);
+    aimBone(el, _v.clone().sub(_e), target.clone().sub(_e));
+    // chewing: small nods of the head between bites, a swallow at the end
+    const chew = ph > 0.5 && !last ? Math.sin(T * 18) * 0.05 : last ? -0.12 * Math.sin(Math.PI * (1 - P.eatT / 0.45)) : 0;
+    head.rotateX(chew); head.updateMatrixWorld(true);
+    hand.getWorldPosition(_v);
+    I.food.position.set(_v.x + fx * 0.05, _v.y + 0.02, _v.z + fz * 0.05); I.food.rotation.set(0, yaw, 0);
+    I.food.scale.setScalar(Math.max(0.25, 1 - bites * 0.25));
+    I.food.visible = !last || P.eatT > 0.25;
   }
 
   update(dt) {

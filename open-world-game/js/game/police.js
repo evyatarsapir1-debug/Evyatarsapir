@@ -142,7 +142,7 @@ export class Police {
       const hit = Math.random() < (q.doorGuard ? (d < 12 ? 0.55 : 0.36) : (d < 12 ? 0.45 : 0.28)) * (1 - pain);
       const to = hit ? new THREE.Vector3(pos.x, pos.y + 1.1, pos.z) : new THREE.Vector3(pos.x + (Math.random() - 0.5) * 3, pos.y + 0.3 + Math.random() * 1.5, pos.z + (Math.random() - 0.5) * 3);
       g.weapons.npcShot(from, to, q.app.soldier ? 'rifle' : 'pistol', g.audio);
-      if (hit) g.hurt(P.state === 'driving' ? 3 : q.app.soldier ? 8 : 6, q.app.soldier ? 'חייל' : 'משטרה');
+      if (hit) g.shotHit(q.app.soldier ? 'חייל' : q.doorGuard ? 'מאבטח' : 'משטרה');
     }
   }
 
@@ -272,7 +272,7 @@ export class Police {
       if (shooter) {
         const from = new THREE.Vector3(shooter.x + Math.sin(shooter.yaw) * 0.55, (shooter.y || 0) + 1.38, shooter.z + Math.cos(shooter.yaw) * 0.55), to = new THREE.Vector3(pos.x + (Math.random() - 0.5) * 2, pos.y + 1.2, pos.z + (Math.random() - 0.5) * 2);
         g.weapons.npcShot(from, to, 'pistol', g.audio);
-        if (Math.random() < 0.45) g.hurt(P.state === 'driving' ? 3 : 6, 'משטרה');
+        if (Math.random() < 0.45) g.shotHit('משטרה');
       }
     }
     // ---- escaping: out of sight -> the stars blink. They give up after 50 s without seeing you,

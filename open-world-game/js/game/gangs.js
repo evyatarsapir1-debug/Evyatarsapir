@@ -667,7 +667,7 @@ export class Gangs {
           const from = new THREE.Vector3(p.x + Math.sin(p.yaw) * 0.5, p.y + 1.4, p.z + Math.cos(p.yaw) * 0.5);
           const to = new THREE.Vector3(pos.x + (Math.random() - 0.5) * 2.2, pos.y + 1.1, pos.z + (Math.random() - 0.5) * 2.2);
           g.weapons.npcShot(from, to, 'pistol', g.audio);
-          if (Math.random() < (d < 12 ? 0.45 : 0.3) * (1 - pain)) g.hurt(Pl.state === 'driving' ? 3 : 6, crew.G.full);
+          if (Math.random() < (d < 12 ? 0.45 : 0.3) * (1 - pain)) g.shotHit(crew.G.full);
         }
         if (Math.random() < dt * 0.15) peds.say(p, ANGRY[Math.floor(Math.random() * ANGRY.length)], 1.6);
       } else {

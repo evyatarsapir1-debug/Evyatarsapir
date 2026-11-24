@@ -677,6 +677,8 @@ export function interiorSpec(b) {
     piece(F, spec, 'armchair', -hl + 1.6, 1.2, y0, '+a', 0x7a3b2e); piece(F, spec, 'armchair', -hl + 3.2, 1.2, y0, '-a', 0x7a3b2e);
     piece(F, spec, 'plant', -hl + 0.45, 0.45, y0); piece(F, spec, 'plant', hl - 0.45, 0.45, y0);
     for (let a = -hl + 3; a < hl; a += 6) for (let d = 2.5; d < D; d += 5) lamp(a, d, y0 + H - 0.03);
+  } else if (b.interior === 'hall' && (b.police || b.hospital)) {
+    apartmentSpec(b, F, spec, piece, lamp, furn, { kind: b.police ? 'police' : 'hospital' });
   } else if (b.interior === 'hall') {
     const H = Math.min(b.h, 7);
     spec.door = { face: b.face, w: 3.0, h: 3.2 };
@@ -1188,13 +1190,22 @@ function bankSpec(b, F, spec, piece, lamp, furn) {
 }
 
 // --------------------------------------------------------------------------- apartment buildings & towers
+// police station / hospital room types
+const ROOM_NAME = { cells: 'תאי מעצר', interrogation: 'חדר חקירות', training: 'כיתת הדרכה', office: 'משרד', ward: 'חדר אשפוז', er: 'מיון' };
+// police: ground floor - holding cells, interrogation, an office; upstairs - training classrooms and offices.
+// hospital: ground floor - emergency treatment bays; upstairs - wards
+function roomKind(kind, floor, i) {
+  if (kind === 'hospital') return floor === 0 ? 'er' : 'ward';
+  if (floor === 0) return ['cells', 'interrogation', 'cells', 'office', 'interrogation'][i % 5];
+  return ['training', 'office', 'office', 'training'][i % 4];
+}
 // Lobby + elevator on the ground floor, then on every floor a central corridor with apartments on both sides.
 // Each apartment has a living room (sofa, TV, kitchen, table) and a bedroom (bed, wardrobe, lamp).
 export const FLOOR_H = 3.2;
-function apartmentSpec(b, F, spec, piece, lamp, furn) {
-  const C = spec.colliders, y0 = CURB_H, L = F.L, D = F.D, hl = L / 2;
+function apartmentSpec(b, F, spec, piece, lamp, furn, opts = {}) {
+  const C = spec.colliders, y0 = CURB_H, L = F.L, D = F.D, hl = L / 2, KIND = opts.kind;
   const usable = b.tower && b.setback ? b.h * 0.62 : b.h;
-  const nF = Math.max(2, Math.min(6, Math.floor((usable - 0.5) / FLOOR_H))); // every elevator serves up to 6 floors (ק + 5)
+  const nF = Math.max(2, Math.min(KIND === 'police' ? 3 : 6, Math.floor((usable - 0.5) / FLOOR_H))); // every elevator serves up to 6 floors (ק + 5)
   const topY = y0 + nF * FLOOR_H;
   spec.door = { face: b.face, w: 2.2, h: 2.7 };
   spec.doors = []; spec.floorRanges = [];
@@ -1229,11 +1240,14 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
   };
   const wallD = (d0, d1, ac, ya, yb, color) => wallBox(ac - WT / 2, ac + WT / 2, d0, d1, ya, yb, color);
   // units along the lateral axis
-  const nU = Math.max(1, Math.round(L / 10));
+  const nU = Math.max(1, Math.round(L / (KIND ? 7.5 : 10)));   // police / hospital: smaller rooms
   const uw = L / nU;
   const units = [];
   for (let i = 0; i < nU; i++) units.push([-hl + i * uw, -hl + (i + 1) * uw]);
   spec.homes = [];
+  // a sign over the door, on the corridor side of the wall, facing the corridor
+  const roomSign = (a, dCor, y, s, name) => { const [x, z] = F.pt(a, dCor + s * 0.09); spec.signs.push({ x, y: y + 2.45, z, nx: -F.fx * s, nz: -F.fz * s, w: 1.3, name }); };
+  let roomNo = 0;
   const furnishUnit = (u0, u1, dFac, dCor, y, k, office) => {
     // dFac: depth of the facade wall, dCor: depth of the corridor wall
     const s = Math.sign(dCor - dFac), um = (u0 + u1) / 2;
@@ -1241,6 +1255,49 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
     const lm = (u0 + um) / 2, bm = (um + u1) / 2;
     const depth = Math.abs(dCor - dFac);
     const at = (t) => dFac + s * t;
+    if (KIND) {
+      // police station / hospital rooms: the door in the middle of the corridor wall, a sign over it
+      const kind = roomKind(KIND, Math.round((y - y0) / FLOOR_H), roomNo++), mid = um;
+      const pole = (a, d, h, c = 0xcfd4d8) => furn(a - 0.025, a + 0.025, d - 0.025, d + 0.025, y, y + h, c, false, 'metal');
+      if (kind === 'cells') {
+        // two holding cells behind steel bars (locked), each with a bunk and a toilet
+        const bd = at(depth - 1.3);
+        for (let a = u0 + 0.1; a < u1 - 0.05; a += 0.16) furn(a - 0.02, a + 0.02, bd - 0.02, bd + 0.02, y, y + 2.4, 0x5e646b, false, 'metal');
+        for (const yy of [0.1, 1.2, 2.35]) furn(u0, u1, bd - 0.03, bd + 0.03, y + yy - 0.03, y + yy + 0.03, 0x5e646b, false, 'metal');
+        C.push(colFromRect(F.rect(u0, u1, Math.min(bd - 0.05, bd + 0.05), Math.max(bd - 0.05, bd + 0.05)), y, y + 2.4));
+        wallD(dFac, bd, um, y, y + FLOOR_H - 0.25, 0xd5d0c6);
+        for (const c of [(u0 + um) / 2, (um + u1) / 2]) { furn(c - 0.9, c + 0.3, at(0.1), at(0.8), y, y + 0.45, 0x8a8f96); furn(c + 0.6, c + 1.0, at(0.15), at(0.6), y, y + 0.42, 0xe8e8e8); }
+        piece(F, spec, 'bench', mid, at(depth - 0.6), y, inward, 0x4a4f55);
+      } else if (kind === 'interrogation') {
+        piece(F, spec, 'table', mid, at(depth * 0.45), y, '+a');
+        piece(F, spec, 'chair', mid - 1.0, at(depth * 0.45), y, '+a'); piece(F, spec, 'chair', mid + 1.0, at(depth * 0.45), y, '-a');
+        furn(u0 + 0.02, u0 + 0.08, at(1.0), at(depth - 1.0), y + 0.9, y + 2.1, 0x1a2230, false, 'glass');   // one-way mirror
+        pole(mid, at(depth * 0.45), 0.02);
+      } else if (kind === 'training') {
+        // classroom: a whiteboard and rows of desks with chairs (you can sit and learn)
+        furn(u0 + 0.6, u1 - 0.6, at(0.05), at(0.1), y + 0.9, y + 2.1, 0xf6f6f6, false);
+        for (let r = 0; r < 2; r++) for (const c of [um - 1.3, um + 1.3]) { piece(F, spec, 'desk', c, at(2.0 + r * 1.6), y, inward); piece(F, spec, 'chair', c, at(2.65 + r * 1.6), y, back); }
+        piece(F, spec, 'desk', um, at(0.8), y, back);
+      } else if (kind === 'office') {
+        piece(F, spec, 'desk', lm, at(1.3), y, back); piece(F, spec, 'chair', lm, at(0.6), y, inward);
+        piece(F, spec, 'desk', bm, at(1.3), y, back); piece(F, spec, 'chair', bm, at(0.6), y, inward);
+        piece(F, spec, 'bookcase', u1 - 0.45, at(depth - 0.9), y, '-a'); piece(F, spec, 'plant', u0 + 0.45, at(depth - 0.6), y);
+      } else {
+        // hospital: a ward with two beds (monitor, drip stand, chair, curtain between) or an emergency treatment bay
+        const er = kind === 'er', beds = er ? [um] : [lm, bm];
+        for (const c of beds) {
+          piece(F, spec, 'bed', c, at(1.25), y, inward, er ? 0x9cc7d9 : 0xbfd8e6);
+          pole(c + 0.95, at(0.5), 1.85); furn(c + 0.88, c + 1.02, at(0.45), at(0.55), y + 1.55, y + 1.75, 0xbfe3f2, false);   // drip
+          pole(c - 1.0, at(0.35), 1.2, 0x555b61); furn(c - 1.2, c - 0.8, at(0.3), at(0.42), y + 1.2, y + 1.5, 0x22303a, false);   // monitor
+          if (!er) piece(F, spec, 'chair', c + 0.95, at(2.6), y, inward, 0x5b7f9a);
+        }
+        if (!er) furn(um - 0.03, um + 0.03, at(0.2), at(2.4), y + 0.15, y + 2.1, 0x9fc9b8, false);   // curtain between the beds
+        else { furn(u0 + 0.3, u0 + 0.9, at(depth - 1.2), at(depth - 0.4), y, y + 1.0, 0xdfe3e6); piece(F, spec, 'chair', um + 1.4, at(2.4), y, inward, 0x5b7f9a); }
+      }
+      roomSign(mid, dCor, y, s, ROOM_NAME[kind]);
+      lamp(lm, at(depth * 0.5), y + FLOOR_H - 0.28); lamp(bm, at(depth * 0.5), y + FLOOR_H - 0.28);
+      return { lm: mid, s };
+    }
     if (office) {
       piece(F, spec, 'desk', lm, at(1.3), y, back);
       piece(F, spec, 'desk', bm, at(1.3), y, back);
@@ -1291,7 +1348,14 @@ function apartmentSpec(b, F, spec, piece, lamp, furn) {
       if (i > 0) wallD(cd1, D, u0, y, yb, wallC);
     });
     wallA(-hl, sa0, cd1, y, yb, backGaps, wallC);
-    if (k === 0) {
+    if (k === 0 && KIND) {
+      // reception and waiting area across the front
+      piece(F, spec, 'desk_reception', hl / 2, 1.6, y, '+d');
+      spec.counter = { pt: F.pt(hl / 2, 0.6), keeper: F.pt(hl / 2, 2.4), yaw: Math.atan2(F.fx, F.fz), y: y0, lobby: true };
+      for (let a = -hl + 3; a < hl / 2 - 3; a += 3.6) piece(F, spec, 'seatrow', a, 2.6, y, '-d', KIND === 'police' ? 0x2b3e5c : 0x5b8fb0);
+      piece(F, spec, 'plant', -hl + 0.6, 0.6, y); piece(F, spec, 'plant', hl - 0.6, 0.6, y);
+      const [sx, sz] = F.pt(hl / 2, 3.05); spec.signs.push({ x: sx, y: y + 2.5, z: sz, nx: -F.fx, nz: -F.fz, w: 2.2, name: KIND === 'police' ? 'קבלת קהל' : 'קבלה · מיון' });
+    } else if (k === 0) {
       // lobby across the whole front band
       piece(F, spec, 'sofa', -hl / 2, 1.0, y, '+d', 0x5a6e7f);
       piece(F, spec, 'plant', -hl + 0.6, 0.6, y); piece(F, spec, 'plant', hl - 0.6, 0.6, y);

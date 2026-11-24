@@ -612,8 +612,17 @@ class Game {
     this.creatorLight.intensity = 30;
     this.creatorLight.position.set(p.x + Math.sin(f + 0.5) * 1.8, p.y + 2.2, p.z + Math.cos(f + 0.5) * 1.8);
   }
+  // a bullet that hits you: you can take six; the seventh puts you down (a vest takes part of each hit, a car protects)
+  shotHit(why) { this.hurt(this.player.state === 'driving' ? 6 : 15, why); }
+  // health comes back by itself a few seconds after the last hit (eat for an instant boost)
+  _regen(dt) {
+    this._sinceHurt = (this._sinceHurt ?? 99) + dt;
+    const E = this.econ;
+    if (this._sinceHurt > 6 && E.health > 0 && E.health < 100) E.heal(dt * 4);
+  }
   hurt(n, why) {
     if (n <= 0) return;
+    this._sinceHurt = 0;
     // a vest takes part of the hit and wears out
     const V = this.econ.vest;
     if (V && V.armor > 0) {
@@ -678,7 +687,7 @@ class Game {
         const F = FOODS[id]; if (!F) continue;
         row(`${F.icon} ${F.name} ×${n}`, `+${F.heal} בריאות`, 'לאכול', () => {
           const eaten = E.eat(id); if (!eaten) return null;
-          p.eating = eaten; p.eatT = 2.2;
+          p.eating = eaten; p.eatT = 4.5;   // three bites, chewing, a swallow
           this.save(); this.closeBag();
           this.toast(`${eaten.icon} אכלת ${eaten.name} · +${eaten.heal} בריאות`, 2.2);
           return null;
@@ -1048,6 +1057,7 @@ class Game {
     this.heist.update(dt);
     this.tuning.update(dt);
     this.gangs.update(dt);
+    this._regen(dt);
     this.realPeople.update(dt);
     this.robbery.update(dt);
     this.crashes.update(dt, { vehicles: all, player: p, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });

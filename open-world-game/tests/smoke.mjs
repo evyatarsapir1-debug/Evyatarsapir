@@ -1377,6 +1377,32 @@ const realMe = await g(async () => {
   return { stand, walk, armedOld };
 });
 check('you are a real person too: walking / standing as the character\'s real model (old figure hidden); with a gun in hand the full figure is used', realMe.stand.me === 'Male_Adult_06' && realMe.stand.real && realMe.stand.oldHidden && realMe.walk === 'walk' && realMe.armedOld, JSON.stringify(realMe));
+const life = await g(async () => {
+  const WG = await import('./js/world/worldGen.js'), IN = await import('./js/world/interiors.js'), L = await import('./js/world/layout.js');
+  const game = __game, P = game.player, R = game.realPeople, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const find = (flag) => { for (let i = -2; i < 20; i++) for (let j = -2; j < 20; j++) { const b = WG.cellData(i, j).buildings.find((q) => q[flag]); if (b) return b; } };
+  const bld = { police: IN.interiorSpec(find('police')), hospital: IN.interiorSpec(find('hospital')) };
+  const rooms = Object.fromEntries(Object.entries(bld).map(([k, S]) => [k, { floors: S.floors?.length, elevator: !!S.elevator, kinds: [...new Set(S.signs.map((s) => s.name))], inAtlas: S.signs.every((s) => L.ALL_SIGNS.includes(s.name)), beds: (S.seats || []).filter((q) => q.kind === 'sleep').length }]));
+  // shot: six hits and you are still up, the seventh puts you down
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.econ.vest = null; game.econ.health = 100; let down6 = null;
+  for (let i = 0; i < 6; i++) game.shotHit('בדיקה'); down6 = game.econ.health;
+  let ko = 0; const _ko = game.knockedOut.bind(game); game.knockedOut = (w) => { ko++; return _ko(w); };
+  game.shotHit('בדיקה'); const after7 = ko; game.knockedOut = _ko; step(30 * 12); game.police.clear();
+  // health comes back by itself after a few seconds
+  game.econ.health = 50; game.hurt(1, 'x'); step(30 * 3); const h3 = game.econ.health; step(30 * 7); const h10 = game.econ.health;
+  // eating: food in the hand, up to the mouth, smaller after each bite
+  for (let k = 0; k < 60 && !(R.me && R.me.root.visible); k++) { step(3); await new Promise((r) => setTimeout(r, 300)); }
+  game.econ.addFood('falafel'); const F = game.econ.eat('falafel'); P.eating = F; P.eatT = 4.5; step(18);
+  const V = R.me.root.position.constructor, hand = R.me.model.getObjectByName('Bip01_R_Hand').getWorldPosition(new V()), head = R.me.head.getWorldPosition(new V());
+  const reach = hand.distanceTo(head), held = !!R.me.food; step(30 * 2); const smaller = R.me.food?.scale.x < 1; step(30 * 3); const gone = !R.me.food;
+  return { rooms, down6, after7, h3: Math.round(h3), h10: Math.round(h10), reach: +reach.toFixed(2), held, smaller, gone };
+});
+check('police station: holding cells, interrogation rooms, training classrooms, offices, reception, 3 floors with an elevator; signs over the doors', life.rooms.police.floors === 3 && life.rooms.police.elevator && ['תאי מעצר', 'חדר חקירות', 'כיתת הדרכה', 'משרד', 'קבלת קהל'].every((k) => life.rooms.police.kinds.includes(k)) && life.rooms.police.inAtlas, JSON.stringify(life.rooms.police));
+check('hospital: reception, emergency room, wards with beds on every floor, elevator to the patient rooms', life.rooms.hospital.floors >= 5 && life.rooms.hospital.elevator && ['מיון', 'חדר אשפוז', 'קבלה · מיון'].every((k) => life.rooms.hospital.kinds.includes(k)) && life.rooms.hospital.inAtlas && life.rooms.hospital.beds >= 30, JSON.stringify(life.rooms.hospital));
+check('shot: six hits and you are still standing, the seventh puts you down', life.down6 > 0 && life.after7 === 1, JSON.stringify({ down6: life.down6, after7: life.after7 }));
+check('health comes back by itself a few seconds after the last hit', life.h3 <= 50 && life.h10 > 55, JSON.stringify({ h3: life.h3, h10: life.h10 }));
+check('eating: the food is in your hand, goes up to the mouth, gets smaller with each bite and is gone at the end', life.held && life.reach < 0.2 && life.smaller && life.gone, JSON.stringify({ reach: life.reach, held: life.held, smaller: life.smaller, gone: life.gone }));
 const hudCol = await g(() => {
   const r = (id) => { const e = document.getElementById(id); return e ? parseFloat(getComputedStyle(e).top) : null; };   // CSS position (the crew button is hidden outside a gang)
   const before = __game.state; document.querySelector('[data-btn="bag"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
