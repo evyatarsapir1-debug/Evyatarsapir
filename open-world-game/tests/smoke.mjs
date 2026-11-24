@@ -1307,6 +1307,15 @@ const guards = await g(() => {
   return { n: gd.filter((q) => !q.vaultGuard).length, nVault: gd.filter((q) => q.vaultGuard).length, look, hidden, shown, called };
 });
 check('bank: two armed guards at the entrance + two at the vault (full body, uniform, vest, rifle)', guards.n === 2 && guards.nVault === 2 && guards.look.every((l) => l.gun && l.model && l.rifle && l.vest), JSON.stringify(guards));
+const hudCol = await g(() => {
+  const r = (id) => document.getElementById(id)?.getBoundingClientRect().top;
+  const before = __game.state; document.querySelector('[data-btn="bag"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  for (let i = 0; i < 2; i++) { __game.time += 1 / 30; __game._playFrame(1 / 30); }
+  const opened = __game.state === 'bag', rows = [...document.querySelectorAll('#bagPanel .srow b')].map((e) => e.textContent).join(' | ');
+  __game.closeBag();
+  return { bag: !!document.getElementById('bagBtn'), phone: r('phoneBtn'), char: r('charBtn'), gang: r('gangBtn'), cycleLabel: document.querySelector('[data-btn="bag"]')?.textContent, opened, rows, before };
+});
+check('HUD: no bag button; phone at the top, then characters, then the crew call; "ציוד" opens weapons + parachute + food', !hudCol.bag && hudCol.phone < hudCol.char && hudCol.char < hudCol.gang && hudCol.cycleLabel === 'ציוד' && hudCol.opened && /מצנח/.test(hudCol.rows) && /ידיים ריקות/.test(hudCol.rows), JSON.stringify(hudCol));
 const zones = await g(() => {
   const game = __game, P = game.player, W = game.weapons;
   const step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };

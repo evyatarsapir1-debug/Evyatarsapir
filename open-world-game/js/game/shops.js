@@ -93,15 +93,15 @@ function catalogue(kind, ctx) {
         : [['sandwich', 22], ['meal', 65], ['drink', 8], ['snack', 18]];
       for (const [id, price] of menu) {
         const F = FOODS[id];
-        out.push({ id: `food-${id}`, name: `${F.icon} ${F.name}`, desc: `+${F.heal} בריאות · נכנס לתיק (יש לך ${econ.items.food[id] || 0})`, price,
-          buy: () => { econ.addFood(id); return `${F.icon} ${F.name} נוסף לתיק — פותחים את התיק ולוחצים "לאכול"`; } });
+        out.push({ id: `food-${id}`, name: `${F.icon} ${F.name}`, desc: `+${F.heal} בריאות · נכנס לציוד (יש לך ${econ.items.food[id] || 0})`, price,
+          buy: () => { econ.addFood(id); return `${F.icon} ${F.name} נוסף לציוד — לוחצים "ציוד" ואז "לאכול"`; } });
       }
       break;
     }
     case 'equipment':
-      out.push({ id: 'parachute', name: 'מצנח', desc: 'בציוד (G). קפיצה מגובה / ממסוק: "פתח מצנח"', price: 900, buy: () => { econ.items.parachute++; return 'מצנח נוסף לתיק'; } });
-      out.push({ id: 'repair', name: 'ערכת תיקון לרכב', desc: 'מתקנת את הרכב שאתה נוהג בו (מהתיק)', price: 600, buy: () => { econ.items.repairKit++; return 'ערכת תיקון נוספה לתיק'; } });
-      out.push({ id: 'snack2', name: '🍫 חטיף ובקבוק מים', desc: 'נכנס לתיק', price: 20, buy: () => { econ.addFood('snack'); econ.addFood('drink'); return 'נוסף לתיק'; } });
+      out.push({ id: 'parachute', name: 'מצנח', desc: 'בציוד. קפיצה מגובה / ממסוק: "פתח מצנח"', price: 900, buy: () => { econ.items.parachute++; return 'מצנח נוסף לתיק'; } });
+      out.push({ id: 'repair', name: 'ערכת תיקון לרכב', desc: 'מתקנת את הרכב שאתה נוהג בו (מהציוד)', price: 600, buy: () => { econ.items.repairKit++; return 'ערכת תיקון נוספה לתיק'; } });
+      out.push({ id: 'snack2', name: '🍫 חטיף ובקבוק מים', desc: 'נכנס לציוד', price: 20, buy: () => { econ.addFood('snack'); econ.addFood('drink'); return 'נוסף לציוד'; } });
       break;
     case 'dealer': {
       // buy a vehicle: it is delivered next to the dealership and stays yours (saved; in the phone's "my cars")

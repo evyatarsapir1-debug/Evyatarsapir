@@ -438,7 +438,7 @@ class Game {
     switch (id) {
       case 'roni': line ||= 'מה קורה? הכל רגוע פה. תתקשר כשבא לך לצאת.'; break;
       case 'mom': line ||= 'חמוד! אכלת משהו היום? תקפוץ לבקר.'; acts.push({ text: 'אני בסדר, אמא', run: () => 'טוב, תשמור על עצמך ❤️' }); break;
-      case 'falafel': line ||= 'פלאפל הכיכר, שלום!'; acts.push({ text: 'הזמנה לתיק (₪25)', run: () => { if (!this.econ.pay(25, 'פלאפל')) return 'אין מספיק כסף'; this.econ.addFood('falafel'); return 'פלאפל בפיתה נוסף לתיק. בתיאבון!'; } }); break;
+      case 'falafel': line ||= 'פלאפל הכיכר, שלום!'; acts.push({ text: 'להזמין מנה (₪25)', run: () => { if (!this.econ.pay(25, 'פלאפל')) return 'אין מספיק כסף'; this.econ.addFood('falafel'); return 'פלאפל בפיתה נוסף לציוד. בתיאבון!'; } }); break;
       case 'mechanic': {
         line = 'מאיה מהמוסך. איך אפשר לעזור?';
         const v = this.player.lastVehicle;
@@ -662,9 +662,15 @@ class Game {
         r.appendChild(b); list.appendChild(r);
       };
       el.querySelector('.smoney').textContent = `${fmt(E.money)} · בריאות ${Math.round(E.health)}`;
+      // weapons: pick what you hold
+      const chuteOn = E.gear === 'chute';
+      row('✋ ידיים ריקות', '', !E.equipped && !chuteOn ? 'נבחר' : 'לבחור', () => { E.gear = null; this.equip(null); this.closeBag(); return null; }, !E.equipped && !chuteOn);
+      for (const id of WEAPON_ORDER) if (E.weapons[id]) row(`🔫 ${WEAPONS[id].name}`, `${E.weapons[id].ammo} יחידות תחמושת`, E.equipped === id ? 'נבחר' : 'לבחור', () => { this.equip(id); this.closeBag(); this.toast(WEAPONS[id].name, 1.5); return null; }, E.equipped === id);
+      // the parachute: wear it on your back (jump from high up / a helicopter, then "פתח מצנח")
+      row(`🪂 מצנח (${E.items.parachute})`, E.items.parachute ? 'על הגב — קופצים מגובה ולוחצים "פתח מצנח"' : 'קונים ב"חנות ציוד"', chuteOn ? 'על הגב' : 'ללבוש', () => { this.equip(null); E.gear = 'chute'; this.closeBag(); this.toast(`🪂 מצנח (${E.items.parachute}) — על הגב`, 2); return null; }, !E.items.parachute || chuteOn);
       // food bought in shops: eat it from the bag
       const foods = Object.entries(E.items.food || {}).filter(([, n]) => n > 0);
-      if (!foods.length) row('🍽️ אין אוכל בתיק', 'קונים בגלידה, בפלאפל, בפיצה, בבית קפה…', '—', () => null, true);
+      if (!foods.length) row('🍽️ אין אוכל', 'קונים בגלידה, בפלאפל, בפיצה, בבית קפה…', '—', () => null, true);
       for (const [id, n] of foods) {
         const F = FOODS[id]; if (!F) continue;
         row(`${F.icon} ${F.name} ×${n}`, `+${F.heal} בריאות`, 'לאכול', () => {
@@ -676,10 +682,7 @@ class Game {
         });
       }
       const v = p.state === 'driving' ? p.vehicle : this.myVehicleNear(8);
-      row(`ערכות תיקון (${E.items.repairKit})`, v ? `ל${v.T.name} (נזק ${Math.round(v.damage)}%)` : 'צריך להיות ליד הרכב שלך', 'לתקן', () => { E.items.repairKit--; v.repair(); return 'הרכב תוקן'; }, E.items.repairKit < 1 || !v);
-      row(`מצנחים (${E.items.parachute})`, 'נפתח לבד בנפילה מגובה', '—', () => null, true);
-      row('ידיים ריקות', '', this.econ.equipped ? 'לבחור' : 'נבחר', () => { this.equip(null); return null; }, !this.econ.equipped);
-      for (const id of WEAPON_ORDER) if (E.weapons[id]) row(WEAPONS[id].name, `${E.weapons[id].ammo} יחידות תחמושת`, E.equipped === id ? 'נבחר' : 'לבחור', () => { this.equip(id); return null; }, E.equipped === id);
+      row(`🧰 ערכות תיקון (${E.items.repairKit})`, v ? `ל${v.T.name} (נזק ${Math.round(v.damage)}%)` : 'צריך להיות ליד הרכב שלך', 'לתקן', () => { E.items.repairKit--; v.repair(); return 'הרכב תוקן'; }, E.items.repairKit < 1 || !v);
     };
     el.querySelector('.smsg').textContent = '';
     el.classList.add('show');
