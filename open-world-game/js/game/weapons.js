@@ -19,8 +19,8 @@ const _q = [];
 const _v = new THREE.Vector3(), _d = new THREE.Vector3();
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
-// Bullets are deadly where they would be for real: the head, the neck and the heart kill on the spot; a hit in the
-// shoulder, an arm, the belly or a leg drops the person to the ground wounded (out of the fight). No health bars.
+// Where a bullet lands on the body: a head shot kills on the spot; the chest, belly, shoulder, arm or leg wound the
+// person (they keep fighting, hurt) until enough hits take them down. No health bars.
 export function bodyZone(p, hy, lat) {
   if (p.state === 'knocked' || p.state === 'dead') return 'vital';      // lying on the ground: any shot finishes it
   const H = 1.8 * (p.modelApp?.height || 1), f = hy / H;

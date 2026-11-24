@@ -103,9 +103,10 @@ export class Police {
       q.angryT -= dt; q.shotT = (q.shotT ?? 0.4) - dt;
       if (q.pose !== 'aimGun' || q.shotT > 0) continue;
       const d = Math.hypot(q.x - pos.x, q.z - pos.z); if (d > 40 || !this._los(q.x, q.z, pos.x, pos.z)) continue;
-      q.shotT = (q.app.soldier ? 0.35 : 0.6) + Math.random() * 0.4;
+      const pain = g.peds.pain(q);   // a wounded shooter fires slower and misses more
+      q.shotT = ((q.app.soldier ? 0.35 : 0.6) + Math.random() * 0.4) * (1 + pain * 1.5);
       const from = new THREE.Vector3(q.x + Math.sin(q.yaw) * 0.55, q.y + 1.38, q.z + Math.cos(q.yaw) * 0.55);
-      const hit = Math.random() < (d < 12 ? 0.45 : 0.28);
+      const hit = Math.random() < (d < 12 ? 0.45 : 0.28) * (1 - pain);
       const to = hit ? new THREE.Vector3(pos.x, pos.y + 1.1, pos.z) : new THREE.Vector3(pos.x + (Math.random() - 0.5) * 3, pos.y + 0.3 + Math.random() * 1.5, pos.z + (Math.random() - 0.5) * 3);
       g.weapons.npcShot(from, to, q.app.soldier ? 'rifle' : 'pistol', g.audio);
       if (hit) g.hurt(P.state === 'driving' ? 3 : q.app.soldier ? 8 : 6, q.app.soldier ? 'חייל' : 'משטרה');

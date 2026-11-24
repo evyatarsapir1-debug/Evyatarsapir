@@ -307,7 +307,9 @@ export class Heists {
     const barGeo = new THREE.CylinderGeometry(0.018, 0.018, G.h, 8);
     for (let i = 0; i <= n; i++) { const t = i / n, m = new THREE.Mesh(barGeo, steel); m.position.set(G.p0[0] + dx * t, G.y + G.h / 2, G.p0[1] + dz * t); m.castShadow = true; bars.add(m); }
     for (const y of [0.08, G.h * 0.5, G.h - 0.08]) { const r = new THREE.Mesh(new THREE.BoxGeometry(len, 0.06, 0.06), steel); r.position.set((G.p0[0] + G.p1[0]) / 2, G.y + y, (G.p0[1] + G.p1[1]) / 2); r.rotation.y = Math.atan2(-uz, ux); bars.add(r); }
-    const pad = new THREE.Group(); pad.position.set(G.padWall[0], G.y + 1.25, G.padWall[1]); pad.rotation.y = Math.atan2(-uz, ux) + Math.PI / 2; g.add(pad);
+    // the keypad sits on the bars in the middle, facing the vault door (it rises with the gate)
+    const pad = new THREE.Group(); pad.position.set(G.padWall[0], G.y + 1.25, G.padWall[1]); pad.rotation.y = Math.atan2(G.pad[0] - G.padWall[0], G.pad[1] - G.padWall[1]); bars.add(pad);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.5, 0.03), steel); plate.position.z = -0.03; pad.add(plate);
     pad.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.32, 0.05), new THREE.MeshStandardMaterial({ color: 0x1c1f24, metalness: 0.5, roughness: 0.4 })));
     const keys = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.012), new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.5 })); keys.position.set(0, -0.04, 0.03); pad.add(keys);
     const light = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff2020, emissiveIntensity: 2 })); light.position.set(0, 0.11, 0.03); pad.add(light);

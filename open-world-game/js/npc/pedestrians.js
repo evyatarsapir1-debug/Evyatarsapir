@@ -112,6 +112,7 @@ const LINES = {
   callCops: ['הלו, משטרה? יש פה מישהו עם נשק!', 'מישהו יכול לעזור לי?!', 'אני מתקשר למשטרה!', 'הצילו! משטרה!'],
   fear: ['הצילו!', 'יורים! תברחו!', 'מישהו יכול לעזור לי?!', 'משטרה! משטרה!', 'רוצו!'],
 };
+const WOUNDS_DEAD = 4.5;   // body-hit points that take a person down (arm/leg/shoulder 1, belly 1.5, chest 2)
 export class Pedestrians {
   constructor(scene) {
     this.scene = scene;
@@ -761,7 +762,7 @@ export class Pedestrians {
       case 'dazed': {
         const [sx, sz] = p.fleeFrom, dx = p.x - sx, dz = p.z - sz, L = Math.hypot(dx, dz) || 1;
         goal = [p.x + dx / L * 10, p.z + dz / L * 10]; speed = p.wounded ? 0.6 : 1.0; pose = 'walk';
-        if (p.timer <= 0) { p.state = this._calm(p); p.timer = 6; p.hp = p.maxHp; p.defeated = false; p.wounded = false; }
+        if (p.timer <= 0) { p.state = this._calm(p); p.timer = 6; p.hp = p.maxHp; p.defeated = false; p.wounded = false; p.wounds = 0; p.limp = false; }
         break;
       }
       case 'flee': {
@@ -773,6 +774,7 @@ export class Pedestrians {
       }
     }
     // ---- movement with simple avoidance
+    if (p.wounds && speed > 0) speed *= 1 - this.pain(p) * (p.limp ? 1 : 0.7);   // hurt: slower (limping with a leg wound)
     if (goal && speed > 0) {
       let dx = goal[0] - p.x, dz = goal[1] - p.z;
       const L = Math.hypot(dx, dz) || 1;
@@ -905,29 +907,30 @@ export class Pedestrians {
   }
 
   // a person got hit in a fist fight
-  // a bullet: head / neck / heart -> dead on the spot; anywhere else -> falls wounded (stays down, then limps away;
-  // never back in the fight). A second bullet on someone lying there finishes it.
+  // a bullet: the head kills on the spot. Anywhere else hurts and keeps hurting: the person stays on their feet and
+  // keeps fighting, but slower and with a worse aim; after several hits (the chest counts more than an arm or a leg)
+  // they go down for good.
   shot(p, src, zone) {
     if (p.state === 'dead') return false;
-    const lethal = zone === 'head' || zone === 'vital' || p.wounded;
-    if (['down', 'dazed', 'getup'].includes(p.state)) p.state = 'knocked';   // on the ground / getting up: still hittable
-    const r = this.hit(p, src, lethal ? 999 : 0.01, true);
-    if (!r || r === 'dead' || lethal) return r;
-    const dx = p.x - src.x, dz = p.z - src.z, L = Math.hypot(dx, dz) || 1;
-    this._release(p); p.seat = null;
-    p.state = 'knocked'; p.wounded = zone; p.timer = 55 + this.rng.float(0, 15);
-    p.copChase = false; p.gunOut = false; p.aggroT = 0; p.atk = null; p.angryT = 0;
-    p.vx = dx / L * 1.6; p.vz = dz / L * 1.6; p.fallYaw = Math.atan2(-dx, -dz);
-    this.say(p, this.rng.pick(zone === 'leg' ? ['אאאח! הרגל!', 'אני לא יכול לעמוד!'] : zone === 'shoulder' || zone === 'arm' ? ['אאאח! היד!', 'נפגעתי בכתף!'] : ['אאאח... נפגעתי', 'עזרה...']), 2.4);
+    const w = zone === 'head' ? 99 : zone === 'vital' ? 2 : zone === 'belly' ? 1.5 : 1;
+    const lethal = (p.wounds || 0) + w >= WOUNDS_DEAD;
+    if (['down', 'dazed', 'getup'].includes(p.state)) p.state = 'knocked';    // still hittable while on the ground
+    const r = this.hit(p, src, lethal ? 999 : 0.01, 'bullet');
+    if (!r || r === 'dead') return r;
+    p.wounds = (p.wounds || 0) + w; p.hurtZone = zone; p.hitT = 0.45;          // flinch
+    if (zone === 'leg') p.limp = true;
+    if (this.rng.chance(0.6)) this.say(p, this.rng.pick(zone === 'leg' ? ['אאאח! הרגל!', 'אוף, הרגל...'] : zone === 'shoulder' || zone === 'arm' ? ['אאאח! היד!', 'נפגעתי בכתף!'] : ['אאאח...', 'נפגעתי!']), 1.8);
     return 'wound';
   }
+  // how much the wounds slow a person down / spoil their aim: 0 (fine) .. 0.6
+  pain(p) { return Math.min(0.6, (p.wounds || 0) * 0.13); }
   hit(p, src, dmg, kick) {
     if (p.state === 'down' || p.state === 'dazed' || p.state === 'dead' || p.state === 'driving' || p.state === 'pulled' || p.state === 'thrown') return false;
     if (p.state === 'getup') return false;                                  // can't hit someone while they get up
     this._release(p); p.seat = null; p.fixedY = null;
     const dx = p.x - src.x, dz = p.z - src.z, L = Math.hypot(dx, dz) || 1;
     // guard up: the blow lands on the arms
-    if (p.state === 'fight' && p.block > 0 && kick !== true) {
+    if (p.state === 'fight' && p.block > 0 && kick !== true && kick !== 'bullet') {
       p.hp = Math.max(0.5, p.hp - dmg * 0.25); p.barT = 6; p.hitT = 0.15; p.hitKind = 'block';
       p.x += dx / L * 0.2; p.z += dz / L * 0.2; p.block = 0.25; p.atkCool = Math.min(p.atkCool ?? 0, 0.15);
       this.say(p, this.rng.pick(['חסמתי!', 'לא כל כך מהר', 'הא!']), 1.1);

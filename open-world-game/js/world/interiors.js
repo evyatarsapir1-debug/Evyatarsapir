@@ -1132,9 +1132,11 @@ function bankSpec(b, F, spec, piece, lamp, furn) {
     lamp(va, (vd0 + d1) / 2, y + h - 0.05); lamp(va, d0 + 1.0, y + h - 0.05);
     info.alarms.push({ pt: F.pt(va, vd0 - 0.2), y: y + 2.9 });
     // inner bar gate across the vault (opened with a code at its keypad) between the door and the money
-    const gd = vd0 + T2 + 0.9, gh = Math.min(h - 0.1, 2.6);
+    // set back from the door (room to walk in after it opens), in front of the money; keypad in the middle of the bars
+    const ldMin = (vd0 + d1) / 2 + 0.4 - 0.9;                     // where you stand to take the nearest money
+    const gd = Math.max(vd0 + T2 + 0.9, Math.min(vd0 + T2 + 2.3, ldMin - 0.9)), gh = Math.min(h - 0.1, 2.6);
     const gateCol = colFromRect(F.rect(ia0, ia1, gd - 0.06, gd + 0.06), y, y + gh, 'vaultgate'); C.push(gateCol);
-    const gate = { p0: F.pt(ia0, gd), p1: F.pt(ia1, gd), y, h: gh, col: gateCol, pad: F.pt(ia0 + 0.6, gd - 0.75), padWall: F.pt(ia0 + 0.25, gd - 0.1) };
+    const gate = { p0: F.pt(ia0, gd), p1: F.pt(ia1, gd), y, h: gh, col: gateCol, pad: F.pt(va, gd - 0.75), padWall: F.pt(va, gd - 0.08) };
     return { center: F.pt(va, vd0 + T2 / 2), hingeA: va - 1.25, d: vd0, y, col: doorCol, out: [F.fx, F.fz], lat: [-F.fz, F.fx], loot, outside: F.pt(va, vd0 - 1.6), gate };
   };
   // security room on the ground floor (harbor, local), manager's office upstairs (classic), security upstairs (gold)

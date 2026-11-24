@@ -624,11 +624,11 @@ export class Gangs {
     p.atkT = (p.atkT ?? Math.random() * 0.8) - dt;
     if (p.atkT > 0) return;
     if (p.app.gun && p.pose === 'aimGun' && d < 34) {
-      p.atkT = 0.7 + Math.random() * 0.6; p.recoilT = 0.12;
+      const pain = g.peds.pain(p); p.atkT = (0.7 + Math.random() * 0.6) * (1 + pain * 1.5); p.recoilT = 0.12;
       const from = new THREE.Vector3(p.x + Math.sin(p.yaw) * 0.5, p.y + 1.4, p.z + Math.cos(p.yaw) * 0.5);
       const to = new THREE.Vector3(target.x + (Math.random() - 0.5) * 1.4, target.y + 1.1, target.z + (Math.random() - 0.5) * 1.4);
       g.weapons.npcShot(from, to, p.weaponKind === 'rifle' ? 'rifle' : 'pistol', g.audio);
-      if (Math.random() < (d < 14 ? 0.5 : 0.32)) g.peds.hit(target, p, shooterIsEnemy ? 1.6 : 3.5);   // your crew is tougher than the rivals
+      if (Math.random() < (d < 14 ? 0.5 : 0.32) * (1 - pain)) g.peds.hit(target, p, shooterIsEnemy ? 1.6 : 3.5);   // your crew is tougher than the rivals
     } else if (!p.app.gun && d < 1.6) {
       p.atkT = 0.85 + Math.random() * 0.4; p.hitT = 0.25;
       g.peds.hit(target, p, p.app.knife ? 3 : 2); g.audio.impact?.(2);
@@ -658,11 +658,11 @@ export class Gangs {
           if (p.stabT <= 0) { p.stabT = 0.9 + Math.random() * 0.4; g.hurt(p.app.knife ? 7 : 4, crew.G.full); g.audio.impact?.(p.app.knife ? 1.5 : 2.5); g.rig.shake = Math.max(g.rig.shake, 0.12); p.hitT = 0.25; }
         }
         if (p.app.gun && p.pose === 'aimGun' && crew.shootT <= 0 && d < 34 && (g.police._los?.(p.x, p.z, pos.x, pos.z) ?? true)) {
-          crew.shootT = 0.55 + Math.random() * 0.5; p.recoilT = 0.12;
+          const pain = peds.pain(p); crew.shootT = (0.55 + Math.random() * 0.5) * (1 + pain * 1.5); p.recoilT = 0.12;
           const from = new THREE.Vector3(p.x + Math.sin(p.yaw) * 0.5, p.y + 1.4, p.z + Math.cos(p.yaw) * 0.5);
           const to = new THREE.Vector3(pos.x + (Math.random() - 0.5) * 2.2, pos.y + 1.1, pos.z + (Math.random() - 0.5) * 2.2);
           g.weapons.npcShot(from, to, 'pistol', g.audio);
-          if (Math.random() < (d < 12 ? 0.45 : 0.3)) g.hurt(Pl.state === 'driving' ? 3 : 6, crew.G.full);
+          if (Math.random() < (d < 12 ? 0.45 : 0.3) * (1 - pain)) g.hurt(Pl.state === 'driving' ? 3 : 6, crew.G.full);
         }
         if (Math.random() < dt * 0.15) peds.say(p, ANGRY[Math.floor(Math.random() * ANGRY.length)], 1.6);
       } else {

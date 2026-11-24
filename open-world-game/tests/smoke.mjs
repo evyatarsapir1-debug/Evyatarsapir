@@ -1324,20 +1324,20 @@ const zones = await g(() => {
   };
   const H = 1.8 * (a.modelApp?.height || 1);
   const zHead = ray(a, H * 0.93, 0).zone, zShoulder = ray(a, H * 0.78, 0.19).zone, zHeart = ray(a, H * 0.72, 0.03).zone, zLeg = ray(a, H * 0.3, 0.1).zone;
-  // shoulder: falls wounded, stops fighting, stays down
-  const rw = game.peds.shot(b, P, 'shoulder'); step(30 * 5);
-  const wounded = { r: rw, st: b.state, w: b.wounded, gun: b.gunOut, chase: b.copChase };
+  // shoulder, then a leg: hurt but still on his feet and fighting back (slower, worse aim)
+  const rw = game.peds.shot(b, P, 'shoulder'); step(30 * 2); game.peds.shot(b, P, 'leg'); step(30 * 3);
+  const wounded = { r: rw, st: b.state, wounds: b.wounds, pain: +game.peds.pain(b).toFixed(2), gun: b.gunOut, chase: b.copChase, alive: b.state !== 'dead' };
   const bars = [...document.querySelectorAll('.npctag .hp')].filter((e) => e.style.display !== 'none').length;
   // head: dead in one shot
   const rh = game.peds.shot(a, P, zHead); step(3);
   const headDead = a.state === 'dead';
-  // a second shot on the wounded one finishes it
-  const r2 = game.peds.shot(b, P, ray(b, 0.3, 0).zone || 'leg'); step(3);
+  // a few more body hits take him down
+  let r2 = null, n = 0; while (b.state !== 'dead' && n < 6) { r2 = game.peds.shot(b, P, n % 2 ? 'belly' : 'arm'); n++; step(3); }
   game.police.clear(); game.econ.health = 100;
-  return { zHead, zShoulder, zHeart, zLeg, rw, wounded, rh, headDead, r2, finished: b.state, bars };
+  return { zHead, zShoulder, zHeart, zLeg, rw, wounded, rh, headDead, r2, more: n, finished: b.state, bars };
 });
-check('guns: the head and the heart kill in one shot; shoulder / leg are wounds (real bullet rays on a bank guard)', zones.zHead === 'head' && zones.zHeart === 'vital' && zones.zShoulder === 'shoulder' && zones.zLeg === 'leg' && zones.headDead, JSON.stringify(zones));
-check('guns: a wounded guard falls, stops shooting and stays down; another shot finishes him; no health bars', zones.rw === 'wound' && zones.wounded.st === 'knocked' && !zones.wounded.gun && !zones.wounded.chase && zones.finished === 'dead' && zones.bars === 0, JSON.stringify(zones));
+check('guns: one bullet in the head kills; bullet rays tell head / chest / shoulder / leg apart (bank guard)', zones.zHead === 'head' && zones.zHeart === 'vital' && zones.zShoulder === 'shoulder' && zones.zLeg === 'leg' && zones.headDead, JSON.stringify(zones));
+check('guns: shot in the shoulder and leg the guard stays up and fights on, hurt (slower, worse aim); a few more hits take him down; no health bars', zones.rw === 'wound' && zones.wounded.alive && zones.wounded.st === 'copChase' && zones.wounded.chase && zones.wounded.pain > 0 && zones.finished === 'dead' && zones.more >= 2 && zones.bars === 0, JSON.stringify(zones));
 check('gangs: a crew button on the screen while you are in a gang - tap it and your boys come', guards.hidden && guards.shown && guards.called >= 4, JSON.stringify({ hidden: guards.hidden, shown: guards.shown, called: guards.called }));
 
 // ---------------------------------------------------------------- skydiving: jump out of a helicopter high above the clouds
