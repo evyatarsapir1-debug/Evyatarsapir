@@ -5,6 +5,7 @@ const { districtAt } = WG;
 const _navDir = new THREE.Vector3();
 import { heightAt, surfaces } from './world/terrain.js';
 import { Pedestrians } from './npc/pedestrians.js';
+import { RealPeople } from './npc/realPeople.js';
 import { InteriorManager } from './world/interiorManager.js';
 import { Economy, fmt, FOODS, VESTS } from './game/economy.js';
 import { PostFX } from './render/postfx.js';
@@ -113,6 +114,7 @@ class Game {
     this.tuning = new Tuning(this);
     this.chars = new Characters(this);
     this.gangs = new Gangs(this);
+    this.realPeople = new RealPeople(this);   // detailed human models for the people near the camera
     this.robbery = new Robbery(this);
     this.voices = new Voices(this); this.peds.voice = this.voices;
     this.vehicleTypes = VEHICLE_TYPES;
@@ -1045,6 +1047,7 @@ class Game {
     this.heist.update(dt);
     this.tuning.update(dt);
     this.gangs.update(dt);
+    this.realPeople.update(dt);
     this.robbery.update(dt);
     this.crashes.update(dt, { vehicles: all, player: p, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });
     this.military.update(dt, { player: p, input, vehicles: all, onCrime: (k, x, z) => this.police.crime(k, x, z), camYaw: this.rig.yaw, camPitch: this.rig.pitch, weapons: this.weapons, audio: this.audio, onShake: (k) => { this.rig.shake = Math.max(this.rig.shake, k); } });

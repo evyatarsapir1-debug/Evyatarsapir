@@ -8,4 +8,4 @@ Source: https://github.com/microsoft/Microsoft-Rocketbox — see LICENSE-Rocketb
   crouch, nervous), rotation tracks at 20 fps.
 
 Rebuilt with `tools/people/` (rbxcopy.py picks + converts textures, convert.html/convert.cjs turn FBX into GLB).
-Not yet wired into the game: proof-of-concept renders only.
+In the game: js/npc/realPeople.js draws the pedestrians near the camera with these models (textures 512 px for phones).

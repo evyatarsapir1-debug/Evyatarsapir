@@ -51,7 +51,7 @@ window.convertAvatar = async (name) => {
   await Promise.all(jobs);
   root.animations = []; window.__root = root;
   const box = new THREE.Box3().setFromObject(root);
-  const glb = await new GLTFExporter().parseAsync(root, { binary: true, maxTextureSize: 1024 });
+  const glb = await new GLTFExporter().parseAsync(root, { binary: true, maxTextureSize: window.__maxTex || 512 });
   return { b64: btoa(new Uint8Array(glb).reduce((s, c) => s + String.fromCharCode(c), '')), info, h: box.max.y - box.min.y, tris: (() => { let t = 0; root.traverse((o) => { if (o.isMesh) t += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; }); return t; })(), bones: (() => { let n = []; root.traverse((o) => { if (o.isBone && n.length < 6) n.push(o.name); }); return n; })() };
 };
 
@@ -67,10 +67,11 @@ window.convertAnims = async (list) => {
     for (const t of c.tracks) {
       const sz = t.getValueSize(), T = t.times, V = t.values, step = 1 / 20, nt = [], nv = [];
       let last = -1;
-      for (let i = 0; i < T.length; i++) if (T[i] - last >= step - 1e-4 || i === T.length - 1) { last = T[i]; nt.push(T[i]); for (let k = 0; k < sz; k++) nv.push(V[i * sz + k]); }
+      const cap = 10;   // long idle / talk clips are cut to 10 s (smaller download)
+      for (let i = 0; i < T.length && T[i] <= cap + 1e-4; i++) if (T[i] - last >= step - 1e-4 || i === T.length - 1 || T[i + 1] > cap) { last = T[i]; nt.push(T[i]); for (let k = 0; k < sz; k++) nv.push(V[i * sz + k]); }
       t.times = new Float32Array(nt); t.values = new Float32Array(nv);
     }
-    clips.push(c);
+    c.resetDuration(); clips.push(c);
   }
   host.traverse((o) => { if (o.isMesh) o.visible = false; });
   const glb = await new GLTFExporter().parseAsync(host, { binary: true, animations: clips, onlyVisible: false });

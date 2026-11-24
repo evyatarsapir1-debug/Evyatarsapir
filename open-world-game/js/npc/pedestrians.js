@@ -1207,7 +1207,7 @@ export class Pedestrians {
     const R = this.rig, M = this.M;
     const dt = this._lastDt || 0.016;
     this.peds.forEach((p, i) => {
-      if (p.cmOn) { for (const [k, m] of Object.entries(M)) { if (LIMB_KEYS.has(k)) { m.setMatrixAt(i * 2, this.zero); m.setMatrixAt(i * 2 + 1, this.zero); } else m.setMatrixAt(i, this.zero); } return; }
+      if (p.cmOn || p.rpOn) { for (const [k, m] of Object.entries(M)) { if (LIMB_KEYS.has(k)) { m.setMatrixAt(i * 2, this.zero); m.setMatrixAt(i * 2 + 1, this.zero); } else m.setMatrixAt(i, this.zero); } return; }
       this._pose(p, dt);
       R.root.position.set(p.x, p.y, p.z);
       R.root.rotation.set(0, p.state === 'fall' || p.state === 'dead' || p.state === 'knocked' ? p.fallYaw : p.yaw, 0);

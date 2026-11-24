@@ -1333,6 +1333,21 @@ const guards = await g(() => {
   return { n: gd.filter((q) => !q.vaultGuard).length, nVault: gd.filter((q) => q.vaultGuard).length, look, hidden, shown, called };
 });
 check('bank: two armed guards at the entrance + two at the vault (full body, uniform, vest, rifle)', guards.n === 2 && guards.nVault === 2 && guards.look.every((l) => l.gun && l.model && l.rifle && l.vest), JSON.stringify(guards));
+const realPpl = await g(async () => {
+  const game = __game, P = game.player, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.police.clear(); game.teleport(520, 540, 0, 0.3); step(20);
+  let i = 0; for (const q of game.peds.peds) { if (i >= 8 || q.car || q.state === 'driving' || q.state === 'inside' || q.cm) continue; q.x = P.x + Math.sin(i) * 6; q.z = P.z + Math.cos(i) * 6 + 3; q.y = P.y; q.state = i % 2 ? 'walk' : 'idle'; i++; }
+  for (let k = 0; k < 80 && game.realPeople.count < 6; k++) { step(4); await new Promise((r) => setTimeout(r, 300)); }
+  const R = game.realPeople, live = [...R.live.entries()];
+  const hidden = live.every(([q]) => q.rpOn), animated = live.filter(([, I]) => I.cur && I.mixer.time > 0).length;
+  const onSpot = live.every(([q, I]) => Math.hypot(I.root.position.x - q.x, I.root.position.z - q.z) < 0.01);
+  const kinds = new Set(live.map(([, I]) => I.name)).size;
+  // far away: back to the light figures
+  game.teleport(900, 200, 0, 0.3); step(10); const after = R.count;
+  return { count: live.length, hidden, animated, onSpot, kinds, after };
+});
+check('real people: nearby pedestrians are detailed human models (several different people), animated, in place of the simple figures; far away back to light figures', realPpl.count >= 6 && realPpl.hidden && realPpl.animated >= 6 && realPpl.onSpot && realPpl.kinds >= 3 && realPpl.after <= realPpl.count, JSON.stringify(realPpl));
 const hudCol = await g(() => {
   const r = (id) => { const e = document.getElementById(id); return e ? parseFloat(getComputedStyle(e).top) : null; };   // CSS position (the crew button is hidden outside a gang)
   const before = __game.state; document.querySelector('[data-btn="bag"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
