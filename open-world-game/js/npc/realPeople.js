@@ -74,7 +74,7 @@ const NAMES = {
   walk: ['m_walk_neutral_01', 'f_walk_neutral_01'], run: ['m_run_neutral', 'f_run_neutral'], idle: ['m_idle_neutral_01', 'f_idle_neutral_01'],
   look: ['m_idle_look_around_01', 'f_idle_look_around_01'], talk: ['m_gestic_talk_neutral_01', 'f_gestic_talk_neutral_01'],
   phone: ['m_cell_phone_talk_01', 'm_cell_phone_talk_01'], sit: ['m_sit_chair_idle_neutral_01', 'f_sit_chair_idle_neutral_01'],
-  nervous: ['m_idle_nervous_01', 'f_idle_nervous_01'], crouch: ['m_crouch_idle', 'm_crouch_idle'],
+  nervous: ['m_idle_nervous_01', 'f_idle_nervous_01'], crouch: ['m_crouch_idle', 'm_crouch_idle'], sprint: ['m_run_fast_01', 'm_run_fast_01'],
 };
 // the playable characters: each one is his own real person
 const PLAYER_AV = { miguel: 'Male_Adult_06', tavor: 'Male_Adult_05', jason: 'Male_Adult_04' };
@@ -139,14 +139,17 @@ export class RealPeople {
     return (p.rpAvatar = (pool.length ? pool : list)[seed % (pool.length || list.length)]);
   }
   _load(name) {
-    if (this.tpl.has(name) || this.loading.has(name) || this.failed.has(name) || this.loading.size >= 2) return;
+    if (this.tpl.has(name) || this.loading.has(name) || this.failed.has(name)) return;
+    if (this.loading.size >= 2) { (this.queue ||= new Set()).add(name); return; }   // waits its turn (not dropped)
     this.loading.add(name);
     loadGltf(this.loader, `${BASE}av/${name}.js`).then((g) => {
       this.loading.delete(name);
       g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; } });
       this.tpl.set(name, { scene: g.scene, female: name.includes('Female') });
-    }, (e) => { console.warn('real people:', name, e); this.loading.delete(name); this.failed.add(name); this._why(e); });
+      this._drain();
+    }, (e) => { console.warn('real people:', name, e); this.loading.delete(name); this.failed.add(name); this._why(e); this._drain(); });
   }
+  _drain() { if (!this.queue?.size) return; const n = this.queue.values().next().value; this.queue.delete(n); this._load(n); }
   _make(name) {
     const spare = this.free.get(name)?.pop(); if (spare) { spare.root.visible = true; this.game.scene.add(spare.root); return spare; }
     const T = this.tpl.get(name), model = skeletonClone(T.scene), root = new THREE.Group();
@@ -262,22 +265,23 @@ export class RealPeople {
     const g = this.game, P = g.player, id = g.chars?.active || 'miguel', name = this.uniform?.() || PLAYER_AV[id] || PLAYER_AV.miguel;
     const v = P.vehicle, inCar = (P.state === 'driving' || P.state === 'entering' || P.state === 'exiting') && v;
     const enclosed = inCar && P.state === 'driving' && (v.isPlane || v.T?.enclosed);
-    const ok = !g.realPeopleOff && !P.swimming && !enclosed && P.object.parent && g.state !== 'switching';
+    const ok = !g.realPeopleOff && !P.swimming && !enclosed && P.object.parent;
+    if (!this._pre && this.clips) { this._pre = true; for (const n of Object.values(PLAYER_AV)) this._load(n); }   // all your characters ready before you switch
     if (!ok || !this.tpl.has(name)) {
       if (ok) this._load(name);
       if (this.me) { this.me.root.visible = false; if (this.me.gun) this.me.gun.visible = false; if (this.meHid) { P.object.visible = !enclosed; this.meHid = false; } }
       P.realBody = false;
       return;
     }
-    if (!this.me || this.me.name !== name) { if (this.me) { this.game.scene.remove(this.me.root); if (this.me.gun) this.game.scene.remove(this.me.gun); } this.me = this._make(name); this.me.root.scale.setScalar(1.0); }
+    if (!this.me || this.me.name !== name) { if (this.me) { this.game.scene.remove(this.me.root); if (this.me.gun) this.game.scene.remove(this.me.gun); } this.me = this._make(name); this.me.root.scale.setScalar(1.08); }   // as tall as your old figure: the camera frames you the same
     const I = this.me, sp = Math.hypot(P.vx || 0, P.vz || 0);
     const W = g.econ?.equipped ? WEAPONS[g.econ.equipped] : null;
     const gunKind = W && P.state === 'foot' ? ({ pistol: 'pistol', rifle: 'rifle', long: 'long', heavy: 'launcher' })[W.kind] || null : null;
     const seated = inCar && P.state === 'driving' || !!P.seat;
-    const key = seated ? 'sit' : P.skydive ? 'idle' : !P.grounded && !P.parachute ? (I.cur && I.cur !== 'sit' ? I.cur : 'idle') : sp < 0.3 ? 'idle' : sp < 3.3 ? 'walk' : 'run';
+    const key = seated ? 'sit' : P.skydive ? 'idle' : !P.grounded && !P.parachute ? (I.cur && I.cur !== 'sit' ? I.cur : 'idle') : sp < 0.3 ? 'idle' : sp < 3.3 ? 'walk' : sp < 5 ? 'run' : 'sprint';
     if (I.cur !== key) { const a = I.actions[key], old = I.cur && I.actions[I.cur]; if (a) { a.reset(); a.play(); if (old) a.crossFadeFrom(old, 0.2, false); } I.cur = key; }
     const a = I.actions[key];
-    if (a) a.timeScale = !P.grounded && !seated ? 0.25 : key === 'walk' ? Math.max(0.7, Math.min(1.8, sp / 1.35)) : key === 'run' ? Math.max(0.8, Math.min(1.8, sp / 3.6)) : 1;
+    if (a) a.timeScale = !P.grounded && !seated ? 0.25 : key === 'walk' ? Math.max(0.7, Math.min(1.6, sp / 1.45)) : key === 'run' ? Math.max(0.85, Math.min(1.3, sp / 3.8)) : key === 'sprint' ? Math.max(0.85, Math.min(1.25, sp / 6.2)) : 1;
     I.root.visible = true;
     // where you are: the old figure's place (it is positioned in the seat when you drive)
     P.object.updateWorldMatrix(true, false);

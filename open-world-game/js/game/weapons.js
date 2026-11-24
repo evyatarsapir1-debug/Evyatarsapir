@@ -525,7 +525,7 @@ export class WeaponSystem {
       this.pendingThrow.t -= dt;
       if (this.pendingThrow.t <= 0) {
         const { W, dir } = this.pendingThrow; this.pendingThrow = null;
-        const hand = new THREE.Vector3(); player.model.arms[1].hand.getWorldPosition(hand);
+        const hand = new THREE.Vector3(); const rh = player.realBody && this.game?.realPeople?.me?.B?.R?.hand; (rh || player.model.arms[1].hand).getWorldPosition(hand);
         let vel = new THREE.Vector3(dir.x * 15, Math.max(4.5, dir.y * 14 + 5.5), dir.z * 15);
         // aimed throw: a car (or person) near the crosshair within 25 m gets exactly the arc that lands on it
         { const hx = Math.hypot(dir.x, dir.z) || 1, ux = dir.x / hx, uz = dir.z / hx; let best = null, bs = 0.32;
@@ -555,7 +555,17 @@ export class WeaponSystem {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const pr = this.projectiles[i];
       pr.v.y -= 18 * dt;
+      const a0 = pr.obj.position.clone();
       pr.obj.position.addScaledVector(pr.v, dt);
+      // walls / roofs / furniture: it bounces off (never through)
+      { const o = pr.obj.position; this.statics.query(Math.min(a0.x, o.x) - 0.3, Math.min(a0.z, o.z) - 0.3, Math.max(a0.x, o.x) + 0.3, Math.max(a0.z, o.z) + 0.3, _q);
+        let hitT = 1, hc = null;
+        for (const s of _q) { if (s.off || s.tag === 'water') continue; const t = segmentVsBox(a0.x, a0.y, a0.z, o.x, o.y, o.z, s, 0.07); if (t < hitT) { hitT = t; hc = s; } }
+        if (hc) {
+          o.lerpVectors(a0, o, Math.max(0, hitT - 0.02));
+          if (a0.y >= (hc.y1 ?? 99) - 0.05 && pr.v.y < 0) { o.y = hc.y1 + 0.08; pr.v.y = Math.abs(pr.v.y) * 0.3; pr.v.x *= 0.6; pr.v.z *= 0.6; }   // landed on top
+          else { pr.v.x *= -0.35; pr.v.z *= -0.35; pr.v.y *= 0.6; }                                                                          // hit a wall: back off it
+        } }
       for (const v of ctx.vehicles) { const q = pr.obj.position; if (Math.abs(v.x - q.x) > 4 || Math.abs(v.z - q.z) > 5) continue; if (q.y > v.y && q.y < v.y + v.T.H && segmentVsBox(q.x - pr.v.x * dt, q.y, q.z - pr.v.z * dt, q.x, q.y, q.z, v.collider, 0.05) < 1) { pr.v.x *= -0.35; pr.v.z *= -0.35; pr.obj.position.addScaledVector(pr.v, dt * 2); } else if (q.y > v.y + v.T.H - 0.15 && q.y < v.y + v.T.H + 0.2 && verticalOverlap(q.y - 0.3, q.y, v.collider) && segmentVsBox(q.x, q.y + 0.3, q.z, q.x, q.y - 0.3, q.z, v.collider, 0.05) < 1 && pr.v.y < 0) { pr.v.y = Math.abs(pr.v.y) * 0.3; pr.v.x *= 0.6; pr.v.z *= 0.6; } }
       if (pr.spin) { pr.obj.rotation.x += pr.spin * dt; pr.obj.rotation.z += pr.spin * 0.6 * dt; }
       const g = heightAt(pr.obj.position.x, pr.obj.position.z, pr.obj.position.y + 0.3);
@@ -573,16 +583,21 @@ export class WeaponSystem {
         for (const v of ctx.vehicles) { if (Math.abs(v.x - o.x) > 8 || Math.abs(v.z - o.z) > 8) continue; const t = segmentVsBox(a.x, a.y, a.z, o.x, o.y, o.z, v.collider, 0.05); if (t < hitT) { hitT = t; hitV = v; } }
         this.statics.query(Math.min(a.x, o.x) - 0.5, Math.min(a.z, o.z) - 0.5, Math.max(a.x, o.x) + 0.5, Math.max(a.z, o.z) + 0.5, _q);
         for (const s of _q) { if (s.off || s.tag === 'water') continue; const t = segmentVsBox(a.x, a.y, a.z, o.x, o.y, o.z, s, 0.02); if (t < hitT) { hitT = t; hitV = null; hitStatic = true; } }
+        let hitP = null;
+        for (const q of ctx.peds) { if (q.state === 'dead' || q.car || Math.abs(q.x - o.x) > 3 || Math.abs(q.z - o.z) > 3) continue;
+          const dx = q.x - o.x, dz = q.z - o.z; if (Math.hypot(dx, dz) < 0.32 && o.y > (q.y || 0) + 0.3 && o.y < (q.y || 0) + 1.8) { hitP = q; hitT = Math.min(hitT, 0.99); hitV = null; hitStatic = false; break; } }
         const gy = heightAt(o.x, o.z, o.y + 0.3);
         if (hitT < 1 || o.y < gy + 0.04) {
           if (hitT < 1) o.lerpVectors(a, o, hitT);
           else o.y = gy + 0.04;
           c.obj.rotation.set(hitT < 1 && !hitV ? 0 : -Math.PI / 2, Math.atan2(c.flying.v.x, c.flying.v.z), 0);
           if (hitV) c.stuck = { v: hitV, ox: o.x - hitV.x, oy: o.y - hitV.y, oz: o.z - hitV.z, h: hitV.heading };
+          if (hitP) c.stuckPed = { p: hitP, ox: o.x - hitP.x, oy: o.y - (hitP.y || 0), oz: o.z - hitP.z };
           c.flying = null; this._spark(o.clone(), 0xffffff, 0.05, 0.08);
-          ctx.message?.(hitV ? 'הפצצה נדבקה לרכב!' : hitStatic ? 'הפצצה נדבקה לקיר!' : 'הפצצה נדבקה לרצפה!');
+          ctx.message?.(hitV ? 'הפצצה נדבקה לרכב!' : hitP ? 'הפצצה נדבקה עליו!' : hitStatic ? 'הפצצה נדבקה לקיר!' : 'הפצצה נדבקה לרצפה!');
         }
       }
+      if (c.stuckPed) { const q = c.stuckPed.p; c.obj.position.set(q.x + c.stuckPed.ox, (q.y || 0) + c.stuckPed.oy, q.z + c.stuckPed.oz); }
       if (c.stuck) { const v = c.stuck.v, da = v.heading - c.stuck.h, cs = Math.cos(da), sn = Math.sin(da); c.obj.position.set(v.x + c.stuck.ox * cs + c.stuck.oz * sn, v.y + c.stuck.oy, v.z - c.stuck.ox * sn + c.stuck.oz * cs); c.obj.rotation.y += 0; }
       c.led.visible = (c.t % (c.t < 1.5 ? 0.25 : 0.6)) < (c.t < 1.5 ? 0.12 : 0.3);
       if (c.t <= 0) { this.scene.remove(c.obj); this.explode(c.obj.position.clone(), c.W.explosive, c.W.damage, ctx); this.charges.splice(i, 1); }

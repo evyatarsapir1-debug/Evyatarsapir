@@ -126,6 +126,7 @@ class Game {
     this.rig.flight = this.flight;
     this.econ = new Economy();
     this.weapons = new WeaponSystem(this.scene, this.statics);
+    this.weapons.game = this;                 // (throws leave from the real body's hand)
     this.weapons.audio = this.audio;
     this.combat = new Combat(this);
     this.headlight = new THREE.SpotLight(0xfff4e0, 0, 70, 0.55, 0.45, 1.3);
@@ -813,7 +814,7 @@ class Game {
     else if (this.state === 'shop' && this.shop.tryOn) this._fittingFrame(dt);
     else if (this.state === 'playing') this._playFrame(dt);
     else if (this.state === 'tuning') this.tuning.frame(dt);
-    else if (this.state === 'switching') this.chars.frame(dt);
+    else if (this.state === 'switching') { this.chars.frame(dt); this.realPeople.update(dt); }   // the switch shot shows the real people too
     else if (this.state === 'charwheel') this.chars.wheelFrame(dt);
     this._lights();
     this.clouds?.update(this.camera, this.env);

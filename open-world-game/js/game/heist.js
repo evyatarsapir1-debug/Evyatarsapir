@@ -161,6 +161,7 @@ export class Heists {
   }
   _gps() {
     const S = this.stage(); if (!S) return;
+    if (S.type !== 'escape') { this.game.gps.clear(); return; }   // inside the bank: no marker (you know what to do)
     if (S.type === 'escape') {
       if (S.dest) { const d = S.dest(); this.game.gps.set({ x: d.x, z: d.z, name: d.name, radius: d.r, mission: true }, this.game.playerPos()); }
       else this.game.gps.clear();

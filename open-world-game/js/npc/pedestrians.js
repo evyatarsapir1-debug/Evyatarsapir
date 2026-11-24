@@ -328,7 +328,29 @@ export class Pedestrians {
     if (this._skT <= 0) { this._skT = 1; this._syncInteriorPeople(ctx.places, ctx.player, ctx.cells); }
 
     for (const p of this.peds) this._think(p, dt, time, ctx);
+    this._spread(dt);
     this._render();
+  }
+  // people keep a little personal space: anyone standing / walking closer than ~0.8 m to another is eased apart
+  // (no clumps, nobody inside somebody else); seated / lying / riding people stay where they are
+  _spread(dt) {
+    const FIX = new Set(['resident', 'shopkeeper', 'inside', 'dead', 'driving', 'pulled', 'thrown', 'sit', 'seated', 'knocked', 'convoy', 'swimmer', 'sunbathe', 'beachsit', 'talk']);
+    const grid = new Map(), key = (x, z) => Math.floor(x / 1.2) * 4096 + Math.floor(z / 1.2);
+    for (const p of this.peds) { if (p.car) continue; const k = key(p.x, p.z); let L = grid.get(k); if (!L) grid.set(k, L = []); L.push(p); }
+    for (const p of this.peds) {
+      if (p.car || FIX.has(p.state)) continue;
+      const cx = Math.floor(p.x / 1.2), cz = Math.floor(p.z / 1.2);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+        const L = grid.get((cx + i) * 4096 + cz + j); if (!L) continue;
+        for (const o of L) {
+          if (o === p || Math.abs((o.y || 0) - (p.y || 0)) > 1.2) continue;
+          const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz);
+          if (d >= 0.8 || d < 1e-4) continue;
+          const push = Math.min(0.08, (0.8 - d) * (FIX.has(o.state) || o.car ? 1 : 0.5) * dt * 6);
+          p.x += dx / d * push; p.z += dz / d * push;
+        }
+      }
+    }
   }
 
   _release(p) { if (p.bench) this.benchesTaken.delete(p.bench.key); }

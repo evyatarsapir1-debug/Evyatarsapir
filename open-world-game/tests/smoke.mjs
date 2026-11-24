@@ -1438,6 +1438,46 @@ const jobs = await g(async () => {
   return out;
 });
 check('jobs (phone): ice-cream delivery, clothes-shop clerk, police (uniform, catch and arrest), paramedic (treat the injured), soldier patrol - each pays', jobs.pick.includes('גלידות') && jobs.give.includes('גלידה') && jobs.ice >= 360 && jobs.inUniform === 'Police_Male_01' && jobs.fled === 'flee' && jobs.arrest.includes('עצור') && jobs.lying === 'knocked' && jobs.treat.includes('טפל') && jobs.healed !== 'knocked' && jobs.atCounter && jobs.serve.includes('שרת') && jobs.clerkDone === 1 && jobs.army >= 800 && jobs.money > 1500, JSON.stringify(jobs));
+const fix2 = await g(async () => {
+  const game = __game, P = game.player, W = game.weapons, R = game.realPeople, H = game.heist, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(); game.time += 1 / 30; game._playFrame(1 / 30); game.econ.health = 100; } };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.police.clear(); game.equip(null);
+  const THREE = await import('three'), out = {};
+  // a grenade thrown at a building wall bounces back off it (never ends up inside)
+  const I = H.info('central'), bb = H.bankBuilding('central'), d = bb.door, L = Math.hypot(d.x - bb.x, d.z - bb.z), ux = (d.x - bb.x) / L, uz = (d.z - bb.z) / L, rx = -uz, rz = ux;
+  const sx = d.x + ux * 4 + rx * 6, sz = d.z + uz * 4 + rz * 6;   // outside, beside the door, facing the facade
+  game.teleport(sx, sz, 0); step(10);
+  const gObj = new THREE.Mesh(new THREE.SphereGeometry(0.07)); gObj.position.set(sx, 1.4, sz); game.scene.add(gObj);
+  W.projectiles.push({ obj: gObj, v: new THREE.Vector3(-ux * 14, 2, -uz * 14), fuse: 99, W: { explosive: 0, damage: 0 }, spin: 0 });
+  step(45); const gp = gObj.position, inside = Math.abs(gp.x - bb.x) < bb.w / 2 - 0.2 && Math.abs(gp.z - bb.z) < bb.d / 2 - 0.2;
+  out.grenadeOutside = !inside; W.projectiles.length = 0; game.scene.remove(gObj);
+  // the sticky bomb sticks to a person it hits and moves with him
+  const q = game.peds.peds.find((o) => !o.car && o.state !== 'inside' && o.state !== 'resident' && Math.hypot(o.x - P.x, o.z - P.z) < 80);
+  if (q) { q.x = P.x + 4; q.z = P.z; q.state = 'guard'; q.homeSpot = { x: q.x, z: q.z, yaw: 0, state: 'guard', y: q.y }; step(3);
+    const s = new THREE.Group(); s.position.set(P.x + 1, (q.y || 0) + 1.2, P.z); game.scene.add(s);
+    W.charges.push({ obj: s, t: 99, W: { explosive: 0, damage: 0 }, led: new THREE.Object3D(), stuck: null, flying: { v: new THREE.Vector3(12, 0.5, 0) } });
+    step(10); const c = W.charges[W.charges.length - 1]; out.stuckPed = !!c.stuckPed; q.x += 2; step(2); out.moved = Math.abs(s.position.x - (q.x + (c.stuckPed?.ox || 0))) < 0.01;
+    W.charges.length = 0; game.scene.remove(s); }
+  // the bank: no purple marker during the robbery
+  game.teleport(I.start.pt[0], I.start.pt[1], 0, I.start.y + 0.6); step(20); H.start('central', false); step(5);
+  out.bankMarker = !!game.gps.dest; H.fail('בדיקה'); game.police.clear(); game.econ.heists = {};
+  // people keep their distance
+  game.teleport(520, 540, 0); step(20);
+  const ws = game.peds.peds.filter((o) => !o.car && ['walk', 'idle', 'guard'].includes(o.state)).slice(0, 6); ws.forEach((o, i) => { o.x = P.x + 3 + i * 0.05; o.z = P.z + 3; o.state = 'guard'; o.homeSpot = null; });
+  step(60); let close = 0; for (const a of ws) for (const b of ws) if (a !== b && Math.hypot(a.x - b.x, a.z - b.z) < 0.55) close++;
+  out.clumped = close / 2;
+  // you: as tall as before, a sprint clip when running fast, real during the character switch
+  for (let k = 0; k < 60 && !(R.me && R.me.root.visible); k++) { step(3); await new Promise((r) => setTimeout(r, 250)); }
+  out.scale = R.me?.root.scale.x;
+  P.sprint = true; step(40, () => { game.input.joyY = 1; game.input.held.add('run'); }); out.runClip = R.me?.cur; out.runSp = +Math.hypot(P.vx, P.vz).toFixed(1); game.input.joyY = 0; game.input.held.delete('run'); P.sprint = false; step(20);
+  for (let k = 0; k < 40 && ['Male_Adult_04', 'Male_Adult_05'].some((n) => !R.tpl.has(n)); k++) { step(3); await new Promise((r) => setTimeout(r, 250)); }
+  out.preloaded = ['Male_Adult_04', 'Male_Adult_05', 'Male_Adult_06'].every((n) => R.tpl.has(n));
+  game.chars.switchTo?.('tavor'); let oldSeen = 0; for (let i = 0; i < 30 * 8 && game.state === 'switching'; i++) { game.chars.frame(1 / 30); game.realPeople.update(1 / 30); if (P.object.visible && !R.me?.root.visible) oldSeen++; } step(5);
+  out.switchOld = oldSeen; out.after = R.me?.name; if (game.state === 'switching') game.state = 'playing'; game.chars.active = 'miguel'; step(10);
+  return out;
+});
+check('grenades bounce off walls (never through); the sticky bomb sticks to the person it hits; no purple marker in the bank; people keep their distance', fix2.grenadeOutside && fix2.stuckPed && fix2.moved && !fix2.bankMarker && fix2.clumped === 0, JSON.stringify(fix2));
+check('you: as tall as the old figure (same camera framing), a sprint when running fast, characters preloaded, no old figure during the character switch', Math.abs(fix2.scale - 1.08) < 0.01 && fix2.runClip === 'sprint' && fix2.preloaded && fix2.switchOld === 0 && fix2.after === 'Male_Adult_05', JSON.stringify(fix2));
 const hudCol = await g(() => {
   const r = (id) => { const e = document.getElementById(id); return e ? parseFloat(getComputedStyle(e).top) : null; };   // CSS position (the crew button is hidden outside a gang)
   const before = __game.state; document.querySelector('[data-btn="bag"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
