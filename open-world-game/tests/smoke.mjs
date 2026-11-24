@@ -1349,6 +1349,17 @@ const realPpl = await g(async () => {
   return { count: live.length, cap, hidden, animated, onSpot, kinds, after };
 });
 check('real people: nearby pedestrians are detailed human models (several different people), animated, in place of the simple figures; far away back to light figures', realPpl.count >= Math.min(6, realPpl.cap) && realPpl.hidden && realPpl.animated >= Math.min(6, realPpl.cap) && realPpl.onSpot && realPpl.kinds >= 3 && realPpl.after <= realPpl.count, JSON.stringify(realPpl));
+const realMe = await g(async () => {
+  const game = __game, P = game.player, R = game.realPeople, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  if (P.state !== 'foot') { game.input.pressed.add('vehicle'); step(60); }
+  game.equip(null); game.econ.gear = null;
+  for (let k = 0; k < 80 && !(R.me && R.me.root.visible); k++) { step(3); await new Promise((r) => setTimeout(r, 300)); }
+  const stand = { me: R.me?.name, real: !!R.me?.root.visible, oldHidden: !P.object.visible };
+  step(40, () => { game.input.joyY = 1; }); const walk = R.me?.cur; game.input.joyY = 0; step(10);
+  game.econ.weapons.p7 = { ammo: 40 }; game.equip('p7'); step(3); const armedOld = P.object.visible && !R.me.root.visible; game.equip(null); step(3);
+  return { stand, walk, armedOld };
+});
+check('you are a real person too: walking / standing as the character\'s real model (old figure hidden); with a gun in hand the full figure is used', realMe.stand.me === 'Male_Adult_06' && realMe.stand.real && realMe.stand.oldHidden && realMe.walk === 'walk' && realMe.armedOld, JSON.stringify(realMe));
 const hudCol = await g(() => {
   const r = (id) => { const e = document.getElementById(id); return e ? parseFloat(getComputedStyle(e).top) : null; };   // CSS position (the crew button is hidden outside a gang)
   const before = __game.state; document.querySelector('[data-btn="bag"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));

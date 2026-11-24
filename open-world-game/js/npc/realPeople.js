@@ -20,6 +20,8 @@ const NAMES = {
   phone: ['m_cell_phone_talk_01', 'm_cell_phone_talk_01'], sit: ['m_sit_chair_idle_neutral_01', 'f_sit_chair_idle_neutral_01'],
   nervous: ['m_idle_nervous_01', 'f_idle_nervous_01'], crouch: ['m_crouch_idle', 'm_crouch_idle'],
 };
+// the playable characters: each one is his own real person
+const PLAYER_AV = { miguel: 'Male_Adult_06', tavor: 'Male_Adult_05', jason: 'Male_Adult_04' };
 const SKIP_STATES = new Set(['driving', 'inside', 'pulled', 'thrown', 'swimmer', 'convoy', 'dead']);
 // how many real people at once / out to what distance, by graphics quality
 const BUDGET = { low: [5, 26], medium: [10, 38], high: [16, 50] };
@@ -43,7 +45,9 @@ export class RealPeople {
     const seed = p.rpSeed ??= Math.floor(Math.random() * 1e6);
     const female = !!p.app?.long;
     const list = p.app?.cop ? (female ? POLICE_F : POLICE_M) : p.app?.guard ? SECURITY : female ? WOMEN : MEN;
-    return (p.rpAvatar = list[seed % list.length]);
+    // never the same person as one of the playable characters
+    const mine = new Set(Object.values(PLAYER_AV)), pool = list.filter((n) => !mine.has(n));
+    return (p.rpAvatar = (pool.length ? pool : list)[seed % (pool.length || list.length)]);
   }
   _load(name) {
     if (this.tpl.has(name) || this.loading.has(name) || this.failed.has(name) || this.loading.size >= 2) return;
@@ -76,8 +80,35 @@ export class RealPeople {
     return CLIP[p.pose] || null;
   }
 
+  // you: the character you play is a real person too while walking / running / standing / jumping (empty hands);
+  // with a weapon in hand, fighting, swimming, parachuting, eating, sitting or in a vehicle the full-featured
+  // figure (which has those animations) is used
+  _player(dt) {
+    const g = this.game, P = g.player, id = g.chars?.active || 'miguel', name = PLAYER_AV[id] || PLAYER_AV.miguel;
+    const ok = !g.realPeopleOff && P.state === 'foot' && !P.swimming && !P.parachute && !P.skydive && !P.attack && !(P.hitT > 0) && !(P.eatT > 0) && !(P.throwT > 0)
+      && !(P.combatT > 0) && !g.econ?.equipped && g.econ?.gear !== 'chute' && !P.seat && !P.eating && P.object.parent && g.state !== 'switching';
+    if (!ok || !this.tpl.has(name)) {
+      if (ok) this._load(name);
+      if (this.me) { this.me.root.visible = false; if (this.meHid) { P.object.visible = true; this.meHid = false; } }
+      P.realBody = false;
+      return;
+    }
+    if (!this.me || this.me.name !== name) { if (this.me) this.game.scene.remove(this.me.root); this.me = this._make(name); this.me.root.scale.setScalar(1.0); }
+    const I = this.me, sp = Math.hypot(P.vx || 0, P.vz || 0);
+    const key = !P.grounded ? (I.cur || 'idle') : sp < 0.3 ? 'idle' : sp < 3.3 ? 'walk' : 'run';
+    if (I.cur !== key) { const a = I.actions[key], old = I.cur && I.actions[I.cur]; if (a) { a.reset(); a.play(); if (old) a.crossFadeFrom(old, 0.2, false); } I.cur = key; }
+    const a = I.actions[key];
+    if (a) a.timeScale = !P.grounded ? 0.25 : key === 'walk' ? Math.max(0.7, Math.min(1.8, sp / 1.35)) : key === 'run' ? Math.max(0.8, Math.min(1.8, sp / 3.6)) : 1;
+    I.root.visible = true;
+    I.root.position.copy(P.object.position); I.root.rotation.set(0, P.object.rotation.y, 0);
+    I.mixer.update(dt);
+    if (P.object.visible) { P.object.visible = false; this.meHid = true; }
+    P.realBody = true;
+  }
+
   update(dt) {
     const g = this.game;
+    if (this.clips && !this.off) this._player(dt);
     if (!this.clips || this.off || g.realPeopleOff) { if (this.live.size) for (const p of [...this.live.keys()]) this._release(p); return; }
     const [budget, range] = BUDGET[g.settings?.quality] || BUDGET.medium;
     const cam = g.camera.position, peds = g.peds.peds;

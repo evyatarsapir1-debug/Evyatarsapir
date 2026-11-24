@@ -121,7 +121,7 @@ export class CameraRig {
       player.object.visible = false;
       return;
     }
-    player.object.visible = !(v && (v.isPlane || v.T.enclosed));   // the pilot sits inside the closed cockpit
+    player.object.visible = !(v && (v.isPlane || v.T.enclosed)) && !player.realBody;   // the pilot sits inside the closed cockpit; a real-person model may stand in for the figure
 
     const cp = Math.cos(this.pitch);
     const dirX = -Math.sin(this.yaw) * cp, dirY = Math.sin(this.pitch), dirZ = -Math.cos(this.yaw) * cp;
