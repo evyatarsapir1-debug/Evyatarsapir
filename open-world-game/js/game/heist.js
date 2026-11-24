@@ -119,7 +119,8 @@ export class Heists {
   stage() { const A = this.active; return A && HEISTS[A.id].stages[A.stage]; }
   // the spots the current stage needs (each with pt [x,z] and y)
   targets() {
-    const A = this.active, S = this.stage(), I = this.info(A.id);
+    const A = this.active; if (!A) return [];
+    const S = this.stage(), I = this.info(A.id);
     if (!S || !I) return [];
     if (A.targets) return A.targets;
     let list = [];

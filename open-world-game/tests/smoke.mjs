@@ -986,7 +986,7 @@ check('heist: the cash and gold you take disappear from the bank', bank.lootAll 
 check('heist: alarm, police stars and people reacting (hide / flee / call)', bank.alarm && bank.stars >= 2 && bank.peopleReacted > 0, JSON.stringify(bank));
 check('heist: completing it pays the bank loot into the account, with the money animation', bank.done && bank.paid === 150000 && bank.reward, JSON.stringify(bank));
 const vkey = await g(() => {
-  const game = __game, P = game.player, H = game.heist, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); } };
+  const game = __game, P = game.player, H = game.heist, step = (n, f) => { for (let i = 0; i < n; i++) { f && f(i); game.time += 1 / 30; game._playFrame(1 / 30); game.econ.health = 100; } };
   game.police.clear(); game.econ.health = 100; game.econ.heists = {};
   const I = H.info('central'); game.teleport(I.start.pt[0], I.start.pt[1], Math.PI, I.start.y + 0.6); step(60);
   H.start('central', false); const A = H.active;
