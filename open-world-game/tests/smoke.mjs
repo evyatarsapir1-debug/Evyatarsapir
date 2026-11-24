@@ -1344,7 +1344,8 @@ const guards = await g(() => {
   game.police.clear(); game.econ.health = 100;
   const I = H.info('central'); game.teleport(I.start.pt[0], I.start.pt[1], Math.PI, I.start.y + 0.6); step(90);
   const gd = game.peds.peds.filter((q) => q.doorGuard);
-  const look = gd.map((q) => ({ gun: !!q.app.gun, model: !!q.cm, rifle: q.weaponKind === 'rifle', vest: !!q.cm?.vest?.visible }));
+  // full body: the old full figure with a vest, or the real security model (vest is part of the uniform) with a rifle in hand
+  const look = gd.map((q) => ({ gun: !!q.app.gun, model: !!q.cm || !!q.rpOn, rifle: q.weaponKind === 'rifle', vest: !!q.cm?.vest?.visible || (q.rpOn && game.realPeople.live.get(q)?.name === 'Security_Male_01') }));
   // the crew button: hidden when you are not in a gang, there (and calling) when you are
   const btn = document.getElementById('gangBtn'), hidden = getComputedStyle(btn).display === 'none';
   game.gangs.join('abc'); step(2); const shown = getComputedStyle(btn).display !== 'none';
