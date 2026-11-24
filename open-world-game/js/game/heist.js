@@ -98,7 +98,12 @@ export class Heists {
     }
     const Gt = this.gates[A.id], gate = I?.vault?.gate;
     if (S.type === 'loot' && S.from === 'vault' && gate && Gt?.locked) {
-      if (near(gate.pad, gate.y, 1.6)) return { text: '🔢 פרוץ את דלת הסורגים (קוד)', action: () => this._codeGame(A.id) };
+      if (near(gate.pad, gate.y, 1.6)) {
+        const left = (Gt.lockUntil || 0) - this.game.time;
+        const sec = Math.ceil(left);
+        if (left > 0) return { text: `🔒 הלוח ננעל — עוד ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`, action: () => this.game.toast('5 ניסיונות נכשלו — הלוח נעול ל-5 דקות. המשטרה בדרך…', 2.5) };
+        return { text: `🔢 פרוץ את דלת הסורגים (קוד) · ${5 - (Gt.miss || 0)}/5 ניסיונות`, action: () => this._codeGame(A.id) };
+      }
       return null;                     // the money is behind the bars until you crack the code
     }
     for (const t of this.targets()) {
@@ -130,7 +135,7 @@ export class Heists {
     const H = HEISTS[id];
     this.active = { id, b: this.bankBuilding(id), stage: 0, loot: 0, busy: null, targets: null, timer: H.timeLimit || null, alarm: false, holdup: loud };
     this.doors[id] = { open: 0, mode: 'closed', t: 0 };
-    this.gates[id] = { locked: true, open: 0 };
+    this.gates[id] = { locked: true, open: 0, miss: 0, lockUntil: 0 };
     this.taken[id] = new Set();
     this.game.toast(loud ? `🔫 שוד! ${H.stages[0].text}` : `🤫 שוד שקט — ${H.stages[0].text}`, 4);
     if (H.alarmAtStart || loud) this.alarm(loud ? 'holdup' : 'start');
@@ -254,6 +259,8 @@ export class Heists {
         if (W.t <= 0) { this._blast(); W.kind = 'blown'; W.t = 1.2; }
       } else if (W.kind === 'blown') { W.t -= dt; if (W.t <= 0) { if (S.alarm || S.type === 'vault') this.alarm('blast'); this._next(S.type === 'vault' ? 'בום! דלת הכספת עפה — האזעקה פועלת!' : S.done); } }
     }
+    // the police surround the bank a while after the alarm: when you come down they are waiting outside
+    if (A.alarm) { A.alarmT = (A.alarmT || 0) + dt; if (!A.cordon && A.alarmT > 20) { A.cordon = true; g.police.cordon?.(A.b); } }
     // escape
     if (S?.type === 'escape') {
       if (S.lose) { if (g.police.level === 0) this._next(); }
@@ -327,7 +334,9 @@ export class Heists {
       <div class="cg-btns"><button type="button" class="cg-lock">🔒 עצור</button><button type="button" class="cg-x">✕</button></div></div>`;
     document.body.appendChild(el);
     const dials = [...el.querySelectorAll('.cg-d')], msg = el.querySelector('.cg-msg');
-    const st = this._cg = { i: 0, v: 0, miss: 0, code, el, timer: null };
+    const Gt = (this.gates[id] ||= { locked: true, open: 0, miss: 0, lockUntil: 0 });
+    const st = this._cg = { i: 0, v: 0, miss: Gt.miss || 0, code, el, timer: null };
+    msg.textContent = `עצור כל ספרה מתגלגלת כשהיא שווה לספרה הירוקה שמעליה · ${5 - st.miss}/5 ניסיונות`;
     g.state = 'minigame'; document.body.classList.add('shopping');
     const tick = () => { st.v = (st.v + 1) % 10; dials[st.i].textContent = st.v; };
     const speed = () => 230 - st.i * 35;
@@ -344,8 +353,10 @@ export class Heists {
         if (st.i >= 4) { msg.textContent = '✔ הקוד נפרץ — הסורגים עולים!'; clearInterval(st.timer); setTimeout(() => close(true), 700); return; }
         run();
       } else {
-        st.miss++; g.audio.mech?.('dry'); dials[st.i].classList.add('bad'); setTimeout(() => dials[st.i]?.classList.remove('bad'), 300);
-        msg.textContent = st.miss >= 3 ? '⚠ יותר מדי טעויות — האזעקה הופעלה! תמשיך לנסות' : `טעות (${st.miss}/3)`;
+        st.miss++; Gt.miss = st.miss; g.audio.mech?.('dry'); dials[st.i].classList.add('bad'); setTimeout(() => dials[st.i]?.classList.remove('bad'), 300);
+        // five tries: after the fifth miss the keypad locks for five minutes (and the alarm goes off)
+        if (st.miss >= 5) { Gt.lockUntil = g.time + 300; Gt.miss = 0; this.alarm('code'); msg.textContent = '⛔ 5 טעויות — הלוח ננעל ל-5 דקות! האזעקה פועלת'; clearInterval(st.timer); setTimeout(() => close(false), 1400); return; }
+        msg.textContent = `טעות — נשארו ${5 - st.miss}/5 ניסיונות`;
         if (st.miss >= 3) this.alarm('code');
       }
     };
@@ -465,20 +476,21 @@ export class Heists {
     g.weapons.flash.position.copy(c); g.weapons.flash.intensity = 80; g.weapons._flashT = 0.35;
     g.audio.gunshot?.('heavy'); g.audio.impact?.(14);
     g.rig.shake = Math.max(g.rig.shake, 0.9); g.hitStop = 0.12;
-    for (let i = 0; i < 14; i++) this._smoke(c, 0.6 + Math.random() * 0.8, 4 + Math.random() * 3, (Math.random() - 0.5) * 3 + v.out[0] * 2, (Math.random() - 0.5) * 3 + v.out[1] * 2);
-    this.smokeT = 18; this.smokeAt = c;
+    // a short puff of smoke that clears fast, so you can see what you're doing
+    for (let i = 0; i < 4; i++) this._smoke(c, 0.5 + Math.random() * 0.5, 1.6 + Math.random() * 1.2, (Math.random() - 0.5) * 2 + v.out[0] * 1.5, (Math.random() - 0.5) * 2 + v.out[1] * 1.5);
+    this.smokeT = 2.5; this.smokeAt = c;
     // too close? the blast knocks you down (game damage)
     const P = g.player, d = Math.hypot(P.x - c.x, P.z - c.z);
     if (d < 4.5 && P.state === 'foot') { g.hurt(Math.round(35 * (1 - d / 4.5)) + 5, 'פיצוץ הכספת'); P.vx += (P.x - c.x) / (d || 1) * 6; P.vz += (P.z - c.z) / (d || 1) * 6; P.vy = 3; P.grounded = false; }
   }
   _smoke(at, size, life, vx = 0, vz = 0) {
     const tex = this.game.hitfx?.dust; if (!tex) return;
-    const m = new THREE.SpriteMaterial({ map: tex, color: 0x8a8a8a, transparent: true, depthWrite: false, opacity: 0.85 });
+    const m = new THREE.SpriteMaterial({ map: tex, color: 0x9a9a9a, transparent: true, depthWrite: false, opacity: 0.45 });
     const s = new THREE.Sprite(m); s.position.copy(at); s.scale.setScalar(size); this.game.scene.add(s);
     this.fx.push({ s, t: 0, life, vx, vz, grow: 1.2 + Math.random() });
   }
   _fx(dt) {
-    if (this.smokeT > 0) { this.smokeT -= dt; if (Math.random() < dt * 4) this._smoke(this.smokeAt.clone().add(new THREE.Vector3((Math.random() - 0.5), Math.random() * 0.5, (Math.random() - 0.5))), 0.8, 5, (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.6); }
+    if (this.smokeT > 0) { this.smokeT -= dt; if (Math.random() < dt * 1.2) this._smoke(this.smokeAt.clone().add(new THREE.Vector3((Math.random() - 0.5), Math.random() * 0.5, (Math.random() - 0.5))), 0.8, 5, (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.6); }
     for (let i = this.fx.length - 1; i >= 0; i--) {
       const f = this.fx[i]; f.t += dt; const k = f.t / f.life;
       if (k >= 1) { this.game.scene.remove(f.s); f.s.material.dispose(); this.fx.splice(i, 1); continue; }

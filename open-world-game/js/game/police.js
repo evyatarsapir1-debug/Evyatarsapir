@@ -52,10 +52,43 @@ export class Police {
     this.gone = this.gone || [];
     for (const c of this.cars) { if (msg && !c.wrecked) { c.siren = false; c.leaveT = 15; this.gone.push(c); } else this._remove(c); }
     this.cars = [];
-    for (const p of this.game.peds.peds) if (p.app.cop && p.copChase) { p.copChase = false; p.chaseTo = null; p.state = 'walk'; p.timer = 4; }
+    for (const p of this.game.peds.peds) if (p.app.cop && (p.copChase || p.cordon)) { p.copChase = false; p.cordon = false; p.chaseTo = null; p.state = 'walk'; p.timer = 4; p.angryT = 0; }
+    this.siege = null;
     if (msg) this.game.toast(msg, 3);
   }
   _remove(c) { c.removed = true; this.game.scene.remove(c.object); }
+  // the building is surrounded (bank robbery): two patrol cars parked across the street in front of the entrance and
+  // officers behind them, weapons on the door. They hold while you are inside; the moment you come out the chase starts.
+  cordon(b) {
+    const g = this.game; if (this.siege || !b?.door) return;
+    const d = b.door, L = Math.hypot(d.x - b.x, d.z - b.z) || 1, ux = (d.x - b.x) / L, uz = (d.z - b.z) / L, rx = -uz, rz = ux;
+    const face = Math.atan2(-ux, -uz);                   // looking at the door
+    this.siege = { b, hold: true, cops: [], cars: [] };
+    for (const k of [-1, 1]) {
+      const s = g.roadsideSpot(d.x + ux * 13 + rx * k * 5, d.z + uz * 13 + rz * k * 5); if (!s) continue;
+      const v = new Vehicle('police', 0xf5f5f5, s.x, s.z, face + Math.PI / 2 * k * 0.8, 0);
+      v.driver = 'police'; v.siren = true; v.stuck = 0; v.cordon = true; v.deployed = true;
+      g.scene.add(v.object); this.cars.push(v); this.siege.cars.push(v);
+    }
+    for (let i = 0; i < 4; i++) {
+      const x = d.x + ux * (9 + (i % 2) * 1.5) + rx * (i - 1.5) * 2.6, z = d.z + uz * (9 + (i % 2) * 1.5) + rz * (i - 1.5) * 2.6;
+      const p = g.peds.addCop?.(x, z, false, true); if (!p) continue;
+      p.state = 'guard'; p.yaw = p.baseYaw = face; p.homeSpot = { x, z, yaw: face, state: 'guard', y: 0 }; p.app.gun = true; p.gunOut = true; p.cordon = true;
+      this.siege.cops.push(p);
+    }
+    this.level = Math.max(this.level, 3);
+  }
+  _siege(dt, pos) {
+    const S = this.siege; if (!S) return;
+    const b = S.b, inside = Math.abs(pos.x - b.x) < b.w / 2 + 0.5 && Math.abs(pos.z - b.z) < b.d / 2 + 0.5;
+    if (S.hold && !inside) {
+      // you came out: everybody goes after you
+      S.hold = false;
+      for (const p of S.cops) if (p.state !== 'dead') { p.state = 'copChase'; p.copChase = true; p.chaseTo = null; p.gunOut = true; p.angryT = 45; this.game.peds.say?.(p, ['משטרה! זרוק את הנשק!', 'הוא יוצא! עצור!', 'ידיים למעלה!'][Math.floor(Math.random() * 3)], 2); }
+      for (const c of S.cars) c.cordon = false;
+      this.unseen = 0; this.lastKnown = { x: pos.x, z: pos.z };
+    }
+  }
 
   // can someone at (ax,az) see the player at (bx,bz)? buildings block the view
   _los(ax, az, bx, bz, ay = 1.5, by = 1.5) {
@@ -104,9 +137,9 @@ export class Police {
       if (q.pose !== 'aimGun' || q.shotT > 0) continue;
       const d = Math.hypot(q.x - pos.x, q.z - pos.z); if (d > 40 || !this._los(q.x, q.z, pos.x, pos.z)) continue;
       const pain = g.peds.pain(q);   // a wounded shooter fires slower and misses more
-      q.shotT = ((q.app.soldier ? 0.35 : 0.6) + Math.random() * 0.4) * (1 + pain * 1.5);
+      q.shotT = ((q.app.soldier ? 0.35 : q.doorGuard ? 0.45 : 0.6) + Math.random() * 0.4) * (1 + pain * 1.5);
       const from = new THREE.Vector3(q.x + Math.sin(q.yaw) * 0.55, q.y + 1.38, q.z + Math.cos(q.yaw) * 0.55);
-      const hit = Math.random() < (d < 12 ? 0.45 : 0.28) * (1 - pain);
+      const hit = Math.random() < (q.doorGuard ? (d < 12 ? 0.55 : 0.36) : (d < 12 ? 0.45 : 0.28)) * (1 - pain);
       const to = hit ? new THREE.Vector3(pos.x, pos.y + 1.1, pos.z) : new THREE.Vector3(pos.x + (Math.random() - 0.5) * 3, pos.y + 0.3 + Math.random() * 1.5, pos.z + (Math.random() - 0.5) * 3);
       g.weapons.npcShot(from, to, q.app.soldier ? 'rifle' : 'pistol', g.audio);
       if (hit) g.hurt(P.state === 'driving' ? 3 : q.app.soldier ? 8 : 6, q.app.soldier ? 'חייל' : 'משטרה');
@@ -118,7 +151,8 @@ export class Police {
     this._leaving(dt, ctx, pos);
     this._hud(stars, dt);
     this._returnFire(dt, P, pos);
-    if (!stars) { if (this.cars.length) this.clear(); return; }
+    if (!stars) { if (this.cars.length || this.siege) this.clear(); return; }
+    this._siege(dt, pos);
     const want = Math.min(1 + stars, 5);
     if (!this.lastKnown) this.lastKnown = { x: pos.x, z: pos.z };
     const hunting = this.unseen === 0;            // they saw you last frame: they know exactly where you are
@@ -146,6 +180,7 @@ export class Police {
     //      the last stretch (you in sight, close) is driven straight at you
     let seen = false, reached = false;
     for (const c of this.cars) {
+      if (c.cordon) { c.update(dt, { throttle: 0, steer: 0, handbrake: true }, g.statics, ctx.vehicles); continue; }   // parked across the street in front of the bank
       const dP = Math.hypot(pos.x - c.x, pos.z - c.z);
       if (dP > 420) { this._remove(c); continue; }
       const sees = !c.wrecked && this._sees(c.x, c.z, c.y, pos, 55);

@@ -1027,15 +1027,39 @@ const gold = await g(async () => {
   const closed = !document.getElementById('codeGame'), unlocked = H.gates.gold.locked === false; step(60);
   const gateUp = H.gates.gold.open > 0.9 && gt.col.off !== undefined;
   const L = [...game.interiors.loaded.values()].find((q) => q.b.bank?.id === 'gold'), colOff = L.spec.bank.vault.gate.col.off;
+  const smokeLeft = H.fx.length;
   game.teleport(lootBefore.pt[0], lootBefore.pt[1], 0, lootBefore.y + 0.6); step(3);
   const lootPrompt = P.prompt?.text || '';
+  // police waiting outside: the cordon forms while you're inside, the chase starts when you come out
+  game.econ.health = 100; for (let i = 0; i < 30 * 22; i++) { game.time += 1 / 30; game._playFrame(1 / 30); game.econ.health = 100; }
+  const sg = game.police.siege, cordon = sg ? { cars: sg.cars.length, cops: sg.cops.length, hold: sg.hold, aiming: sg.cops.filter((q) => q.pose === 'aimGun').length } : null;
+  const bb = H.bankBuilding('gold'); game.teleport(bb.door.x + (bb.door.x - bb.x) * 0.3, bb.door.z + (bb.door.z - bb.z) * 0.3, 0, 0.6); step(10);
+  const chase = sg ? { hold: sg.hold, chasing: sg.cops.filter((q) => q.copChase).length, carsFree: sg.cars.filter((c) => !c.cordon).length } : null;
   H.fail('בדיקה'); game.police.clear(); game.econ.heists = {};
-  return { vg, blown, stage, from, padPrompt, lootPromptLocked, opened, wrong, closed, unlocked, gateUp, colOff, lootPrompt, state: game.state };
+  return { cordon, chase, smokeLeft, vg, blown, stage, from, padPrompt, lootPromptLocked, opened, wrong, closed, unlocked, gateUp, colOff, lootPrompt, state: game.state };
 });
 check('gold bank: two armed guards at the vault door', gold.vg >= 2, JSON.stringify(gold));
+check('bank: after the alarm the police surround the bank (cars across the street, officers aiming at the door); coming out starts the chase', gold.cordon && gold.cordon.cars >= 1 && gold.cordon.cops >= 3 && gold.cordon.hold && gold.cordon.aiming >= 3 && gold.chase && !gold.chase.hold && gold.chase.chasing >= 3 && gold.chase.carsFree === gold.cordon.cars, JSON.stringify({ cordon: gold.cordon, chase: gold.chase }));
 check('bank vault: a grenade / sticky bomb at the vault door blows it open (any stage, even before the heist started)', gold.blown && gold.blown !== 'closed' && gold.stage === 'loot' && gold.from === 'vault', JSON.stringify(gold));
 check('bank vault: bar gate inside — locked, money unreachable until you crack the code (keypad prompt)', gold.padPrompt.includes('סורגים') && !gold.lootPromptLocked, JSON.stringify(gold));
 check('bank vault: code mini game — stop each digit on the code, mistakes counted, solving lifts the bars and the money is yours', gold.opened && gold.wrong === 1 && gold.closed && gold.unlocked && gold.gateUp && gold.colOff && gold.lootPrompt.length > 0 && gold.state === 'playing', JSON.stringify(gold));
+const lockout = await g(async () => {
+  const game = __game, P = game.player, H = game.heist, step = (n) => { for (let i = 0; i < n; i++) { game.time += 1 / 30; game._playFrame(1 / 30); } };
+  game.police.clear(); game.econ.health = 100; game.econ.heists = {}; if (H.active) H.fail('בדיקה');
+  const I = H.info('central'), v = I.vault, gt = v.gate; game.teleport(I.start.pt[0], I.start.pt[1], 0, I.start.y + 0.6); step(30);
+  H.start('central', false); const A = H.active; A.stage = HEISTS_LOOT(H); A.targets = null; step(2);
+  game.teleport(gt.pad[0], gt.pad[1], 0, gt.y + 0.6); step(3);
+  const p0 = P.prompt?.text || ''; game.input.pressed.add('interact'); step(1);
+  const st = H._cg; let misses = 0;
+  for (let i = 0; i < 5 && H._cg; i++) { st.v = (st.code[st.i] + 3) % 10; document.querySelector('#codeGame .cg-lock')?.dispatchEvent(new Event('pointerdown')); misses = st.miss; }
+  await new Promise((r) => setTimeout(r, 1700));
+  const closed = !document.getElementById('codeGame'), locked = H.gates.central.lockUntil - game.time; step(3);
+  const p1 = P.prompt?.text || ''; game.input.pressed.add('interact'); step(1); const reopened = !!document.getElementById('codeGame');
+  H.fail('בדיקה'); game.police.clear(); game.econ.heists = {}; game.econ.health = 100;
+  return { p0, misses, closed, locked: Math.round(locked), p1, reopened };
+  function HEISTS_LOOT(H) { for (let i = 0; i < 9; i++) { A.stage = i; if (H.stage()?.type === 'loot' && H.stage()?.from === 'vault') return i; } return 0; }
+});
+check('vault code: 5 tries; after the fifth miss the keypad locks for 5 minutes (can\'t try again)', lockout.p0.includes('5/5') && lockout.misses === 5 && lockout.closed && lockout.locked > 280 && lockout.p1.includes('🔒') && !lockout.reopened, JSON.stringify(lockout));
 check('heist: result is saved and the robbed bank closes for a while', bank.rec && bank.saved === 1 && bank.status === 'cooldown');
 
 // ---------------------------------------------------------------- garage: drive onto the turntable, live mods, before/after, pay, save
@@ -1333,20 +1357,20 @@ const zones = await g(() => {
   };
   const H = 1.8 * (a.modelApp?.height || 1);
   const zHead = ray(a, H * 0.93, 0).zone, zShoulder = ray(a, H * 0.78, 0.19).zone, zHeart = ray(a, H * 0.72, 0.03).zone, zLeg = ray(a, H * 0.3, 0.1).zone;
-  // shoulder, then a leg: hurt but still on his feet and fighting back (slower, worse aim)
-  const rw = game.peds.shot(b, P, 'shoulder'); step(30 * 2); game.peds.shot(b, P, 'leg'); step(30 * 3);
+  // one bullet in the shoulder: hurt but still on his feet and fighting back (slower, worse aim)
+  const rw = game.peds.shot(b, P, 'shoulder'); step(30 * 3);
   const wounded = { r: rw, st: b.state, wounds: b.wounds, pain: +game.peds.pain(b).toFixed(2), gun: b.gunOut, chase: b.copChase, alive: b.state !== 'dead' };
   const bars = [...document.querySelectorAll('.npctag .hp')].filter((e) => e.style.display !== 'none').length;
   // head: dead in one shot
   const rh = game.peds.shot(a, P, zHead); step(3);
   const headDead = a.state === 'dead';
-  // a few more body hits take him down
-  let r2 = null, n = 0; while (b.state !== 'dead' && n < 6) { r2 = game.peds.shot(b, P, n % 2 ? 'belly' : 'arm'); n++; step(3); }
+  // the second body shot kills
+  let r2 = null, n = 0; while (b.state !== 'dead' && n < 6) { r2 = game.peds.shot(b, P, 'leg'); n++; step(3); }
   game.police.clear(); game.econ.health = 100;
   return { zHead, zShoulder, zHeart, zLeg, rw, wounded, rh, headDead, r2, more: n, finished: b.state, bars };
 });
 check('guns: one bullet in the head kills; bullet rays tell head / chest / shoulder / leg apart (bank guard)', zones.zHead === 'head' && zones.zHeart === 'vital' && zones.zShoulder === 'shoulder' && zones.zLeg === 'leg' && zones.headDead, JSON.stringify(zones));
-check('guns: shot in the shoulder and leg the guard stays up and fights on, hurt (slower, worse aim); a few more hits take him down; no health bars', zones.rw === 'wound' && zones.wounded.alive && zones.wounded.st === 'copChase' && zones.wounded.chase && zones.wounded.pain > 0 && zones.finished === 'dead' && zones.more >= 2 && zones.bars === 0, JSON.stringify(zones));
+check('guns: one body shot wounds (he stays up and fights on, hurt), the second kills; no health bars', zones.rw === 'wound' && zones.wounded.alive && zones.wounded.st === 'copChase' && zones.wounded.chase && zones.wounded.pain > 0 && zones.finished === 'dead' && zones.more === 1 && zones.bars === 0, JSON.stringify(zones));
 check('gangs: a crew button on the screen while you are in a gang - tap it and your boys come', guards.hidden && guards.shown && guards.called >= 4, JSON.stringify({ hidden: guards.hidden, shown: guards.shown, called: guards.called }));
 
 // ---------------------------------------------------------------- skydiving: jump out of a helicopter high above the clouds

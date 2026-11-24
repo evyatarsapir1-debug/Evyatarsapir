@@ -112,7 +112,7 @@ const LINES = {
   callCops: ['הלו, משטרה? יש פה מישהו עם נשק!', 'מישהו יכול לעזור לי?!', 'אני מתקשר למשטרה!', 'הצילו! משטרה!'],
   fear: ['הצילו!', 'יורים! תברחו!', 'מישהו יכול לעזור לי?!', 'משטרה! משטרה!', 'רוצו!'],
 };
-const WOUNDS_DEAD = 4.5;   // body-hit points that take a person down (arm/leg/shoulder 1, belly 1.5, chest 2)
+const WOUNDS_DEAD = 2;     // a body shot wounds, the second one kills (a head shot kills at once)
 export class Pedestrians {
   constructor(scene) {
     this.scene = scene;
@@ -355,6 +355,8 @@ export class Pedestrians {
       const r = this.rng.float(), talk = this.rng.chance(0.25), sameFloor = Math.abs(p.y - (src.y ?? p.y)) < 2.5;
       const say = (t, d) => { if (talk) this.say(p, t, d); };
       // hold-up at gunpoint: staff and guards put their hands up, customers get down on the floor
+      // the armed guards at the doors / the vault do their job: they draw and fight (unless you have them at gunpoint up close)
+      if (p.doorGuard && !(holdup && sameFloor && Math.hypot(p.x - src.x, p.z - src.z) < 6)) { p.state = 'copChase'; p.copChase = true; p.chaseTo = null; p.gunOut = true; p.angryT = 60; this.say(p, this.rng.pick(['אבטחה! זרוק את הנשק!', 'שוד! אל תזוז!', 'עצור או שאני יורה!']), 2); continue; }
       if (holdup && sameFloor && (p.app.guard || p.state === 'shopkeeper' || p.state === 'resident')) { p.state = 'surrender'; p.timer = 30 + this.rng.float(0, 10); say( this.rng.pick(['בסדר, בסדר!', 'קח מה שאתה רוצה', 'רק בלי בעיות']), 2.2); continue; }
       if (holdup && (r < 0.7 || !sameFloor)) { p.state = 'hide'; p.timer = 30 + this.rng.float(0, 10); say( this.rng.pick(['כולם על הרצפה!', 'אני לא זז…', 'שקט, שקט…']), 2); continue; }
       if (p.app.guard) { p.state = 'callHelp'; p.timer = 3; p.afterCall = 'hide'; say('מוקד, כאן המאבטח: שוד בבנק! שלחו משטרה!', 3); }
@@ -370,8 +372,8 @@ export class Pedestrians {
     this._colors();
   }
   // an officer who gets out of a patrol car and runs at the player to arrest them
-  addCop(x, z, chase = true) {
-    if (this.peds.length >= MAX) return null;
+  addCop(x, z, chase = true, force = false) {
+    if (this.peds.length >= MAX + (force ? 8 : 0)) return null;   // a police cordon may go a little over the usual crowd limit
     const p = this._add({ x, z, state: chase ? 'copChase' : 'walk', ix: Math.floor(x / P), iz: Math.floor(z / P), corner: 0, dir: 1 });
     this._copLook(p); p.copChase = chase;
     return p;
@@ -551,7 +553,7 @@ export class Pedestrians {
         if (d > 160) p.copChase = false;
         break;
       }
-      case 'guard': speed = 0; pose = Math.sin(time * 0.25 + p.x * 0.7) > 0.55 ? 'talk' : 'idle'; if (p.homeSpot) p.yaw = dampAngle(p.yaw, p.homeSpot.yaw, 4, dt); break;
+      case 'guard': speed = 0; pose = p.cordon ? 'aimGun' : Math.sin(time * 0.25 + p.x * 0.7) > 0.55 ? 'talk' : 'idle'; if (p.homeSpot) p.yaw = dampAngle(p.yaw, p.homeSpot.yaw, 4, dt); break;
       case 'convoy': speed = 0; pose = 'idle'; goal = null; break;   // riding in a gang car (moved by the gang system)
       case 'follow': {
         // a gang member walking / running behind the player (target spot set by the gang system every frame)
@@ -912,7 +914,7 @@ export class Pedestrians {
   // they go down for good.
   shot(p, src, zone) {
     if (p.state === 'dead') return false;
-    const w = zone === 'head' ? 99 : zone === 'vital' ? 2 : zone === 'belly' ? 1.5 : 1;
+    const w = zone === 'head' ? 99 : 1;
     const lethal = (p.wounds || 0) + w >= WOUNDS_DEAD;
     if (['down', 'dazed', 'getup'].includes(p.state)) p.state = 'knocked';    // still hittable while on the ground
     const r = this.hit(p, src, lethal ? 999 : 0.01, 'bullet');
@@ -923,7 +925,7 @@ export class Pedestrians {
     return 'wound';
   }
   // how much the wounds slow a person down / spoil their aim: 0 (fine) .. 0.6
-  pain(p) { return Math.min(0.6, (p.wounds || 0) * 0.13); }
+  pain(p) { return Math.min(0.6, (p.wounds || 0) * 0.35); }
   hit(p, src, dmg, kick) {
     if (p.state === 'down' || p.state === 'dazed' || p.state === 'dead' || p.state === 'driving' || p.state === 'pulled' || p.state === 'thrown') return false;
     if (p.state === 'getup') return false;                                  // can't hit someone while they get up
