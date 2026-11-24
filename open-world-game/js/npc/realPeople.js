@@ -49,6 +49,27 @@ const SKIP_STATES = new Set(['driving', 'inside', 'pulled', 'thrown', 'swimmer',
 // how many real people at once / out to what distance, by graphics quality
 const BUDGET = { low: [5, 26], medium: [10, 38], high: [16, 50] };
 
+// Hosted pages often forbid fetching data: URIs (content-security policy), and our glTF JSON keeps its geometry in one.
+// So: fetch the JSON normally, decode that buffer here, and hand the loader one binary glTF (GLB) built in memory.
+async function loadGltf(loader, url) {
+  const J = await (await fetch(url)).json();
+  let bin = null;
+  const buf = J.buffers?.[0];
+  if (buf?.uri?.startsWith('data:')) {
+    const s = atob(buf.uri.slice(buf.uri.indexOf(',') + 1)); bin = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) bin[i] = s.charCodeAt(i);
+    delete buf.uri;
+  }
+  let js = new TextEncoder().encode(JSON.stringify(J));
+  const jl = (js.length + 3) & ~3, bl = bin ? (bin.length + 3) & ~3 : 0;
+  const out = new Uint8Array(12 + 8 + jl + (bin ? 8 + bl : 0)), dv = new DataView(out.buffer);
+  dv.setUint32(0, 0x46546c67, true); dv.setUint32(4, 2, true); dv.setUint32(8, out.length, true);
+  dv.setUint32(12, jl, true); dv.setUint32(16, 0x4e4f534a, true); out.fill(0x20, 20, 20 + jl); out.set(js, 20);
+  if (bin) { const o = 20 + jl; dv.setUint32(o, bl, true); dv.setUint32(o + 4, 0x004e4942, true); out.set(bin, o + 8); }
+  const base = url.slice(0, url.lastIndexOf('/') + 1);
+  return new Promise((res, rej) => loader.parse(out.buffer, base, res, rej));
+}
+
 export class RealPeople {
   constructor(game) {
     this.game = game;
@@ -59,7 +80,7 @@ export class RealPeople {
     this.free = new Map();         // avatar name -> [spare instances]
     this.live = new Map();         // ped -> instance
     this.clips = null;
-    this.loader.load(BASE + 'anims.json', (g) => { this.clips = Object.fromEntries(g.animations.map((a) => [a.name, a])); }, undefined, () => { this.clips = null; this.off = true; });
+    loadGltf(this.loader, BASE + 'anims.json').then((g) => { this.clips = Object.fromEntries(g.animations.map((a) => [a.name, a])); }, (e) => { console.warn('real people: animations', e); this.clips = null; this.off = true; });
   }
   get count() { return this.live.size; }
 
@@ -75,11 +96,11 @@ export class RealPeople {
   _load(name) {
     if (this.tpl.has(name) || this.loading.has(name) || this.failed.has(name) || this.loading.size >= 2) return;
     this.loading.add(name);
-    this.loader.load(`${BASE}av/${name}.json`, (g) => {
+    loadGltf(this.loader, `${BASE}av/${name}.json`).then((g) => {
       this.loading.delete(name);
       g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; } });
       this.tpl.set(name, { scene: g.scene, female: name.includes('Female') });
-    }, undefined, () => { this.loading.delete(name); this.failed.add(name); });
+    }, (e) => { console.warn('real people:', name, e); this.loading.delete(name); this.failed.add(name); });
   }
   _make(name) {
     const spare = this.free.get(name)?.pop(); if (spare) { spare.root.visible = true; this.game.scene.add(spare.root); return spare; }
